@@ -1,0 +1,13 @@
+{% extends "index.html" %}
+
+{% block brand_header %}
+  <div class="text-center py-3">
+    <img src="{% static 'images/logo-full.svg' %}"
+         alt="{{ BRAND_NAME }} Logo"
+         class="img-fluid"
+         style="max-height: 60px;">
+    <div class="small text-muted">
+      Drone Ops & Finance Platform
+    </div>
+  </div>
+{% endblock %}

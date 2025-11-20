@@ -1,0 +1,35 @@
+{% extends 'index.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container mt-5">
+  <div class="card shadow-sm">
+    <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
+      <h4 class="mb-0">
+        {{ view.object.pk|yesno:"Edit Recurring Transaction,Add Recurring Transaction" }}
+      </h4>
+      {% if form.instance.pk %}
+        <span class="small opacity-75">
+          Last created: {{ form.instance.last_created|default:"—" }}
+        </span>
+      {% endif %}
+    </div>
+
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+        {{ form|crispy }}
+
+        <div class="d-flex justify-content-between mt-4">
+          <a href="{% url 'money:recurring_transaction_list' %}" class="btn btn-outline-secondary">
+            <i class="fa-solid fa-xmark"></i> Cancel
+          </a>
+          <button type="submit" class="btn btn-success">
+            <i class="fa-solid fa-save"></i> Save
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

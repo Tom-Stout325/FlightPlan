@@ -1,0 +1,154 @@
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Nunito:wght@300;400;600&display=swap");
+
+/* Global Reset & Base Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-size: 16px;
+  background-color: #f8f9fa;
+  color: #212529;
+  font-family: 'Nunito', sans-serif;
+  line-height: 1.6;
+}
+
+/* Layout Helpers */
+.container {
+  width: 90%;
+  max-width: 1200px;
+  margin: auto;
+  padding: 2rem 1rem;
+}
+
+.flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.text-center {
+  text-align: center;
+}
+
+/* Headings & Buttons: Montserrat */
+h1, h2, h3, h4, h5, h6,
+.btn,
+.navbar-brand,
+.card-title,
+.modal-title {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 600;
+}
+
+/* Header & Footer */
+header {
+  background-color: #343a40;
+  color: #ffffff;
+  padding: 1rem 0;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  text-align: center;
+}
+
+footer {
+  background-color: #343a40;
+  color: #ffffff;
+  text-align: center;
+  padding: 1rem;
+  position: fixed;
+  width: 100%;
+  bottom: 0;
+}
+
+/* Forms */
+form {
+  background-color: #ffffff;
+  padding: 2rem;
+  border-radius: 6px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+input, select, textarea, button {
+  width: 100%;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-family: 'Nunito', sans-serif;
+}
+
+button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+/* Alerts */
+.alert {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+  font-weight: 500;
+  font-family: 'Nunito', sans-serif;
+}
+
+.alert-success {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.alert-error,
+.alert-danger {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.alert-info {
+  background-color: #d1ecf1;
+  color: #0c5460;
+}
+
+.alert-warning {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+/* Custom Help Section */
+.help-text,
+.text-custom {
+  color: cornflowerblue !important;
+}
+
+.border-help,
+.border-custom {
+  border: 2px solid cornflowerblue !important;
+}
+
+.btn-help,
+.btn-custom {
+  background-color: cornflowerblue !important;
+  border: 1px solid cornflowerblue !important;
+  color: white !important;
+  font-family: 'Montserrat', sans-serif;
+}
+
+.btn-help:hover,
+.btn-custom:hover {
+  background-color: #4169e1 !important;
+  border-color: #4169e1 !important;
+  color: white !important;
+}

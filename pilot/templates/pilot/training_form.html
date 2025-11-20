@@ -1,0 +1,65 @@
+{% extends 'index.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="col-lg-6 offset-lg-3">
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h4 class="mb-0">{{ form.instance.pk|yesno:"Edit Training,Add Training" }}</h4>
+      </div>
+      <div class="card-body">
+        <form method="POST" enctype="multipart/form-data" novalidate>
+          {% csrf_token %}
+          {{ form.non_field_errors }}
+
+          {{ form.title|as_crispy_field }}
+          {{ form.date_completed|as_crispy_field }}
+          {{ form.required|as_crispy_field }}
+
+          <div id="dropzone" class="border rounded p-5 text-center mb-3" style="background-color: #f8f9fa; cursor: pointer;">
+            <p id="dropzone-text" class="mb-2">Drag & drop certificate here, or click to browse.</p>
+            <input type="file" name="certificate" id="fileInput" class="form-control d-none" accept=".pdf,.jpg,.jpeg,.png">
+            <button type="button" class="btn btn-outline-primary mt-2" onclick="fileInput.click();">Browse</button>
+          </div>
+
+          <div class="d-flex justify-content-end">
+            <button type="submit" class="btn btn-success">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Drag and Drop Script -->
+<script>
+  const dropzone = document.getElementById("dropzone");
+  const fileInput = document.getElementById("fileInput");
+  const dropzoneText = document.getElementById("dropzone-text");
+
+  dropzone.addEventListener("dragover", function (e) {
+    e.preventDefault();
+    dropzone.classList.add("bg-light", "border-primary");
+  });
+
+  dropzone.addEventListener("dragleave", function () {
+    dropzone.classList.remove("bg-light", "border-primary");
+  });
+
+  dropzone.addEventListener("drop", function (e) {
+    e.preventDefault();
+    dropzone.classList.remove("bg-light", "border-primary");
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      fileInput.files = files;
+      dropzoneText.textContent = `Selected: ${files[0].name}`;
+    }
+  });
+
+  dropzone.addEventListener("click", function () {
+    fileInput.click();
+  });
+</script>
+{% endblock %}

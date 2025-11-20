@@ -1,0 +1,163 @@
+{% extends 'index.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Invoice Review - #{{ invoice.invoice_number }}{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+
+  <!-- Header -->
+  <div class="text-center mb-4">
+    <img src="{% static 'images/logo2.png' %}" alt="{{ BRAND.name }} Logo" style="width: 150px;">
+    <h2 class="text-primary mt-2">Invoice Summary</h2>
+    <h5 class="text-muted">{{ invoice.event.title }} Invoice</h5>
+    <h6 class="fw-light">Invoice #: {{ invoice.invoice_number }}</h6>
+    <a href="{% url 'invoice_review_pdf' invoice.pk %}" target="_blank" class="btn btn-outline-primary btn-sm mt-2">
+      <i class="fas fa-file-pdf"></i> Download PDF
+    </a>
+  </div>
+
+  <!-- Invoice Info -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-primary text-white">
+      Invoice Information
+    </div>
+    <div class="card-body">
+      <p><strong>Date:</strong> {{ invoice.date }}</p>
+      <p><strong>Client:</strong> {{ invoice.client }}</p>
+      <p><strong>Event:</strong> {{ invoice.event.title }}</p>
+      <p><strong>Service:</strong> {{ invoice.service }}</p>
+      <p><strong>Invoice Amount:</strong> ${{ invoice.amount|floatformat:2|intcomma }}</p>
+    </div>
+  </div>
+
+  <!-- Transactions -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-primary text-white">
+      Associated Transactions
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-bordered mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Date</th>
+              <th>Category</th>
+              <th>Sub-Category</th>
+              <th>Amount</th>
+              <th>Deductible</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in transactions %}
+            <tr>
+              <td>{{ t.date }}</td>
+              <td>{{ t.sub_cat.category.category }}</td>
+              <td>{{ t.sub_cat.sub_cat }}</td>
+              <td>
+                ${{ t.amount|floatformat:2 }}
+                {% if t.sub_cat.slug == 'meals' %}
+                  <br><small class="text-muted">(50%: ${{ t.deductible_amount|floatformat:2 }})</small>
+                {% endif %}
+              </td>
+              <td>
+                {% if t.sub_cat.slug == 'meals' %}
+                  50%
+                {% elif t.sub_cat.slug == 'fuel' and t.transport_type == 'personal_vehicle' %}
+                  No
+                {% else %}
+                  Yes
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center">No transactions found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mileage -->
+  {% if mileage_entries %}
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-primary text-white">
+      Mileage Entries
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-bordered mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Date</th>
+              <th>Total Miles</th>
+              <th>Rate</th>
+              <th>Amount</th>
+              <th>Client</th>
+              <th>Invoice</th>
+              <th>Event</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in mileage_entries %}
+              <tr>
+                <td>{{ m.date|date:"m/d/Y" }}</td>
+                <td>{{ m.miles|floatformat:1|intcomma }}</td>
+                <td>${{ mileage_rate|floatformat:2 }}</td>
+                <td>${{ m.amount|floatformat:2|intcomma }}</td>
+                <td>{{ m.client }}</td>
+                <td>{{ m.invoice_number }}</td>
+                <td>{{ m.event|default:"—" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+<!-- Summary -->
+<div class="card shadow-sm">
+  <div class="card-header bg-primary text-white">
+    Summary
+  </div>
+  <div class="card-body">
+    {% if has_income_transaction %}
+    <div class="row text-center">
+      <div class="col-md-6">
+        <h6 class="text-secondary">Taxable Income</h6>
+        <p>Invoice Amount: ${{ invoice_amount|floatformat:2|intcomma }}</p>
+        <p>Taxable Expenses: -${{ deductible_expenses|floatformat:2|intcomma }}</p>
+        <p>Mileage Deduction: -${{ mileage_dollars|floatformat:2|intcomma }}</p>
+        <p class="fw-bold text-success">Taxable Income: ${{ taxable_income|floatformat:2|intcomma }}</p>
+      </div>
+      <div class="col-md-6">
+        <h6 class="text-secondary">Net Income</h6>
+        <p>Invoice Amount: ${{ invoice_amount|floatformat:2|intcomma }}</p>
+        <p>Total Expenses: -${{ total_expenses|floatformat:2|intcomma }}</p>
+        <p class="fw-bold text-success">Net Income: ${{ net_income|floatformat:2|intcomma }}</p>
+      </div>
+    </div>
+    {% else %}
+    <div class="row">
+      <div class="col-md-12">
+        <h6 class="text-secondary">Expense Summary</h6>
+        <p>Invoice Amount: ${{ invoice_amount|floatformat:2|intcomma }}</p>
+        <p>Expenses: ${{ total_expenses|floatformat:2|intcomma }}</p>
+        <p>Mileage: ${{ mileage_dollars|floatformat:2|intcomma }}</p>
+        <p class="fw-bold text-danger">Expense Total: -${{ total_cost|floatformat:2|intcomma }}</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+
+  <!-- Footer -->
+  <p class="text-muted text-center small mt-4">Generated by Airborne Images • {{ now|date:"F j, Y" }}</p>
+
+</div>
+{% endblock %}

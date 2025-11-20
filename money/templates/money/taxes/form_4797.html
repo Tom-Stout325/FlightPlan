@@ -1,0 +1,42 @@
+{% extends "index.html" %}
+{% load humanize %}
+{% block content %}
+<div class="container mt-5">
+  <h2 class="mb-4">Form 4797 - Sales of Business Property</h2>
+  <div class="text-end mb-4">
+  <a href="{% url 'money:form_4797_pdf' %}?preview=1" target="_blank" class="btn btn-outline-secondary me-2">
+    <i class="fa-solid fa-eye"></i> Preview PDF
+  </a>
+  <a href="{% url 'money:form_4797_pdf' %}" class="btn btn-danger">
+    <i class="fa-solid fa-file-pdf"></i> Download PDF
+  </a>
+</div>
+
+  <table class="table table-bordered table-hover">
+    <thead class="table-light">
+      <tr>
+        <th>Asset</th>
+        <th>Date Sold</th>
+        <th>Sale Price</th>
+        <th>Basis</th>
+        <th>Gain</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in report_data %}
+      <tr>
+        <td>{{ item.name }}</td>
+        <td>{{ item.date_sold }}</td>
+        <td>${{ item.sale_price|floatformat:2|intcomma }}</td>
+        <td>${{ item.purchase_cost|floatformat:2|intcomma }}</td>
+        <td class="fw-bold text-end">
+          ${{ item.gain|floatformat:2|intcomma }}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="text-center text-muted">No asset sales found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

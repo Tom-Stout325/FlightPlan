@@ -1,0 +1,104 @@
+{% extends 'index.html' %}
+{% load humanize %}
+{% block title %}Travel Expense Report{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+  <!-- Header -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-primary text-white text-center py-3">
+      <h2 class="mb-0">Travel Expense Report</h2>
+      <h5 class="mb-0">Actual Costs for {{ selected_year }}</h5>
+    </div>
+    <div class="card-body bg-light">
+      <!-- Year Dropdown -->
+      <form method="get" class="row g-3 align-items-center justify-content-center mb-4">
+        <div class="col-auto">
+          <label for="year" class="form-label fw-bold">Select Year:</label>
+        </div>
+        <div class="col-md-3 col-sm-6">
+          <select name="year" id="year" class="form-select" onchange="this.form.submit()">
+            {% for year in available_years %}
+              <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </form>
+
+        <div class="text-center mb-4">
+            <a href="{% url 'travel_expense_analysis_pdf' %}?year={{ selected_year }}" class="btn btn-outline-danger w-100">
+                <i class="fa-solid fa-file-pdf"></i> Download PDF Report
+            </a>
+        </div>
+
+      <!-- Summary -->
+      <div class="row text-center text-md-end mb-4">
+        <div class="col-12 col-md-6">
+          <h5><strong>YTD Income (Services: Drone):</strong></h5>
+          <p class="text-success fw-bold h4">$ {{ income_total|floatformat:2|intcomma }}</p>
+        </div>
+        <div class="col-12 col-md-6">
+          <h5><strong>Total Travel Expenses:</strong></h5>
+          <p class="text-danger fw-bold h4">$ {{ total_expense|floatformat:2|intcomma }}</p>
+        </div>
+      </div>
+
+        <!-- Pie Chart -->
+        <div class="mb-5 d-flex justify-content-center">
+        <div style="width: 500px; height: 500px;">
+            <canvas id="expensePieChart" width="250" height="250"></canvas>
+        </div>
+        </div>
+
+
+      <!-- Expense Table -->
+      <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle">
+          <thead class="table-warning">
+            <tr>
+              <th>Subcategory</th>
+              <th class="text-end">Amount</th>
+              <th class="text-end">Percent of Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in expense_data %}
+            <tr>
+              <td>{{ row.name }}</td>
+              <td class="text-end">$ {{ row.amount|floatformat:2|intcomma }}</td>
+              <td class="text-end">{{ row.percentage }}%</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Pie Chart Script -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const ctx = document.getElementById('expensePieChart').getContext('2d');
+  const pieChart = new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels: [{% for row in expense_data %}'{{ row.name }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+      datasets: [{
+        data: [{% for row in expense_data %}{{ row.amount }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+        backgroundColor: [
+          '#ff6384', '#36a2eb', '#ffcd56', '#4bc0c0', '#9966ff', '#ff9f40', '#c9cbcf'
+        ],
+        borderWidth: 1
+      }]
+    },
+    options: {
+      plugins: {
+        legend: {
+          position: 'bottom'
+        }
+      }
+    }
+  });
+</script>
+{% endblock %}

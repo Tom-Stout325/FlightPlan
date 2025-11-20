@@ -1,0 +1,194 @@
+{% load static %}
+{% load humanize %}
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    @page {
+      size: A4;
+      margin: 0.5in;
+    }
+
+    body {
+      font-family: "Segoe UI", sans-serif;
+      font-size: 12px;
+      color: #333;
+      margin: 0;
+    }
+
+    .header {
+      text-align: center;
+      border-bottom: 2px solid #4682b4;
+      padding-bottom: 10px;
+      margin-bottom: 30px;
+    }
+
+    .header img {
+      width: 140px;
+    }
+
+    .header h3 {
+      font-size: 16px;
+      margin: 5px 0;
+      color: #4682b4;
+    }
+
+    .section {
+      margin-top: 3px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      margin-top: 10px;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f4f4f4;
+    }
+
+    .subcategory-row td:first-child {
+      padding-left: 30px;
+    }
+
+    .subcategory-note {
+      font-size: 9px;
+      color: #777;
+    }
+
+    .summary {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+
+    .net-amount {
+      font-size: 13.5px;
+      color: #2e8b57;
+    }
+
+    .footer {
+      position: absolute;
+      bottom: .25in;
+      width: 100%;
+      font-size: 10px;
+      text-align: center;
+      color: #777;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <img src="{% static 'images/logo2.png' %}" alt="{{ BRAND.name }} Logo" />
+    <h3>Income Statement – {{ selected_year }}</h3>
+    <p style="margin: 4px 0; font-size: 11px;">2241 W. 171st Street, Westfield, IN 46037</p>
+    <p style="margin: 2px 0; font-size: 11px;">tom@airborne-images.net | 317-987-7387</p>
+  </div>
+
+  <div class="section">
+    <h4>Income</h4>
+    <table>
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Total Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in income_category_totals %}
+        <tr>
+          <td><strong>{{ row.category }}</strong></td>
+          <td><strong>${{ row.total|floatformat:2|intcomma }}</strong></td>
+        </tr>
+        {% for sub_cat, amount, sched_line in row.subcategories %}
+        <tr class="subcategory-row">
+          <td>
+            {{ sub_cat }}
+            {% if sched_line %}
+              <span class="subcategory-note">(Line {{ sched_line }})</span>
+            {% endif %}
+          </td>
+          <td>${{ amount|floatformat:2|intcomma }}</td>
+        </tr>
+        {% endfor %}
+        {% empty %}
+        <tr>
+          <td colspan="2">No income data</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td><strong>Total Income</strong></td>
+          <td><strong>${{ income_category_total|floatformat:2|intcomma }}</strong></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <br /><br />
+
+  <div class="section mt-5">
+    <h4>
+      Expenses
+      <span style="font-weight: normal; font-size: 10px;">
+        (meals are 50% deductible; personal fuel excluded)
+      </span>
+    </h4>
+    <table>
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Total Deductible</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in expense_category_totals %}
+        <tr>
+          <td><strong>{{ row.category }}</strong></td>
+          <td><strong>-${{ row.total|floatformat:2|intcomma }}</strong></td>
+        </tr>
+        {% for sub_cat, amount, sched_line in row.subcategories %}
+        <tr class="subcategory-row">
+          <td>
+            {{ sub_cat }}
+            {% if sched_line %}
+              <span class="subcategory-note">(Line {{ sched_line }})</span>
+            {% endif %}
+          </td>
+          <td>-${{ amount|floatformat:2|intcomma }}</td>
+        </tr>
+        {% endfor %}
+        {% empty %}
+        <tr>
+          <td colspan="2">No deductible expense data</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td><strong>Total Expenses</strong></td>
+          <td><strong>-${{ expense_category_total|floatformat:2|intcomma }}</strong></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="summary" style="float: right; margin-top: 20px; margin-right: 10em;">
+    <p>Net Profit/Loss: <strong>${{ net_profit|floatformat:2|intcomma }}</strong></p>
+  </div>
+
+  <div class="footer">
+    &copy; {{ selected_year }} Airborne Images &nbsp;•&nbsp; {{ now|date:"F j, Y" }}
+  </div>
+</body>
+</html>

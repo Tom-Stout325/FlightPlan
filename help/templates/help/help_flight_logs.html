@@ -1,0 +1,64 @@
+{% extends "index.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-5">
+  <h2 class="mb-4">Flight Logs Help</h2>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Logging and Tracking Your Flights</h5>
+      <div>
+        <h6>Flight Logs are recorded by your drone and typically stored on your controller in the Fly App (for DJI drones).
+            DJI encrypts its flight logs, and requires propeietary code to read the files.  There are several ways to download 
+            and read your flight logs, I have found the following instructions to be the easiest, and free way to accomplish this.
+        </h6>
+        <ol class="list-group list-group-numbered">
+            <li class="list-group-item">Create a free account by registering at: <a href="https://www.airdata.com">AirData</a> </li>
+            <li class="list-group-item">Set up flight log sync with your app.
+                <ul class="mt-2">
+                    <li>If you are using the DJI Fly app on your iOS phone, follow instructions <a href="https://app.airdata.com/wiki/Help/DJI+Fly+for+iOS">HERE</a></li>
+                    <li>If you are using a DJI Controller with a built-in screen (DJI: RC, RC 2, RC Pro, RC PRO 2 or RC Smart Controller), follow instructions <a href="https://app.airdata.com/wiki/HowTo/Uploading+Flight+Logs+with+Airdata’s+Android+App">HERE</a> </li>
+                    <li>For all other flight systems, find your instructions <a href="https://app.airdata.com/wiki/HowTo">HERE</a> </li>
+                </ul>
+            <li class="list-group-item">You will need to sync your flight each time you fly.  Consider log sync at the end of the day when you fly.</li>
+            <li class="list-group-item">After sync is complete, open AirData in your computer's browser (<a href="https://www.airdata.com">Link</a>)</li>
+            <li class="list-group-item">Download your flight logs:
+                <ul class="mt-2">
+                    <li>After Loggin in, click <strong>MY LOGS</strong></li>
+                    <li>Click <strong>Reports</strong></li>
+                    <li>Click <strong>Standard Flight Report</strong></li>
+                    <li>For your first report, select <strong>ALL FLIGHTS</strong> in the Select Period dropdown
+                        <ul>After your first Flight Log Report, you will select "Custom" and select the date range for your new logs.</ul>
+                    <li>Click <strong>Fields to Display</strong></li>
+                    <li>Click <strong>All Groups</strong></li>
+                    <li>Your Report page should look like <a href="{% static 'images/Report_Screen.png' %}" target="_blank">THIS</a>
+                    <li>Click <strong>Continue</strong></li>
+                    <li>Click <strong>Finalize / Save</strong></li>
+                    <li>On the next page, Click <strong>Finalize / Download CSV</strong></li>
+                </ul>   
+        </ol>
+      </div>
+      <h5>Return to FlighPlan</h5>
+      <ol class="list-group list-group-numbered">
+        <li class="list-group-item">Navigate to the <strong>Flight Logs</strong> section from the dashboard.</li>
+        <li class="list-group-item">Click <strong>“Upload Logs”</strong> to open the entry form.</li>
+        <li class="list-group-item">Click inside the gray box to select your flight log csv file from your computer, or drag your csv file into the gray box.
+        
+        </li>
+        <li class="list-group-item">Click <strong>Upload</strong> to add your new flight logs.</li>
+        <li class="list-group-item">Flight statistics will automatically be added in your pilot profile.</li>
+        <li class="list-group-item">Table functions:
+            <ul>
+                <li> <i class="fas fa-eye"></i> View individual Flight Logs</li>
+                <li><i class="fas fa-file-pdf"></i> Create a pdf report of the specific flight with all flight details</li>
+                <li><i class="fas fa-trash-alt text-danger"></i> Delete individual Flight Logs</li>
+                <li>Clicking on the <strong>Location</strong> data will take you to google maps to show where that flight took place.</li>
+            </ul>
+      </ol>
+    </div>
+  </div>
+
+  <a href="{% url 'help:help_home' %}" class="btn btn-secondary">← Back to Help Center</a>
+</div>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "index.html" %}
+{% load static %}
+
+{% block title %}Help Portal{% endblock %}
+
+
+{% block content %}
+  <div class="container">
+      <div class="text-center mb-5">
+        <img src="{% static 'images/logo2.png' %}" alt="FlightPlan Logo" class="img-fluid shadow-sm rounded" style="max-height: 300px;">
+        <h2 class="mb-4 text-center text-primary fw-light mt-4">Help Center</h2>
+      </div>
+
+    <div class="card mb-4 getting-started-card border-help shadow-sm">
+      <div class="card-body">
+        <h4 class="card-title help-text mb-4">Getting Started</h4>
+        <p class="card-text">New here? Learn how to set up your profile, log your first flight, upload documents, and begin using FlightPlan.</p>
+        <a href="{% url 'help:help_getting_started' %}" class="btn btn-help">View Help</a>
+      </div>
+    </div>
+
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5 class="card-title text-primary">Pilot Profile</h5>
+        <p class="card-text">Learn how to register and complete your pilot profile, including uploading your license and tracking training.</p>
+        <a href="{% url 'help:help_pilot_profile' %}" class="btn btn-primary">View Help</a>
+      </div>
+    </div>
+
+  <div class="card mb-3">
+      <div class="card-body">
+          <h5 class="card-title text-warning">Equipment</h5>
+          <p class="card-text">Learn how to add, edit, and manage your drones, batteries, and other gear, including uploading certificates and receipts.</p>
+          <a href="{% url 'help:help_equipment' %}" class="btn btn-warning">View Help</a>
+      </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <h5 class="card-title text-success">Flight Logs</h5>
+      <p class="card-text">Learn how to record and track drone flights, including time, location, purpose, and syncing with your pilot profile stats.</p>
+      <a href="{% url 'help:help_flight_logs' %}" class="btn btn-success">View Help</a>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <h5 class="card-title text-danger">Documents</h5>
+      <p class="card-text">Learn how to upload, categorize, and manage important documents like SOPs, waivers, and certificates.</p>
+      <a href="{% url 'help:help_documents' %}" class="btn btn-danger">View Help</a>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <h5 class="card-title text-primary">Gmail Password Setup</h4>
+    <p class="card-text">Learn how to set up your gmail for use in 12bytes software.</p>
+    <a href="{% url 'help:help_gmail' %}" class="btn btn-help">View Help</a>
+  </div>
+</div>
+
+
+{% endblock %}

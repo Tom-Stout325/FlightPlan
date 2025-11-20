@@ -1,0 +1,159 @@
+{% extends 'index.html' %}
+{% load static %}
+
+{% block title %}Search Transactions{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-3">Search Transactions</h2>
+
+  <form method="get" class="mb-4">
+    <div class="accordion" id="filterAccordion">
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="filtersHeading">
+          <button class="accordion-button {% if not selected_event and not selected_category and not selected_sub_cat and not selected_year %}collapsed{% endif %}"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#filtersCollapse"
+                  aria-expanded="{% if selected_event or selected_category or selected_sub_cat or selected_year %}true{% else %}false{% endif %}"
+                  aria-controls="filtersCollapse">
+            <i class="fas fa-filter me-2"></i> Filter Transactions
+          </button>
+        </h2>
+        <div id="filtersCollapse"
+             class="accordion-collapse collapse {% if selected_event or selected_category or selected_sub_cat or selected_year %}show{% endif %}"
+             aria-labelledby="filtersHeading"
+             data-bs-parent="#filterAccordion">
+          <div class="accordion-body">
+            <div class="row g-3">
+              <div class="col-md-6 col-lg-3">
+                <label class="form-label">event</label>
+                <select name="event" class="form-select">
+                  <option value="">All events</option>
+                  {% for k in event_options %}
+                    <option value="{{ k.id }}" {% if selected_event == k.id|stringformat:"s" %}selected{% endif %}>{{ k.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-6 col-lg-3">
+                <label class="form-label">Category</label>
+                <select name="category" class="form-select">
+                  <option value="">All Categories</option>
+                  {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if selected_category == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-6 col-lg-3">
+                <label class="form-label">Sub-Category</label>
+                <select name="sub_cat" class="form-select">
+                  <option value="">All Sub-Categories</option>
+                  {% for sub in sub_categories %}
+                    <option value="{{ sub.id }}" {% if selected_sub_cat == sub.id|stringformat:"s" %}selected{% endif %}>{{ sub }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-6 col-lg-3">
+                <label class="form-label">Year</label>
+                <select name="year" class="form-select">
+                  <option value="">All Years</option>
+                  {% for y in years %}
+                    <option value="{{ y }}" {% if selected_year == y|stringformat:"s" %}selected{% endif %}>{{ y }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2 mt-3">
+      <a href="{% url 'transactions_search' %}" class="btn btn-outline-secondary">
+        <i class="fas fa-times-circle me-1"></i> Clear Filters
+      </a>
+      <button type="submit" class="btn btn-primary">
+        <i class="fas fa-search me-1"></i> Search
+      </button>
+    </div>
+  </form>
+
+  {% if selected_event or selected_category or selected_sub_cat or selected_year %}
+    <div class="mb-3">
+      <strong>Filters Applied:</strong>
+      {% if selected_event %}
+        | event: {% for k in event_options %}{% if k.id|stringformat:"s" == selected_event %}{{ k.name }}{% endif %}{% endfor %}
+      {% endif %}
+      {% if selected_category %}
+        | Category: {% for cat in categories %}{% if cat.id|stringformat:"s" == selected_category %}{{ cat }}{% endif %}{% endfor %}
+      {% endif %}
+      {% if selected_sub_cat %}
+        | Sub-Category: {% for sub in sub_categories %}{% if sub.id|stringformat:"s" == selected_sub_cat %}{{ sub }}{% endif %}{% endfor %}
+      {% endif %}
+      {% if selected_year %}
+        | Year: {{ selected_year }}
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% if transactions %}
+    <div class="table-responsive">
+      <table class="table table-hover table-bordered align-middle shadow-sm">
+        <thead class="table-light">
+          <tr>
+            <th>Date</th>
+            <th>Description</th>
+            <th>Amount</th>
+            <th class="d-none d-md-table-cell">Type</th>
+            <th class="d-none d-lg-table-cell">event</th>
+            <th class="d-none d-lg-table-cell">Category</th>
+            <th class="d-none d-lg-table-cell">Sub-Category</th>
+            <th>
+              <span data-bs-toggle="tooltip" title="View, Edit or Delete">
+                <i class="fas fa-tools"></i>
+              </span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tx in transactions %}
+            <tr>
+              <td>{{ tx.date }}</td>
+              <td class="text-wrap">{{ tx.transaction }}</td>
+              <td>${{ tx.amount|floatformat:2 }}</td>
+              <td class="d-none d-md-table-cell">{{ tx.trans_type }}</td>
+              <td class="d-none d-lg-table-cell">{{ tx.event }}</td>
+              <td class="d-none d-lg-table-cell">{{ tx.category }}</td>
+              <td class="d-none d-lg-table-cell">{{ tx.sub_cat }}</td>
+              <td class="text-nowrap">
+                <a href="{% url 'transaction_detail' tx.pk %}" class="btn btn-sm btn-outline-info me-1" data-bs-toggle="tooltip" title="View">
+                  <i class="fas fa-eye"></i>
+                </a>
+                <a href="{% url 'edit_transaction' tx.pk %}" class="btn btn-sm btn-outline-warning me-1" data-bs-toggle="tooltip" title="Edit">
+                  <i class="fas fa-edit"></i>
+                </a>
+                <a href="{% url 'delete_transaction' tx.pk %}" class="btn btn-sm btn-outline-danger" data-bs-toggle="tooltip" title="Delete">
+                  <i class="fas fa-trash-alt"></i>
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="text-muted">No transactions found for the selected filters.</p>
+  {% endif %}
+</div>
+
+<!-- Bootstrap Tooltips -->
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el));
+  });
+</script>
+{% endblock %}

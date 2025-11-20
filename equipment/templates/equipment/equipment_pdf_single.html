@@ -1,0 +1,141 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ item.name }} - Equipment Details</title>
+    <style>
+        body {
+            font-family: "Helvetica", sans-serif;
+            font-size: 12px;
+            padding: 2em;
+            color: #333;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #004080;
+            padding-bottom: 1em;
+            margin-bottom: 2em;
+        }
+
+        .header img {
+            max-height: 120px;
+            margin-bottom: 0.5em;
+        }
+
+        .header h2 {
+            color: #004080;
+            margin: 0;
+        }
+
+        .section-title {
+            background-color: #f0f4f8;
+            padding: 0.4em;
+            font-weight: bold;
+            border-left: 4px solid #004080;
+            margin-top: 2em;
+            margin-bottom: 0.5em;
+        }
+
+        .field-pair {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.3em 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .field-label {
+            font-weight: bold;
+            width: 40%;
+        }
+
+        .field-value {
+            width: 58%;
+            text-align: right;
+        }
+
+        .notes-box {
+            margin-top: 0.5em;
+            border: 1px solid #ccc;
+            padding: 0.7em;
+            background-color: #fafafa;
+            min-height: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="{{ logo_url }}" alt="{{ BRAND.name }} Logo">
+        <h2>Equipment Detail Report</h2>
+    </div>
+
+    <!-- General -->
+    <div class="section-title">General Information</div>
+    <div class="field-pair"><div class="field-label">Name</div><div class="field-value">{{ item.name }}</div></div>
+    <div class="field-pair"><div class="field-label">Type</div><div class="field-value">{{ item.equipment_type }}</div></div>
+    {% if item.brand %}
+        <div class="field-pair"><div class="field-label">Brand</div><div class="field-value">{{ item.brand }}</div></div>
+    {% endif %}
+    {% if item.model %}
+        <div class="field-pair"><div class="field-label">Model</div><div class="field-value">{{ item.model }}</div></div>
+    {% endif %}
+
+    <!-- Technical -->
+    <div class="section-title">Technical Details</div>
+    {% if item.serial_number %}
+        <div class="field-pair"><div class="field-label">Serial Number</div><div class="field-value">{{ item.serial_number }}</div></div>
+    {% endif %}
+    {% if item.is_drone and item.faa_number %}
+        <div class="field-pair"><div class="field-label">FAA Registration</div><div class="field-value">{{ item.faa_number }}</div></div>
+    {% endif %}
+    {% if item.is_drone and item.faa_certificate %}
+        <div class="field-pair">
+            <div class="field-label">FAA Certificate</div>
+            <div class="field-value">
+                <a href="{{ item.faa_certificate.url }}" target="_blank">View Certificate</a>
+            </div>
+        </div>
+    {% endif %}
+    {% if item.receipt %}
+        <div class="field-pair">
+            <div class="field-label">Receipt</div>
+            <div class="field-value">
+                <a href="{{ item.receipt.url }}" target="_blank">View Receipt</a>
+            </div>
+        </div>
+    {% endif %}
+
+
+    <!-- Financial -->
+    <div class="section-title">Purchase & Sale</div>
+    {% if item.purchase_date %}
+        <div class="field-pair"><div class="field-label">Purchase Date</div><div class="field-value">{{ item.purchase_date }}</div></div>
+    {% endif %}
+    {% if item.purchase_cost %}
+        <div class="field-pair"><div class="field-label">Purchase Cost</div><div class="field-value">${{ item.purchase_cost|floatformat:2 }}</div></div>
+    {% endif %}
+    {% if item.date_sold %}
+        <div class="field-pair"><div class="field-label">Date Sold</div><div class="field-value">{{ item.date_sold }}</div></div>
+    {% endif %}
+    {% if item.sale_price %}
+        <div class="field-pair"><div class="field-label">Sale Price</div><div class="field-value">${{ item.sale_price|floatformat:2 }}</div></div>
+    {% endif %}
+    <div class="field-pair">
+        <div class="field-label">Deducted Full Cost</div>
+        <div class="field-value">{{ item.deducted_full_cost|yesno:"Yes,No" }}</div>
+    </div>
+
+    <!-- Lifecycle -->
+    {% if item.date_sold %}
+        <div class="section-title">Disposal</div>
+        <div class="field-pair"><div class="field-label">Date Disposed</div><div class="field-value">{{ item.date_sold }}</div></div>
+    {% endif %}
+
+    <!-- Notes -->
+    <div class="section-title">Notes</div>
+    <div class="notes-box">
+        {{ item.notes|linebreaksbr|default:"No additional notes." }}
+    </div>
+</body>
+</html>

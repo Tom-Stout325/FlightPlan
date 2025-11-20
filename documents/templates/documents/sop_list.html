@@ -1,0 +1,110 @@
+{% extends 'index.html' %}
+{% load static %}
+{% load flightplan_tags %}
+
+{% block title %}Standard Operating Procedures{% endblock %}
+
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="text-center mb-5 text-primary">Standard Operating Procedures</h2>
+
+  <div class="text-end mb-4">
+    <a href="{% url 'documents:sop_upload' %}" class="btn btn-outline-primary w-100">Upload New SOP</a>
+  </div>
+
+  <form method="get" class="row g-3 mb-3">
+  <div class="col-md-6">
+    <input type="text" name="q" class="form-control" placeholder="Search SOPs..." value="{{ search_query }}">
+  </div>
+  <div class="col-md-2">
+    <button type="submit" class="btn btn-success">Search</button>
+  </div>
+</form>
+
+<table class="table table-striped table-hover align-middle">
+  <thead class="table-light">
+    <tr>
+      <th scope="col">Date</th>
+      <th scope="col">Title</th>
+      <th scope="col">Description</th>
+      <th scope="col" class="text-end">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for sop in sops %}
+      <tr>
+        <td>{{ sop.created_at|date:"M d, Y" }}</td>
+        <td><strong>{{ sop.title }}</strong></td>
+        <td>{{ sop.description|default:"—" }}</td>
+        <td class="text-end">
+          <div class="btn-group" role="group">
+            <a href="{{ sop.file.url }}" download class="btn btn-sm btn-success">Download</a>
+            {% if sop.file.url|is_pdf %}
+              <a href="{{ sop.file.url }}" target="_blank" class="btn btn-sm btn-outline-info">Preview</a>
+            {% endif %}
+            <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#confirmDeleteSOPModal{{ sop.id }}">
+              Delete
+            </button>
+          </div>
+
+          <!-- Delete Confirmation Modal -->
+          <div class="modal fade" id="confirmDeleteSOPModal{{ sop.id }}" tabindex="-1" aria-labelledby="confirmDeleteSOPLabel{{ sop.id }}" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+              <div class="modal-content border-danger">
+                <div class="modal-header bg-danger text-white">
+                  <h5 class="modal-title" id="confirmDeleteSOPLabel{{ sop.id }}">Confirm Delete</h5>
+                  <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  Are you sure you want to permanently delete <strong>{{ sop.title }}</strong>?
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                  <form method="post" action="{% url 'documents:delete_sop' sop.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Yes, Delete</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    {% empty %}
+      <tr>
+        <td colspan="4" class="text-center text-muted">No SOP documents found.</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+
+  
+
+  <!-- Pagination -->
+  {% if page_obj.has_other_pages %}
+  <nav aria-label="SOP pagination" class="mt-4">
+    <ul class="pagination justify-content-center">
+      {% if page_obj.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+      </li>
+      {% endif %}
+
+      {% for num in page_obj.paginator.page_range %}
+      <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+        <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+      </li>
+      {% endfor %}
+
+      {% if page_obj.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

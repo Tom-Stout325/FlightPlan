@@ -1,0 +1,21 @@
+{% extends 'index.html' %}
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    {% block title %} Transaction Added{% endblock %}
+</head>
+
+{% block content %}
+
+<body>
+    <div class="text-center mt-5">
+        <h2 class="mb-4">Transaction added successfully </h2>
+        <a href="{% url 'transactions' %}" class="btn btn-success">Back to Transactions</a>
+    </div>
+    
+</body>
+
+{% endblock %}

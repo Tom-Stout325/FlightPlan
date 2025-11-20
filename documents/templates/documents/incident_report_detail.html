@@ -1,0 +1,109 @@
+{% extends 'index.html' %}
+{% load humanize %}
+
+{% block title %}Incident Report Detail{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-2">Incident Report  {{ report.reported_by }}</h2>
+  <h5 class="mb-4">Incident Number:  {{ report.id }}</h5>
+
+  <div class="text-center">
+
+    <div class="mb-3">
+      <a href="{% url 'documents:incident_report_pdf' report.id %}" class="btn btn-outline-primary px-4" target="_blank">
+        📄 View/Download PDF
+      </a>
+    </div>
+    <div class="mb-3">
+      <a href="{% url 'documents:incident_reporting_system' %}" class="btn btn-outline-danger px-5">
+        <i class="fa-solid fa-arrow-left"></i> Back to Incidents
+      </a>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header fw-bold">General Information</div>
+    <div class="card-body">
+      <p><strong>Report Date:</strong> {{ report.report_date }}</p>
+      <p><strong>Reported By:</strong> {{ report.reported_by }}</p>
+      <p><strong>Contact:</strong> {{ report.contact }}</p>
+      <p><strong>Role:</strong> {{ report.role }}</p>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header fw-bold">Event Details</div>
+    <div class="card-body">
+      <p><strong>Date/Time:</strong> {{ report.event_date }} {{ report.event_time }}</p>
+      <p><strong>Location:</strong> {{ report.location }}</p>
+      <p><strong>Type:</strong> {{ report.event_type }}</p>
+      <p><strong>Description:</strong> {{ report.description }}</p>
+      <p><strong>Injuries:</strong> {{ report.injuries|yesno:"Yes,No" }}</p>
+      {% if report.injuries %}
+        <p><strong>Details:</strong> {{ report.injury_details }}</p>
+      {% endif %}
+      <p><strong>Damage:</strong> {{ report.damage|yesno:"Yes,No" }}</p>
+      {% if report.damage %}
+        <p><strong>Cost:</strong> ${{ report.damage_cost|floatformat:2 }}</p>
+        <p><strong>Description:</strong> {{ report.damage_desc }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header fw-bold">Equipment</div>
+    <div class="card-body">
+      <p><strong>Drone Model:</strong> {{ report.drone_model }}</p>
+      <p><strong>Registration:</strong> {{ report.registration }}</p>
+      <p><strong>Controller:</strong> {{ report.controller }}</p>
+      <p><strong>Payload:</strong> {{ report.payload }}</p>
+      <p><strong>Battery:</strong> {{ report.battery }}</p>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header fw-bold">Environmental Conditions</div>
+    <div class="card-body">
+      <p><strong>Weather:</strong> {{ report.weather }}</p>
+      <p><strong>Wind:</strong> {{ report.wind }}</p>
+      <p><strong>Temperature:</strong> {{ report.temperature }}</p>
+      <p><strong>Lighting:</strong> {{ report.lighting }}</p>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header fw-bold">Witnesses</div>
+    <div class="card-body">
+      <p><strong>Witnesses Present:</strong> {{ report.witnesses|yesno:"Yes,No" }}</p>
+      {% if report.witnesses %}
+        <p><strong>Details:</strong> {{ report.witness_details }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header fw-bold">Actions Taken</div>
+    <div class="card-body">
+      <p><strong>Emergency Response:</strong> {{ report.emergency|yesno:"Yes,No" }}</p>
+      <p><strong>Agency Response:</strong> {{ report.agency_response }}</p>
+      <p><strong>Scene Actions:</strong> {{ report.scene_action }}</p>
+      <p><strong>FAA Report Filed:</strong> {{ report.faa_report|yesno:"Yes,No" }}</p>
+      {% if report.faa_ref %}
+        <p><strong>FAA Ref:</strong> {{ report.faa_ref }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header fw-bold">Follow-up</div>
+    <div class="card-body">
+      <p><strong>Cause:</strong> {{ report.cause }}</p>
+      <p><strong>Notes:</strong> {{ report.notes }}</p>
+      <p><strong>Signed By:</strong> {{ report.signature }}</p>
+      <p><strong>Sign Date:</strong> {{ report.sign_date }}</p>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

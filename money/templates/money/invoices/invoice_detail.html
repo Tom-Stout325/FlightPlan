@@ -1,0 +1,122 @@
+{% load static %}
+{% load humanize %}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Invoice {{ invoice.invoice_number }}</title>
+  <style>
+    /* Page + running footer */
+    @page{
+      size: Letter;
+      margin: 0.75in;
+      @bottom-center { content: element(pdf_footer); }
+    }
+
+    body{ margin:0; font-family:"Segoe UI", Helvetica, Arial, sans-serif; color:#333; }
+
+    /* Simple two-column layout that prints reliably */
+    .row{ display: table; width:100%; table-layout:fixed; }
+    .col{ display: table-cell; vertical-align: top; }
+    .col.left{ padding-right:12px; }
+    .col.right{ padding-left:12px; text-align:right; }
+
+    .logo{ width: 200px; }
+    .h2{ font-size:28px; margin:0 0 4px; }
+    .muted{ color:#666; }
+
+    .bar{ background:#2c3e50; color:#fff; font-weight:700; padding:6px 10px; margin:0 0 6px; }
+    .box{ border:1px solid #dcdcdc; padding:8px 10px; }
+
+    .pill{ background:#f5f7fb; border:1px solid #e2e6ef; padding:10px 12px; border-radius:6px; margin: 14px 0; }
+
+    table{ width:100%; border-collapse: collapse; font-size:12px; }
+    thead th{ background:#e8f0fe; border:1px solid #d1d8e5; padding:6px 8px; text-align:left; }
+    tbody td{ border:1px solid #e1e1e1; padding:6px 8px; vertical-align:top; }
+
+    .totals{ text-align:right; margin-top:10px; }
+    .totals h5{ margin:0; font-size:16px; }
+
+    /* Running footer (prints at bottom of every page) */
+    .pdf-footer{
+      position: running(pdf_footer);
+      font-size:10px; color:#777; text-align:center;
+      border-top:1px solid #ddd; padding-top:6px; margin-top:16px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="row" style="margin-bottom:16px">
+    <div class="col left">
+      <img src="{% static 'images/logo2.png' %}" alt="Airborne Images" class="logo">
+    </div>
+    <div class="col right">
+      <div class="h2">Invoice</div>
+      <div>Invoice #: {{ invoice.invoice_number }}</div>
+      <div class="muted">Date: {{ invoice.date|date:"M j, Y" }}</div>
+    </div>
+  </div>
+
+  <!-- From / To -->
+  <div class="row" style="margin-bottom:14px">
+    <div class="col left">
+      <div class="bar">FROM:</div>
+      <div class="box">
+        TSP, LLC<br>
+        <span class="muted">dba</span> Airborne Images<br>
+        2241 West 171st Street<br>
+        Westfield, Indiana 46074
+      </div>
+    </div>
+    <div class="col right" style="text-align:left">
+      <div class="bar">TO:</div>
+      <div class="box">
+        {{ invoice.client }}<br>
+        {{ invoice.client.street }}{% if invoice.client.address2 %}<br>{{ invoice.client.address2 }}{% endif %}<br>
+        {{ invoice.client.email }}
+      </div>
+    </div>
+  </div>
+
+  <!-- Event -->
+  <div class="pill">
+    <strong>Event:</strong> {{ invoice.event }}<br>
+    <strong>Location:</strong> {{ invoice.location }}
+  </div>
+
+  <!-- Items -->
+  <table>
+    <thead>
+      <tr class="bar">
+        <th style="width:7%">Qty</th>
+        <th>Description</th>
+        <th style="width:18%">Unit Price</th>
+        <th style="width:18%">Line Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in invoice.items.all %}
+      <tr>
+        <td>{{ item.qty|default:0 }}</td>
+        <td>{{ item.description }}</td>
+        <td>${{ item.price|floatformat:2|intcomma }}</td>
+        <td>${{ item.total|floatformat:2|intcomma }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Totals -->
+  <div class="totals">
+    <h5>Total Due: ${{ invoice.amount|default:0.00|floatformat:2|intcomma }}</h5>
+  </div>
+
+  <!-- Footer (running) -->
+  <footer class="pdf-footer">
+    317.987.7387 &nbsp; | &nbsp; www.Airborne-Images.net &nbsp; | &nbsp; tom@airborne-images.net
+  </footer>
+
+</body>
+</html>

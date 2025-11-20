@@ -1,0 +1,70 @@
+{% extends 'index.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+Upload SOP
+{% endblock %}
+
+
+{% block content %}
+<div class="container mt-4">
+  <div class="card shadow-sm">
+    <div class="card-header bg-primary text-white">
+      <h4 class="mb-0">Upload Standard Operating Procedure</h4>
+    </div>
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+
+        {{ form.non_field_errors }}
+        {{ form.title|as_crispy_field }}
+        {{ form.description|as_crispy_field }}
+
+        <!-- Drag and Drop Upload Area -->
+        <div id="dropzone" class="border rounded p-5 text-center mb-3" style="background-color: #f8f9fa; cursor: pointer;">
+          <p id="dropzone-text" class="mb-2">Drag & drop your SOP file here, or click to browse.</p>
+          <input type="file" name="file" id="fileInput" class="form-control d-none" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg">
+          <button type="button" class="btn btn-outline-primary mt-2" onclick="fileInput.click();">Browse</button>
+        </div>
+
+        <div class="d-flex justify-content-between mt-4">
+          <button type="submit" class="btn btn-primary">Upload</button>
+          <a href="{% url 'documents:sop_list' %}" class="btn btn-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Drag and Drop Script -->
+<script>
+  const dropzone = document.getElementById("dropzone");
+  const fileInput = document.getElementById("fileInput");
+  const dropzoneText = document.getElementById("dropzone-text");
+
+  dropzone.addEventListener("dragover", function (e) {
+    e.preventDefault();
+    dropzone.classList.add("bg-light", "border-primary");
+  });
+
+  dropzone.addEventListener("dragleave", function () {
+    dropzone.classList.remove("bg-light", "border-primary");
+  });
+
+  dropzone.addEventListener("drop", function (e) {
+    e.preventDefault();
+    dropzone.classList.remove("bg-light", "border-primary");
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      fileInput.files = files;
+      dropzoneText.textContent = `Selected: ${files[0].name}`;
+    }
+  });
+
+  dropzone.addEventListener("click", function () {
+    fileInput.click();
+  });
+</script>
+{% endblock %}

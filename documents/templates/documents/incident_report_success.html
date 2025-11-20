@@ -1,0 +1,52 @@
+{% extends 'index.html' %} 
+{% load static %} 
+
+{% block title %} Incident Report Submitted {% endblock
+%} {% block content %}
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Report Submission Successful</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: #f4f8fb;
+        color: #333;
+        padding: 40px;
+      }
+      h1 {
+        font-size: 2.5rem;
+        color: #003366;
+        border-bottom: 3px solid #0077cc;
+        padding-bottom: 10px;
+        margin-bottom: 0;
+      }
+      p {
+        font-size: 1.2rem;
+        margin-top: 20px;
+      }
+      a {
+        font-size: 1.2rem;
+        color: #0077cc;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Airborne Images - Report Submission Successful</h1>
+    <p>Your drone incident report has been successfully submitted.</p>
+    <p>Click the link below to download the PDF copy of your report:</p>
+    <p><a href="{{ pdf_url }}" target="_blank">Download PDF</a></p>
+    <p>
+      <a href="{% url 'documents:incident_reporting_system' %}" target="_blank"
+        >Back to Incident Report List</a
+      >
+    </p>
+  </body>
+</html>
+
+{% endblock %}

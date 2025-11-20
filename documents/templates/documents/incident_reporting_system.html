@@ -1,0 +1,78 @@
+{% extends 'index.html' %}
+{% load static %}
+{% load flightplan_tags %}
+
+{% block title %}
+Incident Reporting System
+{% endblock %}
+
+
+
+{% block content %}
+
+<div class="container mt-5">
+    <div>
+        <h2 class="text-center text-primary fw-light">Incident Reporting System</h2>
+    </div>
+
+    <div class="container mt-4">
+
+        <div>
+          <a href="{% url 'documents:submit_incident_report' %}" class="btn btn-outline-primary mb-3 w-100">Submit New Incident Report</a>
+        </div>
+      
+        <!-- Search form -->
+        <form method="get" class="row g-2 mb-4">
+          <div class="col-md-6">
+            <input type="text" name="q" class="form-control" placeholder="Search by name, location, or description..." value="{{ search_query }}">
+          </div>
+          <div class="col-md-2">
+            <button type="submit" class="btn btn-success w-100 ">Search</button>
+          </div>
+        </form>
+      
+        <div class="accordion" id="incidentAccordion">
+          {% for report in incident_reports %}
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="heading{{ forloop.counter }}">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}" aria-expanded="false" aria-controls="collapse{{ forloop.counter }}">
+                  <strong>{{ report.description }}</strong> — {{ report.report_date }}
+                </button>
+              </h2>
+              <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse" aria-labelledby="heading{{ forloop.counter }}" data-bs-parent="#incidentAccordion">
+                <div class="accordion-body">
+                  <p><strong>Location:</strong> {{ report.location }}</p>
+                  <p><strong>Date/Time:</strong> {{ report.event_date }} {{ report.event_time }}</p>
+                  <p><strong>Description:</strong><br>{{ report.description }}</p>
+        
+                  {% if report.attachment %}
+                    <p><strong>Attachment:</strong> 
+                      <a href="{{ report.attachment.url }}" target="_blank">View File</a>
+                    </p>
+                  {% endif %}
+        
+                  <a href="{% url 'documents:incident_detail' report.id %}" class="btn btn-sm btn-outline-info mt-2">View Full Report</a>
+                </div>
+              </div>
+            </div>
+          {% empty %}
+            <div class="alert alert-info">No incident reports found.</div>
+          {% endfor %}
+        </div>
+        
+
+
+        
+          <p>Total Reports: {{ incident_reports|length }}</p>
+        
+          
+   
+      
+        
+      </div>
+<hr>
+
+
+</div>
+
+{% endblock %}

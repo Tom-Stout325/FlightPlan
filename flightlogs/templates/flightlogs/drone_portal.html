@@ -1,0 +1,178 @@
+{% extends 'index.html' %}
+{% load static %}
+{% load flightplan_tags %}
+
+{% block title %}Drone Portal{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <!-- Header -->
+  <div class="text-center mb-5">
+    <img src="{% static 'images/logo2.png' %}" alt="FlightPlan Logo" class="img-fluid shadow-sm rounded" style="max-height: 150px;">
+    <h1 class="display-6 text-primary">Drone Operations Dashboard</h1>
+  </div>
+
+  <hr>
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <h5 class="card-title text-center mb-4 text-primary">Quick Stats</h5>
+      <hr class="w-50 text-primary mx-auto">
+      <div class="row text-center mb-3">
+        <div class="col-md-4 mb-3 mb-md-0">
+          <div class="text-muted"># Flights</div>
+          <h4 class="fw-bold text-info">{{ total_flights }}</h4>
+        </div>
+        <div class="col-md-4 mb-3 mb-md-0">
+          <div class="text-muted">Total Flight Time</div>
+          <h4 class="fw-bold text-info">{{ total_flight_time|duration }}</h4>
+        </div>
+        <div class="col-md-4">
+          <div class="text-muted"># Drones</div>
+          <h4 class="fw-bold text-info">{{ active_drones }}</h4>
+        </div>
+      </div>
+
+      <hr class="w-50 text-primary mx-auto">
+
+      <div class="row text-center">
+        <div class="col-md-4 mb-3 mb-md-0">
+          <div class="text-muted">Highest Altitude</div>
+          {% if highest_altitude_flight %}
+            <h5>
+              <a href="{% url 'flightlog_detail' highest_altitude_flight.id %}" class="text-decoration-none text-success">
+                {{ highest_altitude_flight.max_altitude_ft }} ft
+              </a>
+            </h5>
+          {% else %}
+            <h5 class="text-muted">—</h5>
+          {% endif %}
+        </div>
+
+        <div class="col-md-4 mb-3 mb-md-0">
+          <div class="text-muted">Fastest Speed</div>
+          {% if fastest_speed_flight %}
+            <h5>
+              <a href="{% url 'flightlog_detail' fastest_speed_flight.id %}" class="text-decoration-none text-success">
+                {{ fastest_speed_flight.max_speed_mph }} mph
+              </a>
+            </h5>
+          {% else %}
+            <h5 class="text-muted">—</h5>
+          {% endif %}
+        </div>
+
+        <div class="col-md-4">
+          <div class="text-muted">Longest Flight</div>
+          {% if longest_flight %}
+            <h5>
+              <a href="{% url 'flightlog_detail' longest_flight.id %}" class="text-decoration-none text-success">
+                {{ longest_flight.max_distance_ft }} Feet
+              </a>
+            </h5>
+          {% else %}
+            <h5 class="text-muted">—</h5>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cards Section -->
+  <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-4">
+    <div class="col">
+      <div class="card shadow-sm h-100 border-primary hover-scale">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title text-primary text-center">👨‍✈️&nbsp;Pilot Profile</h5>
+          <p class="card-text mb-3">Manage your profile, license, and training records.</p>
+          <div class="mt-auto">
+            <a href="{% url 'pilot:profile' %}" class="btn btn-primary w-100 text-white">Go to Profile</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card shadow-sm h-100 border-warning hover-scale">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title text-warning text-center">🛠️ Equipment</h5>
+          <p class="card-text mb-3">Track drones, batteries, controllers, and other equipment.</p>
+          <div class="mt-auto">
+            <a href="{% url 'equipment:equipment_list' %}" class="btn btn-warning w-100 text-dark">View Equipment</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card shadow-sm h-100 border-success hover-scale">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title text-success text-center"><i class="fas fa-map-marked-alt"></i> &nbsp;Flight Logs</h5>
+          <p class="card-text mb-3">Upload logs, review flight history, and generate reports.</p>
+          <div class="mt-auto">
+            <a href="{% url 'flightlogs:flightlog_list' %}" class="btn btn-success w-100">View Logs</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card shadow-sm h-100 border-info hover-scale">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title text-center text-info">🚨 Incident Reporting</h5>
+          <p class="card-text mb-3">Submit and review drone-related incident reports.</p>
+          <div class="mt-auto">
+            <a href="{% url 'documents:incident_reporting_system' %}" class="btn btn-info w-100">View Incidents</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card shadow-sm h-100 border-secondary hover-scale">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title text-secondary text-center">📝 SOPs</h5>
+          <p class="card-text mb-3">View and manage your standard operating procedures.</p>
+          <div class="mt-auto">
+            <a href="{% url 'documents:sop_list' %}" class="btn btn-secondary w-100">View SOPs</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card shadow-sm h-100 border-danger hover-scale">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title text-danger text-center">📑 General Documents</h5>
+          <p class="card-text mb-3">Access uploaded documents, guides, and resources.</p>
+          <div class="mt-auto">
+            <a href="{% url 'documents:general_document_list' %}" class="btn btn-danger w-100">Browse Documents</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# NEW: Ops Plans card #}
+    <div class="col">
+      <div class="card shadow-sm h-100 border-dark hover-scale">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title text-dark text-center">🗺️ Ops Plans</h5>
+          <p class="card-text mb-3">Create, review, and export operations plans by event & year.</p>
+          <div class="mt-auto">
+            <a href="{% url 'operations:ops_plan_index' %}" class="btn btn-dark w-100">View Ops Plans</a>
+
+          </div>
+        </div>
+      </div>
+    </div>
+    {# /NEW #}
+
+  </div>
+</div>
+
+<style>
+  .hover-scale:hover {
+    transform: scale(1.02);
+    transition: all 0.2s ease-in-out;
+  }
+</style>
+{% endblock %}

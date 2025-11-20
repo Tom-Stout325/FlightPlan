@@ -1,0 +1,125 @@
+{% load static %}
+{% load crispy_forms_tags %}
+
+<style>
+  .drop-zone {
+    border: 2px dashed #ccc;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    background-color: #f9f9f9;
+    transition: background-color 0.3s;
+  }
+
+  .drop-zone:hover {
+    background-color: #f1f1f1;
+  }
+
+  .form-section {
+    margin-bottom: 1.5rem;
+  }
+
+  .preview-img {
+    max-height: 180px;
+  }
+</style>
+
+<div class="container mt-4">
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="row">
+      {% for field in form.visible_fields %}
+        {% if field.name not in 'faa_certificate receipt active deducted_full_cost' %}
+          <div class="col-md-4 mb-3">
+            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+            {{ field }}
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    <div class="row">
+      <div class="col-md-6 mb-3 d-flex align-items-center">
+        <label class="me-2">{{ form.deducted_full_cost.label_tag }}</label>
+        {{ form.deducted_full_cost }}
+      </div>
+      <div class="col-md-6 mb-3 d-flex align-items-center">
+        <label class="me-2">{{ form.active.label_tag }}</label>
+        {{ form.active }}
+      </div>
+    </div>
+
+    <div class="row">
+      <!-- FAA Certificate -->
+      <div class="col-md-6 mb-4">
+        <label for="id_faa_certificate" class="form-label">FAA Certificate</label>
+        <div class="drop-zone" id="faa-drop-zone">
+          <p><i class="fas fa-upload fa-lg text-primary"></i></p>
+          <p>Drag & drop or click to upload FAA Certificate (PDF/Image)</p>
+          <input type="file" name="faa_certificate" id="id_faa_certificate" accept=".pdf,.jpg,.jpeg,.png" hidden>
+        </div>
+        {% if form.instance.faa_certificate %}
+          <div id="faa-preview" class="mt-2 text-center small text-muted">
+            {% if form.instance.faa_certificate.url|slice:"-4:" == ".pdf" %}
+              <a href="{{ form.instance.faa_certificate.url }}" target="_blank">
+                <i class="fas fa-file-pdf"></i> View PDF
+              </a>
+            {% else %}
+              <img src="{{ form.instance.faa_certificate.url }}" class="img-fluid rounded border mt-2 preview-img">
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Receipt -->
+      <div class="col-md-6 mb-4">
+        <label for="id_receipt" class="form-label">Receipt</label>
+        <div class="drop-zone" id="receipt-drop-zone">
+          <p><i class="fas fa-upload fa-lg text-primary"></i></p>
+          <p>Drag & drop or click to upload Receipt (PDF/Image)</p>
+          <input type="file" name="receipt" id="id_receipt" accept=".pdf,.jpg,.jpeg,.png" hidden>
+        </div>
+        {% if form.instance.receipt %}
+          <div id="receipt-preview" class="mt-2 text-center small text-muted">
+            {% if form.instance.receipt.url|slice:"-4:" == ".pdf" %}
+              <a href="{{ form.instance.receipt.url }}" target="_blank">
+                <i class="fas fa-file-pdf"></i> View PDF
+              </a>
+            {% else %}
+              <img src="{{ form.instance.receipt.url }}" class="img-fluid rounded border mt-2 preview-img">
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="text-end">
+      <button type="submit" class="btn btn-success">
+        <i class="fas fa-save"></i> Save Equipment
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+  document.querySelectorAll('.drop-zone').forEach(zone => {
+    const input = zone.querySelector('input');
+
+    zone.addEventListener('click', () => input.click());
+
+    zone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      zone.classList.add('bg-light');
+    });
+
+    zone.addEventListener('dragleave', () => {
+      zone.classList.remove('bg-light');
+    });
+
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      zone.classList.remove('bg-light');
+      input.files = e.dataTransfer.files;
+    });
+  });
+</script>

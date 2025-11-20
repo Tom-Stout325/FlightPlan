@@ -1,0 +1,63 @@
+{% extends "index.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="card shadow-sm border-0 rounded-4">
+    <div class="card-body p-4">
+      <h2 class="fw-bold mb-4">
+        <i class="fa-solid fa-envelope-circle-check me-2 text-primary"></i>
+        Setting Up a Gmail App Password
+      </h2>
+
+      <p class="lead">
+        Use this guide to create a <strong>Gmail App Password</strong>—a special 16-character password that allows 12bytes software emails securely through Gmail.
+      </p>
+
+      <hr class="my-4">
+
+      <h4 class="fw-semibold mb-3">Step 1: Turn on 2-Step Verification</h4>
+      <ol class="mb-4">
+        <li>Go to <a href="https://myaccount.google.com/security" target="_blank" rel="noopener">myaccount.google.com/security</a>.</li>
+        <li>Under <strong>“How you sign in to Google”</strong>, click <strong>2-Step Verification</strong>.</li>
+        <li>Follow the prompts to enable it. Once enabled, return to the <strong>Security</strong> page.</li>
+      </ol>
+
+      <h4 class="fw-semibold mb-3">Step 2: Open the App Passwords Page</h4>
+      <p>
+        After 2-Step Verification is on, click
+        <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">
+          App passwords
+        </a>
+        under the same <strong>Security</strong> section.
+      </p>
+
+      <h4 class="fw-semibold mt-4 mb-3">Step 3: Generate an App Password</h4>
+      <ol class="mb-4">
+        <li>In <strong>Select app</strong>, choose <strong>Mail</strong> or select <strong>Other (Custom name)</strong> and type something like <em>12bytes</em>.</li>
+        <li>In <strong>Select device</strong>, choose your device or <em>Other</em>.</li>
+        <li>Click <strong>Generate</strong>.</li>
+        <li>Copy the 16-character password that appears (ignore spaces).</li>
+      </ol>
+
+
+      <hr class="my-4">
+
+      <h4 class="fw-semibold mb-3">Troubleshooting</h4>
+      <ul class="mb-4">
+        <li><strong>App passwords not showing?</strong> Make sure 2-Step Verification is turned on.</li>
+        <li><strong>Advanced Protection user?</strong> App passwords are disabled for those accounts.</li>
+        <li><strong>Google Workspace user?</strong> Your admin may need to enable app passwords.</li>
+        <li><strong>Still can’t access?</strong> Wait a few minutes, sign out/in, or try a different browser.</li>
+      </ul>
+
+      <h4 class="fw-semibold mb-3">Good Practices</h4>
+      <ul>
+        <li>Generate separate app passwords for each server or app.</li>
+        <li>Label them clearly for easy management.</li>
+        <li>Revoke old or unused app passwords regularly.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

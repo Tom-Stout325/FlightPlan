@@ -1,0 +1,144 @@
+{% extends 'index.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="text-primary text-center mb-2">Income & Expense Summary</h2>
+  <h4 class="text-muted text-center mb-4">Year: {{ selected_year|default:"All Years" }}</h4>
+
+  <!-- Year Selection -->
+  <div class="card shadow-sm mb-5">
+    <div class="card-header bg-primary text-white">
+      <h5 class="mb-0">Year Filter</h5>
+    </div>
+    <div class="card-body bg-light">
+      <form method="get" class="row g-3 align-items-center justify-content-center">
+        <div class="col-auto">
+          <label for="year" class="form-label fw-bold">Select Year:</label>
+        </div>
+        <div class="col-auto">
+          <select name="year" id="year" class="form-select" onchange="this.form.submit()">
+            <option value="">All Years</option>
+            {% for year in available_years %}
+              <option value="{{ year }}" {% if selected_year|slugify == year|slugify %}selected{% endif %}>{{ year }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="text-center mb-4">
+    <a href="{% url 'money:category_summary_pdf' %}?year={{ selected_year }}&preview=1" target="_blank" class="btn btn-outline-secondary me-2">
+      <i class="fa-solid fa-eye"></i> Preview PDF
+    </a>
+    <a href="{% url 'money:category_summary_pdf' %}?year={{ selected_year }}" class="btn btn-outline-danger">
+      <i class="fa-solid fa-file-pdf"></i> Download PDF
+    </a>
+  </div>
+
+  <!-- INCOME Section -->
+  <div class="card mb-5 shadow-sm">
+    <div class="card-header bg-success text-white">
+      <h5 class="mb-0">Income Categories & Sub-Categories</h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Category / Sub-Category</th>
+              <th class="text-end">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in income_category_totals %}
+              <tr class="table-success fw-bold">
+                <td>{{ row.category }}</td>
+                <td class="text-end">$ {{ row.total|floatformat:2|intcomma }}</td>
+              </tr>
+              {% for sub_cat, amount, schedule_c in row.subcategories %}
+              <tr>
+                <td class="ps-4">↳ {{ sub_cat }}
+                  {% if schedule_c %}
+                    <small class="text-muted d-block">Schedule C Line: {{ schedule_c }}</small>
+                  {% endif %}
+                </td>
+                <td class="text-end">$ {{ amount|floatformat:2|intcomma }}</td>
+              </tr>
+              {% endfor %}
+            {% empty %}
+              <tr><td colspan="2" class="text-center text-muted">No income data</td></tr>
+            {% endfor %}
+            {% if income_category_total %}
+            <tr class="fw-bold bg-success text-white">
+              <td>Total Income</td>
+              <td class="text-end">$ {{ income_category_total|floatformat:2|intcomma }}</td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXPENSE Section -->
+  <div class="card mb-5 shadow-sm">
+    <div class="card-header bg-warning text-dark">
+      <h5 class="mb-0">Expense Categories & Sub-Categories</h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Category / Sub-Category</th>
+              <th class="text-end">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in expense_category_totals %}
+              <tr class="table-warning fw-bold">
+                <td>{{ row.category }}</td>
+                <td class="text-end">- $ {{ row.total|floatformat:2|intcomma }}</td>
+              </tr>
+              {% for sub_cat, amount, schedule_c in row.subcategories %}
+              <tr>
+                <td class="ps-4">↳ {{ sub_cat }}
+                  {% if schedule_c %}
+                    <small class="text-muted d-block">Schedule C Line: {{ schedule_c }}</small>
+                  {% endif %}
+                </td>
+                <td class="text-end">- $ {{ amount|floatformat:2|intcomma }}</td>
+              </tr>
+              {% endfor %}
+            {% empty %}
+              <tr><td colspan="2" class="text-center text-muted">No expense data</td></tr>
+            {% endfor %}
+            {% if expense_category_total %}
+            <tr class="fw-bold bg-warning">
+              <td>Total Expenses</td>
+              <td class="text-end">- $ {{ expense_category_total|floatformat:2|intcomma }}</td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="card shadow-sm mb-5">
+    <div class="card-header bg-info text-white text-center">
+      <h4 class="mb-0">Year-End Summary</h4>
+    </div>
+    <div class="card-body text-center">
+      <h5 class="mb-2"><strong>Year:</strong> {{ selected_year }}</h5>
+      <p class="mb-1"><strong>Total Income:</strong> $ {{ income_category_total|floatformat:2|intcomma }}</p>
+      <p class="mb-1"><strong>Total Expenses:</strong> $ {{ expense_category_total|floatformat:2|intcomma }}</p>
+      <p class="fw-bold text-primary"><strong>Net Profit/Loss:</strong> $ {{ net_profit|floatformat:2|intcomma }}</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

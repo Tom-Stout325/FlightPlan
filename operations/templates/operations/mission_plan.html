@@ -1,0 +1,105 @@
+{% extends 'index.html' %}
+{% load static %}
+{% block content %}
+<div class="container mt-5 mb-5 p-4 border rounded bg-light">
+    <h2 class="text-center mb-0">NHRA 4-Wide Nationals</h2>
+    <h5 class="text-center mb-4">6570 Bruton Smith Blvd</h5>
+    
+    <form method="post" action="{% url 'drone_operation_submit' %}">
+        {% csrf_token %}
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label>Start Date:</label>
+                <input type="date" name="start_date" class="form-control" value="2025-04-25">
+            </div>
+            <div class="col-md-6">
+                <label>End Date:</label>
+                <input type="date" name="end_date" class="form-control" value="2025-04-27">
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label>Client:</label>
+            <input type="text" name="client" class="form-control" value="NHRA">
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <label>Airspace:</label>
+                <input type="text" name="airspace" class="form-control" value="D">
+            </div>
+            <div class="col-md-3">
+                <label>Approval:</label>
+                <select name="airspace_approval" class="form-control">
+                    <option selected>Yes</option>
+                    <option>No</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label>Reference Number:</label>
+                <input type="text" name="reference_number" class="form-control" value="See below">
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label>Approved Altitude:</label>
+            <input type="text" name="approved_altitude" class="form-control" value="200ft">
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label>Nearest Airport:</label>
+                <input type="text" name="nearest_airport" class="form-control" value="KJQF">
+            </div>
+            <div class="col-md-6">
+                <label>Phone Number:</label>
+                <input type="tel" name="airport_phone" class="form-control" value="704-920-590">
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label>RPIC:</label>
+                <input type="text" name="rpic" class="form-control" value="Stout, Tom">
+            </div>
+            <div class="col-md-6">
+                <label>Certificate Number:</label>
+                <input type="text" name="certificate" class="form-control" value="4627541">
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label>FAA Waivers / Notes:</label>
+            <textarea name="notes" class="form-control" rows="3">FAA Waivers: ASLIZHAXMOBO, ASLUNG5PRMJ0, ASLHRRXS68CO. 200ft AGL, 10am - 7pm.</textarea>
+        </div>
+
+        <div class="mb-3 border-top pt-3">
+            <label class="form-label text-danger fw-bold">Special Instructions - Flights Over Racing Surface:</label>
+            <textarea name="special_instructions" class="form-control" rows="2">Minimum Altitude: 30 Feet, Flights over Start Line</textarea>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <label class="form-label text-danger">Flights Over Racing Surface:</label><br>
+                <input type="radio" name="flights_over_racing_surface" value="Yes" id="yes">
+                <label for="yes">Yes</label>
+                <input type="radio" name="flights_over_racing_surface" value="No" id="no" class="ms-3">
+                <label for="no">No</label>
+            </div>
+            <div class="col-md-4">
+                <label>Approved:</label>
+                <input type="text" name="approved" class="form-control">
+            </div>
+            <div class="col-md-4">
+                <label>By:</label>
+                <input type="text" name="approved_by" class="form-control">
+            </div>
+        </div>
+
+        <div class="text-center">
+            <button type="submit" class="btn btn-primary">Submit Operation Plan</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "index.html" %}
+{% block content %}
+<div class="container mt-5">
+  <h2 class="mb-4">Equipment Help</h2>
+
+  <div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Managing Your Equipment</h5>
+        <ol class="list-group list-group-numbered">
+            <li class="list-group-item">Go to the <strong>Equipment</strong> section from the main dashboard or the Menu.</li>
+            <li class="list-group-item">Click the <strong>“Add New Equipment”</strong> button to open the collapsible entry form.</li>
+            <li class="list-group-item">Fill in details such as:
+            <ul class="mt-2">
+                <li>Name (Your name for this piece of equipment)</li>
+                <li>Equipment Type (Select form the dropdown menu)</li>
+                <li>Brand</li>
+                <li>Model</li>
+                <li>Serial Number</li>
+                <li>FAA Registration Number for Drones</li>
+                <li>Purchase Date (use the date picker)</li>
+                <li>Purchase Cost</li>
+                <li>Optional Items: Sale Date, Sale Price, Notes, FAA Certificate & Receipt</li>
+                <li>All entries may be updated later.</li>
+            </ul>
+            </li>
+            <li class="list-group-item">Use drag-and-drop to upload or click/tap to select the file:
+            <ul>
+                <li>FAA Certificate</li>
+                <li>Purchase Receipt</li>
+            </ul>
+            </li>
+            <li class="list-group-item">Click <strong>Save</strong> to add the item. Your equipment will appear in the list below.</li>
+            <li class="list-group-item">Click on any item to view full details or edit it. You can also delete an entry if needed.</li>
+        </ol>
+    <hr>
+        <ul><h5 class="card-title">Equipment Inventory Page</h5>
+            <li><strong>Export PDF</strong> button will generate a pdf of your equipment inventory page. </li>
+            <li><strong>Action</strong> buttons in the Equpment Table: </li>
+                 <ul class="mt-2">
+                    <li><i class="fas fa-eye"></i> Allows you to view the details of that particular item</li>
+                        <ul>Within the View pop up, you can select the <strong>PDF</strong> button to generate a pdf report of that particular item.</ul>
+                    <li><i class="fas fa-edit"></i> Allows you to Edit the details of that particular item</li>
+                    <li><i class="fas fa-trash-alt"></i> Allows you to Delete the details of that particular item</li>
+
+    </div>
+  </div>
+
+  <a href="{% url 'help:help_home' %}" class="btn btn-secondary">← Back to Help Center</a>
+</div>
+{% endblock %}

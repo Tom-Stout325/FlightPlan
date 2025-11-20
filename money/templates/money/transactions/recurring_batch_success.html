@@ -1,0 +1,49 @@
+{% extends 'index.html' %}
+{% load humanize %}
+{% load finance_tags %}
+
+{% block title %}Recurring Batch Success{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="card shadow-sm">
+    <div class="card-header bg-success text-white">
+      <h4 class="mb-0">Recurring Transactions Processed</h4>
+    </div>
+    <div class="card-body">
+      <p><strong>{{ created|length }} transactions created</strong>. {{ skipped }} skipped.</p>
+
+      {% if created %}
+        <table class="table table-bordered table-striped">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Transaction</th>
+              <th>Type</th>
+              <th>Amount</th>
+              <th>Event</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for tx in created %}
+              <tr>
+                <td>{{ tx.date }}</td>
+                <td>{{ tx.transaction }}</td>
+                <td>{{ tx.trans_type.trans_type }}</td>
+                <td>${{ tx.amount|floatformat:2|intcomma }}</td>
+                <td>{{ tx.event.title }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="text-muted">No new transactions were created.</p>
+      {% endif %}
+
+      <a href="{% url 'money:transactions' %}" class="btn btn-primary mt-3">
+        <i class="fa-solid fa-arrow-left"></i> Return to Transactions
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "index.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+  {% if form.instance.pk %}Update Mileage{% else %}Add Mileage{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+      <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">
+            {% if form.instance.pk %}
+              <i class="fa-solid fa-pen-to-square"></i> Update Mileage Entry
+            {% else %}
+              <i class="fa-solid fa-plus"></i> Add New Mileage Entry
+            {% endif %}
+          </h5>
+        </div>
+        <div class="card-body">
+          <form method="post" novalidate>
+            {% csrf_token %}
+            {{ form|crispy }}
+            <div class="d-grid gap-2 mt-3">
+              <button type="submit" class="btn btn-success">
+                {% if form.instance.pk %}
+                  <i class="fa-solid fa-save"></i> Update Entry
+                {% else %}
+                  <i class="fa-solid fa-plus"></i> Save Entry
+                {% endif %}
+              </button>
+              <a href="{% url 'money:mileage_log' %}" class="btn btn-outline-secondary">
+                <i class="fa-solid fa-arrow-left"></i> Back to Mileage Log
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

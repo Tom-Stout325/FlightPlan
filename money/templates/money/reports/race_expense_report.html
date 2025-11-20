@@ -1,0 +1,116 @@
+{% extends 'index.html' %}
+{% load static %}
+{% load l10n %}
+{% load humanize %}
+{% load finance_tags %}
+
+{% block title %}Race Expense Report{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <!-- Report Header -->
+    <div class="card shadow border-0 mb-5">
+        <div class="card-header bg-primary text-white text-center py-3">
+            <h2 class="mb-0">Airborne Images</h2>
+            <h5 class="mb-0">NHRA Expense Report ({{ years|join:", " }})</h5>
+        </div>
+
+        <!-- event Dropdown -->
+        <div class="card-body bg-light">
+            <form method="get" class="row justify-content-center align-items-center mb-4">
+                <div class="col-auto">
+                    <label for="event" class="form-label fw-bold">Select event:</label>
+                </div>
+                <div class="col-md-4 col-sm-6">
+                    <select name="event" id="event" class="form-select" onchange="this.form.submit()">
+                        <option value="">-- All events --</option>
+                        {% for event in events %}
+                            <option value="{{ event }}" {% if selected_event == event %}selected{% endif %}>
+                                {{ event|default:"Unspecified" }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </form>
+
+            <!-- Download Button -->
+            <div class="text-center mb-4">
+                <a href="{% url 'money:race_expense_report_pdf' %}?event={{ selected_event }}" class="btn btn-outline-primary w-100">
+                    <i class="fa-solid fa-file-arrow-down"></i> Download This Report
+                </a>
+            </div>
+
+            <!-- Travel Expense Report -->
+            {% for event, subcategories in summary_data.items %}
+                {% if not selected_event or selected_event == event %}
+                    <div class="mb-5">
+                        <h3 class="text-danger mb-4 text-center">{{ event|default:"Unspecified" }}</h3>
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover align-middle">
+                                <thead class="table-danger">
+                                    <tr>
+                                        <th class="px-4">Subcategory</th>
+                                        {% for year in years %}
+                                            <th class="text-end px-4">{{ year }}</th>
+                                        {% endfor %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for subcategory in travel_subcategories %}
+                                        <tr>
+                                            <td class="px-4">{{ subcategory }}</td>
+                                            {% for year in years %}
+                                                <td class="text-end px-4">
+                                                    {% with year_data=subcategories|lookup:subcategory %}
+                                                        {% if year_data and year_data|lookup:year %}
+                                                            $ {{ year_data|lookup:year|floatformat:2|intcomma }}
+                                                        {% else %}
+                                                            $ 0.00
+                                                        {% endif %}
+                                                    {% endwith %}
+                                                </td>
+                                            {% endfor %}
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                                <tfoot>
+                                    <tr class="table-light">
+                                        <td class="fw-bold px-4">Total</td>
+                                        {% for year in years %}
+                                            <td class="fw-bold text-end px-4">
+                                                $ {{ event_totals|lookup:event|lookup:year|floatformat:2|intcomma|default:"0.00" }}
+                                            </td>
+                                        {% endfor %}
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                {% endif %}
+            {% empty %}
+                <div class="alert alert-warning text-center">No travel expenses found for selected event.</div>
+            {% endfor %}
+
+            <!-- Overall Totals -->
+            {% if not selected_event %}
+            <div class="card bg-light p-3">
+                <div class="row align-items-center text-center text-md-end">
+                    <div class="col-12 col-md-auto">
+                        <h4 class="fw-bold mb-2 mb-md-0">Total Travel Expenses:</h4>
+                    </div>
+                    <div class="col-12 col-md">
+                        {% for year in years %}
+                            <h5 class="mb-0">
+                                {{ year }}: $ {{ yearly_totals|lookup:year|floatformat:2|intcomma|default:"0.00" }}
+                            </h5>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<pre>{{ events }}</pre>
+
+{% endblock %}

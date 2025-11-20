@@ -1,0 +1,48 @@
+{# templates/money/recurring_report.html #}
+{% extends 'index.html' %}
+{% load humanize finance_tags %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-4 text-success text-center">Recurring Transactions Report</h2>
+
+  <form method="get" class="mb-4">
+    <label for="year" class="form-label me-2">Year:</label>
+    <select name="year" id="year" class="form-select d-inline-block w-auto">
+      {% for y in 2022|get_range:5 %}
+        <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-sm btn-outline-primary ms-2">Go</button>
+  </form>
+
+  <div class="table-responsive mt-4">
+    <table class="table table-bordered table-sm text-center align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Transaction</th>
+          {% for m in months %}
+            <th>{{ m|slice:":3" }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in data %}
+          <tr>
+            <td class="text-start">{{ row.template.transaction }}</td>
+            {% for amt in row.monthly_amounts %}
+              <td>
+                {% if amt is not None %}
+                  ${{ amt|floatformat:2|intcomma }}
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

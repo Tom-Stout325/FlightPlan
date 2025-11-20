@@ -1,0 +1,17 @@
+{% extends 'index.html' %}
+{% load static %}
+
+{% block content %}
+  <div class="container mt-5">
+    <h2 class="mb-4">Edit Equipment: {{ item.name }}</h2>
+
+    <div class="card card-body border-secondary shadow-sm">
+      <form method="post" enctype="multipart/form-data" class="small">
+        {% csrf_token %}
+        {% include 'equipment/equipment_form.html' %}
+
+        <a href="{% url 'equipment:equipment_list' %}" class="btn btn-outline-secondary mt-3 ms-2">Cancel</a>
+      </form>
+    </div>
+  </div>
+{% endblock %}

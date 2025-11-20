@@ -1,0 +1,65 @@
+{% extends "index.html" %}
+{% block content %}
+<div class="container mt-5">
+  <h2 class="mb-4">Getting Started with FlightPlan</h2>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Welcome to FlightPlan!</h5>
+      <p class="card-text">
+        This guide will walk you through the steps to set up your account, complete your pilot profile, and start using all of FlightPlan’s features like flight logging, incident reporting, and equipment tracking.
+      </p>
+
+      <hr>
+
+      <h5 class="text-primary mt-4">✅ What You’ll Need Before You Begin</h5>
+      <ul>
+        <li>A valid email address</li>
+        <li>Your FAA Part 107 Certificate or Pilot License Number</li>
+        <li>A digital copy of your pilot certificate (JPG or PDF)</li>
+        <li>Details about your drone equipment (Brand, Model, Serial Number, FAA Registration)</li>
+        <li>An AirData account to retrieve your flight logs, the free acount works just fine. <a href="https://www.airdata.com">AirData.com</a></li>
+        <li>Flight Logs downloaded from AirData in csv format.</li>
+      </ul>
+
+      <hr>
+
+      <h5 class="text-primary mt-4">🛫 Step-by-Step Setup</h5>
+      <ol class="list-group list-group-numbered mb-4">
+        <li class="list-group-item">
+          <strong>Register your account</strong><br>
+          Enter a username, email, and a secure password to create your FlightPlan account.
+        </li>
+        <li class="list-group-item">
+          <strong>Complete your pilot profile</strong><br>
+          After logging in, you’ll be prompted to add your license number, upload a license image, and optionally enter training records.
+        </li>
+        <li class="list-group-item">
+          <strong>Add your equipment</strong><br>
+          Navigate to the Equipment section and input your drone, controller, battery, and FAA details. You can also upload certificates and receipts.
+        </li>
+        <li class="list-group-item">
+          <strong>Log your first flight</strong><br>
+          Use the Flight Log section to add a flight date, duration, location, and stats like max altitude, speed, and total distance.
+        </li>
+        <li class="list-group-item">
+          <strong>Upload documents</strong><br>
+          Visit the Documents section to upload SOPs, waivers, manuals, and more. Organize by type for quick reference.
+        </li>
+        <li class="list-group-item">
+          <strong>Review your dashboard</strong><br>
+          See summaries of your flight stats, equipment, incidents, and documents all in one place.
+        </li>
+        <li class="list-group-item">
+          <strong>Report any incidents (if needed)</strong><br>
+          Use the Incident Report Wizard to record issues, accidents, or safety concerns in a detailed, multi-step form.
+        </li>
+      </ol>
+
+      <p class="text-muted">Once you’ve completed the setup, you're ready to fly and track with confidence.</p>
+    </div>
+  </div>
+
+  <a href="{% url 'help:help_home' %}" class="btn btn-secondary">← Back to Help Center</a>
+</div>
+{% endblock %}

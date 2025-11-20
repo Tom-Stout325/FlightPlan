@@ -1,0 +1,51 @@
+{% extends "index.html" %}
+{% load static %}
+
+{% block title %}
+  {{ BRAND_NAME|default:"FlightPlan" }} | Dashboard
+{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <div class="text-center mb-5">
+    <h1 class="display-5 fw-bold">
+      Welcome to {{ BRAND_NAME|default:"Your" }} Dashboard
+    </h1>
+    {% if BRAND_TAGLINE %}
+      <p class="text-muted mb-1">{{ BRAND_TAGLINE }}</p>
+    {% endif %}
+    <p class="text-muted">Choose a portal to get started.</p>
+  </div>
+
+  <div class="row g-4 justify-content-center">
+
+    {# Money Portal – placeholder for when Money app is wired in #}
+    <div class="col-12 col-md-4">
+      <button class="btn btn-outline-primary btn-lg w-100 py-4 shadow" type="button" disabled>
+        💰 Money Portal (coming soon)
+      </button>
+    </div>
+
+    {# Drone Portal – main entry to equipment / drone features #}
+    <div class="col-12 col-md-4">
+      <a href="{% url 'equipment:drone_portal' %}"
+         class="btn btn-outline-success btn-lg w-100 py-4 shadow d-flex align-items-center justify-content-center">
+        <img src="{% static 'images/logo.png' %}"
+             alt="{{ BRAND_NAME }} Logo"
+             style="height: 30px;"
+             class="me-2">
+        <span>Drone Portal</span>
+      </a>
+    </div>
+
+    {# Pilot Profile #}
+    <div class="col-12 col-md-4">
+      <a href="{% url 'pilot:profile' %}"
+         class="btn btn-outline-dark btn-lg w-100 py-4 shadow">
+        👨‍✈️ Pilot Profile
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

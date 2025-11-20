@@ -1,0 +1,187 @@
+{% load static %}
+{% load bootstrap5 %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+  />
+
+  <title>
+    {% block title %}
+      {{ BRAND_NAME|default:"12bytes" }}
+    {% endblock %}
+  </title>
+
+  {# --- SEO & Open Graph (overrideable per page) --- #}
+  {% block meta %}
+    <meta name="description"
+          content="Upload, parse, and manage DJI drone flight logs. Track your flight time, speed, altitude, and more with this intuitive drone logbook web app.">
+
+    <meta property="og:title"
+          content="{{ BRAND_NAME|default:'Drone Flight Log App' }}" />
+    <meta property="og:description"
+          content="Upload and analyze your DJI drone logs. Track all key metrics from your drone flights." />
+    <meta property="og:type" content="website" />
+    {# Optionally override this per deployment/page #}
+    <meta property="og:url"
+          content="{% block og_url %}{% endblock %}" />
+    <meta property="og:image"
+          content="{% block og_image %}{% static 'images/og-banner.jpg' %}{% endblock %}" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title"
+          content="{{ BRAND_NAME|default:'Drone Flight Log App' }}" />
+    <meta name="twitter:description"
+          content="Upload and analyze your DJI drone logs. Track all key metrics from your drone flights." />
+    <meta name="twitter:image"
+          content="{% block twitter_image %}{% static 'images/twitter-banner.jpg' %}{% endblock %}" />
+  {% endblock meta %}
+
+  {# --- iOS Web App Meta --- #}
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="{{ BRAND_NAME|default:'12Bytes Transactions' }}">
+
+  <link rel="apple-touch-icon" href="{% static 'images/app-icon-192.png' %}">
+  <link rel="apple-touch-icon" sizes="192x192" href="{% static 'images/app-icon-192.png' %}">
+  <link rel="apple-touch-icon" sizes="512x512" href="{% static 'images/app-icon-512.png' %}">
+
+  <link rel="mask-icon" href="{% static 'images/app-icon-192.png' %}" color="#004080">
+
+  {# iOS splash screens (keep if you’re using them) #}
+  <link rel="apple-touch-startup-image" href="{% static 'images/app-splash.png' %}">
+  <link rel="apple-touch-startup-image"
+        href="{% static 'images/app-splash-640x1136.png' %}"
+        media="(device-width: 320px) and (device-height: 568px)">
+  <link rel="apple-touch-startup-image"
+        href="{% static 'images/app-splash-750x1334.png' %}"
+        media="(device-width: 375px) and (device-height: 667px)">
+  <link rel="apple-touch-startup-image"
+        href="{% static 'images/app-splash-828x1792.png' %}"
+        media="(device-width: 414px) and (device-height: 896px)">
+  <link rel="apple-touch-startup-image"
+        href="{% static 'images/app-splash-1125x2436.png' %}"
+        media="(device-width: 375px) and (device-height: 812px)">
+  <link rel="apple-touch-startup-image"
+        href="{% static 'images/app-splash-1242x2688.png' %}"
+        media="(device-width: 414px) and (device-height: 896px)">
+  <link rel="apple-touch-startup-image"
+        href="{% static 'images/app-splash-1536x2048.png' %}"
+        media="(device-width: 768px) and (device-height: 1024px)">
+  <link rel="apple-touch-startup-image"
+        href="{% static 'images/app-splash-1668x2224.png' %}"
+        media="(device-width: 834px) and (device-height: 1112px)">
+  <link rel="apple-touch-startup-image"
+        href="{% static 'images/app-splash-1668x2388.png' %}"
+        media="(device-width: 834px) and (device-height: 1194px)">
+  <link rel="apple-touch-startup-image"
+        href="{% static 'images/app-splash-2048x2732.png' %}"
+        media="(device-width: 1024px) and (device-height: 1366px)">
+
+  {# --- Favicon / App Icon (logo is client-specific) --- #}
+  <link rel="icon" href="{% static 'images/favicon.ico' %}" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="{% static 'images/favicon.ico' %}">
+
+  <meta name="csrf-token" content="{{ csrf_token }}">
+
+  {# --- Fonts --- #}
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap"
+        rel="stylesheet" />
+
+  {# --- Bootstrap CSS --- #}
+  {% bootstrap_css %}
+
+  {# --- Font Awesome --- #}
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  {# --- Global Custom Styles --- #}
+  <link rel="stylesheet" href="{% static 'styles/index.css' %}">
+
+  {# --- Page-Specific Styles --- #}
+  {% block extra_css %}{% endblock %}
+</head>
+
+<body class="d-flex flex-column min-vh-100">
+
+  {# Shared navbar, can use BRAND_NAME / BRAND_TAGLINE inside #}
+  {% include 'navbar.html' %}
+
+  <main class="flex-fill">
+    <div class="container mt-4">
+
+      {# Messages #}
+      {% if messages %}
+        <div class="mb-3">
+          {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert"
+                      aria-label="Close"></button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  {# Optional footer if you want branding down there as well #}
+  {% block footer %}
+    <footer class="border-top py-3 mt-4">
+      <div class="container d-flex flex-wrap justify-content-between align-items-center small text-muted">
+        <div>
+          &copy; {{ BRAND_NAME|default:"12bytes" }} {% now "Y" %}
+          {% if BRAND_TAGLINE %}
+            &middot; {{ BRAND_TAGLINE }}
+          {% endif %}
+        </div>
+        <div>
+          <span class="text-uppercase">{{ CLIENT_SLUG }}</span>
+        </div>
+      </div>
+    </footer>
+  {% endblock footer %}
+
+  {# Page-Specific Scripts #}
+  {% block extra_js %}{% endblock %}
+
+  {# Bootstrap JS #}
+  {% bootstrap_javascript %}
+
+  {# Spinner Script #}
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const forms = document.querySelectorAll('form');
+      forms.forEach(form => {
+        form.addEventListener('submit', () => {
+          const spinner = document.getElementById('loadingSpinner');
+          if (spinner) {
+            spinner.style.display = 'flex';
+          }
+        });
+      });
+    });
+  </script>
+
+  {# Tooltips #}
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const tooltipTriggerList = Array.prototype.slice.call(
+        document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      );
+      tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+        new bootstrap.Tooltip(tooltipTriggerEl);
+      });
+    });
+  </script>
+
+</body>
+</html>

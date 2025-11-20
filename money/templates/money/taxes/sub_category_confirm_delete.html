@@ -1,0 +1,15 @@
+{% extends 'index.html' %}
+{% load static %}
+
+{% block content %}
+    <div class="container w-50 justify-content-center bg-light border rounded">
+        <div class="py-4 text-center">
+            <h2>Delete Sub-Category</h2>
+            <p>Are you sure you want to delete "{{ sub_cat.sub_cat }}"?</p>
+
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Yes, delete</button>
+    <a href="{% url 'money:category_page' %}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}

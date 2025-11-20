@@ -1,0 +1,92 @@
+{% extends 'index.html' %}
+
+{% block content %}
+
+  <div class="d-flex justify-content-start gap-2 mb-4">
+    <a href="{% url 'money:recurring_add' %}" class="btn btn-success">
+      <i class="fa-solid fa-plus"></i> Add New
+    </a>
+    <a href="{% url 'money:recurring_report' %}" class="btn btn-outline-primary">
+      <i class="fa-solid fa-chart-column"></i> Run Report
+    </a>
+    <a href="{% url 'money:run_monthly_recurring' %}" class="btn btn-outline-warning">
+      <i class="fa-solid fa-bolt"></i> Run Monthly Recurring
+    </a>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm table-striped align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>ID</th>
+          <th>Type</th>
+          <th>Transaction</th>
+          <th class="text-end">Amount</th>
+          <th class="text-center">Day</th>
+          <th>Category</th>
+          <th>SubCategory</th>
+          <th class="d-none d-lg-table-cell">Team</th>
+          <th class="d-none d-lg-table-cell">Event</th>
+          <th class="text-center">Active</th>
+          <th class="text-nowrap">Last Run</th>  {# NEW #}
+          <th class="text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in recurring_transactions %}
+        <tr class="{% if not r.active %}text-muted{% endif %}">
+          <td>{{ r.id }}</td>
+
+          <td>
+            {% if r.trans_type == 'Income' %}
+              <span class="badge bg-success">Income</span>
+            {% else %}
+              <span class="badge bg-danger">Expense</span>
+            {% endif %}
+          </td>
+
+          <td>{{ r.transaction }}</td>
+
+          <td class="text-end">${{ r.amount|floatformat:2 }}</td>
+
+          <td class="text-center">{{ r.day }}</td>
+
+          <td>{{ r.category }}</td>
+          <td>{{ r.sub_cat }}</td>
+
+          <td class="d-none d-lg-table-cell">{{ r.team|default:"—" }}</td>
+          <td class="d-none d-lg-table-cell">{{ r.event|default:"—" }}</td>
+
+          <td class="text-center">
+            {% if r.active %}
+              <i class="fa-solid fa-check-circle text-success" title="Active" aria-label="Active"></i>
+            {% else %}
+              <i class="fa-solid fa-times-circle text-muted" title="Inactive" aria-label="Inactive"></i>
+            {% endif %}
+          </td>
+
+          <td class="text-nowrap">
+            {{ r.last_created|default:"—" }}
+          </td>
+
+          <td class="text-center">
+            <div class="btn-group btn-group-sm" role="group">
+              <a href="{% url 'money:recurring_edit' r.pk %}" class="btn btn-warning" title="Edit">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </a>
+              <a href="{% url 'money:recurring_delete' r.pk %}" class="btn btn-danger" title="Delete">
+                <i class="fa-solid fa-trash"></i>
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="12" class="text-center py-4 text-muted">No recurring transactions found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+{% endblock %}

@@ -1,0 +1,154 @@
+{% load humanize %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Category Summary PDF</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      margin: 0;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    header img {
+      max-height: 80px;
+      margin-top: 10px;
+    }
+    h2, h4 {
+      margin: 0;
+    }
+    .section {
+      margin-bottom: 30px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .text-end {
+      text-align: right;
+    }
+    .ps-4 {
+      padding-left: 1.5em;
+    }
+    .fw-bold {
+      font-weight: bold;
+    }
+    .text-muted {
+      color: #777;
+      font-size: 10px;
+    }
+    .summary {
+      margin-top: 40px;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+<img src="{% static 'images/logo.png' %}" alt="{{ BRAND.name }} Logo" style="max-height: 80px;">
+  <h2>Income & Expense Summary</h2>
+  <h4>Year: {{ selected_year }}</h4>
+</header>
+
+<!-- Income Section -->
+<div class="section">
+  <h3>Income Categories & Sub-Categories</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Category / Sub-Category</th>
+        <th class="text-end">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in income_category_totals %}
+        <tr class="fw-bold">
+          <td>{{ row.category }}</td>
+          <td class="text-end">$ {{ row.total|floatformat:2|intcomma }}</td>
+        </tr>
+        {% for sub_cat, amount, schedule_c in row.subcategories %}
+        <tr>
+          <td class="ps-4">↳ {{ sub_cat }}
+            {% if schedule_c %}
+              <div class="text-muted">Schedule C Line: {{ schedule_c }}</div>
+            {% endif %}
+          </td>
+          <td class="text-end">$ {{ amount|floatformat:2|intcomma }}</td>
+        </tr>
+        {% endfor %}
+      {% empty %}
+        <tr><td colspan="2">No income data found.</td></tr>
+      {% endfor %}
+      {% if income_category_total %}
+      <tr class="fw-bold">
+        <td>Total Income</td>
+        <td class="text-end">$ {{ income_category_total|floatformat:2|intcomma }}</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Expense Section -->
+<div class="section">
+  <h3>Expense Categories & Sub-Categories</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Category / Sub-Category</th>
+        <th class="text-end">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in expense_category_totals %}
+        <tr class="fw-bold">
+          <td>{{ row.category }}</td>
+          <td class="text-end">- $ {{ row.total|floatformat:2|intcomma }}</td>
+        </tr>
+        {% for sub_cat, amount, schedule_c in row.subcategories %}
+        <tr>
+          <td class="ps-4">↳ {{ sub_cat }}
+            {% if schedule_c %}
+              <div class="text-muted">Schedule C Line: {{ schedule_c }}</div>
+            {% endif %}
+          </td>
+          <td class="text-end">- $ {{ amount|floatformat:2|intcomma }}</td>
+        </tr>
+        {% endfor %}
+      {% empty %}
+        <tr><td colspan="2">No expense data found.</td></tr>
+      {% endfor %}
+      {% if expense_category_total %}
+      <tr class="fw-bold">
+        <td>Total Expenses</td>
+        <td class="text-end">- $ {{ expense_category_total|floatformat:2|intcomma }}</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Summary -->
+<div class="summary">
+  <p><strong>Total Income:</strong> $ {{ income_category_total|floatformat:2|intcomma }}</p>
+  <p><strong>Total Expenses:</strong> $ {{ expense_category_total|floatformat:2|intcomma }}</p>
+  <p class="fw-bold"><strong>Net Profit/Loss:</strong> $ {{ net_profit|floatformat:2|intcomma }}</p>
+</div>
+
+</body>
+</html>

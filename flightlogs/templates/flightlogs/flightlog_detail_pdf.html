@@ -1,0 +1,108 @@
+{% load static %}
+{% load flightplan_tags %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Flight Log PDF</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      font-size: 12pt;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #444;
+      padding-bottom: 10px;
+      margin-bottom: 30px;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 20pt;
+    }
+    .header h3 {
+      margin: 5px 0 0;
+      font-size: 12pt;
+      color: #555;
+    }
+    h2 {
+      margin-top: 30px;
+      font-size: 14pt;
+      border-bottom: 1px solid #aaa;
+    }
+    .section {
+      margin-bottom: 20px;
+    }
+    .section p {
+      margin: 4px 0;
+    }
+    .label {
+      font-weight: bold;
+    }
+    .logo {
+      height: 60px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <h1>Flight Report</h1>
+      <h3>{{ log.takeoff_address|default:"Unknown Location" }} | {{ log.flight_date }}</h3>
+    </div>
+    <img src="{% static 'images/logo2.png' %}" class="logo">
+  </div>
+
+  <div class="section">
+    <h2>Date & Time</h2>
+    <p><span class="label">Date:</span> {{ log.flight_date }}</p>
+    <p><span class="label">Takeoff Time:</span> {{ log.landing_time|default:"—" }}</p>
+    <p><span class="label">Duration:</span> {{ log.air_time|duration }}</p>
+  </div>
+
+  <div class="section">
+    <h2>Location</h2>
+    <p><span class="label">Takeoff Address:</span> {{ log.takeoff_address }}</p>
+    <p><span class="label">GPS Coordinates:</span> {{ log.takeoff_latlong }}</p>
+  </div>
+
+  <div class="section">
+    <h2>Flight Details</h2>
+    <p><span class="label">Drone:</span> {{ log.drone_name }} ({{ log.drone_type }})</p>
+    <p><span class="label">Serial Number:</span> {{ log.drone_serial }}</p>
+    <p><span class="label">Battery:</span> {{ log.battery_name }}</p>
+    <p><span class="label">Photos Taken:</span> {{ log.photos|default:"0" }}</p>
+    <p><span class="label">Videos Taken:</span> {{ log.videos|default:"0" }}</p>
+    <p><span class="label">Max Altitude:</span> {{ log.max_altitude_ft }} ft</p>
+    <p><span class="label">Max Speed:</span> {{ log.max_speed_mph }} mph</p>
+    <p><span class="label">Total Distance:</span> {{ log.total_mileage_ft }} ft</p>
+  </div>
+
+  <div class="section">
+    <h2>Weather</h2>
+    <p><span class="label">Conditions:</span> {{ log.ground_weather_summary }}</p>
+    <p><span class="label">Temperature:</span> {{ log.ground_temp_f }}</p>
+    <p><span class="label">Humidity:</span> {{ log.humidity_pct }}</p>
+
+    <p><span class="label">Ground Wind:</span> {{ log.wind_speed }}</p>
+    <p><span class="label">Wind Gust:</span> {{ log.max_gust }} mph</p>
+
+    <p><span class="label">Cloudy:</span> {{ log.cloud_cover }}</p>
+    <p><span class="label">Visibility:</span> {{ log.visibility_miles }} miles</p>
+
+    <p><span class="label">Conditions:</span> {{ log.ground_weather_summary }}</p>
+  </div>
+
+  {% if log.notes %}
+  <div class="section">
+    <h2>Notes</h2>
+    <p>{{ log.notes }}</p>
+  </div>
+  {% endif %}
+</body>
+</html>

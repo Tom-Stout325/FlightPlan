@@ -1,0 +1,20 @@
+{% extends 'index.html' %}
+{% block content %}
+<div class="container mt-4">
+  <div class="col-lg-6 offset-lg-3">
+    <div class="card border-danger shadow-sm">
+      <div class="card-header bg-danger text-white">
+        <h4 class="mb-0">Confirm Delete</h4>
+      </div>
+      <div class="card-body">
+        <p>Are you sure you want to delete the training record: <strong>{{ training.title }}</strong> completed on <strong>{{ training.date_completed }}</strong>?</p>
+        <form method="POST">
+          {% csrf_token %}
+          <a href="{% url 'pilot:profile' %}" class="btn btn-secondary">Cancel</a>
+          <button type="submit" class="btn btn-danger">Delete</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

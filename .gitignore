@@ -1,0 +1,79 @@
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.Python
+
+# Django
+*.log
+*.pot
+*.pyc
+db.sqlite3
+media/
+staticfiles/
+local_settings.py
+
+# Environment variables
+.env
+.env.*
+
+
+# VS Code
+.vscode/
+.code-workspace
+
+# JetBrains (PyCharm)
+.idea/
+
+# Node (if used for frontend tools)
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Coverage and testing
+.coverage
+coverage.xml
+htmlcov/
+*.cover
+.tox/
+.pytest_cache/
+nosetests.xml
+test_db.sqlite3
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Bytecode cache
+*.bak
+*.swp
+*.swo
+
+# System logs
+*.log
+
+# Mac file locking
+*.lock
+
+
+# In .gitignore
+!project/fixtures/finance_data.json

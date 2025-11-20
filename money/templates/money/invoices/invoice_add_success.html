@@ -1,0 +1,21 @@
+{% extends 'index.html' %}
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    {% block title %}Invoice Added{% endblock %}
+</head>
+
+{% block content %}
+
+<body>
+    <div class="text-center">
+        <h2 class="mt-5 mb-3">Invoice Added Successfully!</h2>
+        <a href="{% url 'invoice_list' %}" class="btn btn-success">Back to Invoices</a>
+    </div>
+
+</body>
+
+{% endblock %}

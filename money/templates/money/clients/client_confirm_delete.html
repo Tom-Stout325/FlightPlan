@@ -1,0 +1,18 @@
+{% extends 'index.html' %}
+{% load static %}
+
+{% block content %}
+    <div class="container w-50 justify-content-center bg-light border rounded">
+        <div class="py-4 text-center">
+            <h2>Delete Client</h2>
+            <br>
+            <h4>Are you sure you want to delete "{{ client.business }}"?</h4>
+        </div>
+        <div>
+            <form method="post" class="text-center">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger px-4 mx-5">Yes, delete</button>
+                <a href="{% url 'money:category_page' %}" class="btn btn-secondary px-5">Cancel</a>
+            </form>
+        </div>
+{% endblock %}

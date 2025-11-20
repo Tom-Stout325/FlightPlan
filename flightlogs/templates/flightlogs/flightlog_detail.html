@@ -1,0 +1,79 @@
+{% extends 'index.html' %}
+{% load flightplan_tags %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-4">Flight Details</h2>
+
+  <!-- Export Button -->
+  <div class="mb-3 text-end">
+    <a href="{% url 'flightlogs:flightlog_pdf' log.id %}" class="btn btn-outline-secondary" target="_blank">
+      <i class="fas fa-file-pdf"></i> Export to PDF
+    </a>
+  </div>
+
+  <!-- Date & Time -->
+  <div class="card mb-4">
+    <div class="card-header fw-bold">Date & Time</div>
+    <div class="card-body">
+      <p><strong>Date:</strong> {{ log.flight_date }}</p>
+      <p><strong>Takeoff Time:</strong> {{ log.landing_time|default:"—" }}</p>
+      <p><strong>Duration:</strong> {{ log.air_time|duration|default:"—" }}</p>
+    </div>
+  </div>
+
+  <!-- Locations -->
+  {% if log.takeoff_address or log.takeoff_latlong %}
+  <div class="card mb-4">
+    <div class="card-header fw-bold">Location</div>
+    <div class="card-body">
+      {% if log.takeoff_address %}<p><strong>Takeoff Address:</strong> {{ log.takeoff_address }}</p>{% endif %}
+      {% if log.takeoff_latlong %}<p><strong>GPS Coordinates:</strong> {{ log.takeoff_latlong }}</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Flight Info -->
+  <div class="card mb-4">
+    <div class="card-header fw-bold">Flight Details</div>
+    <div class="card-body">
+      {% if log.drone_name or log.drone_type %}
+        <p><strong>Drone:</strong> {{ log.drone_name }}{% if log.drone_type %} ({{ log.drone_type }}){% endif %}</p>
+      {% endif %}
+      {% if log.drone_serial %}<p><strong>Serial Number:</strong> {{ log.drone_serial }}</p>{% endif %}
+      {% if log.battery_name %}<p><strong>Battery:</strong> {{ log.battery_name }}</p>{% endif %}
+      {% if log.photos %}<p><strong>Photos Taken:</strong> {{ log.photos }}</p>{% endif %}
+      {% if log.videos %}<p><strong>Videos Taken:</strong> {{ log.videos }}</p>{% endif %}
+      {% if log.max_altitude_ft %}<p><strong>Max Altitude:</strong> {{ log.max_altitude_ft }} ft</p>{% endif %}
+      {% if log.max_speed_mph %}<p><strong>Max Speed:</strong> {{ log.max_speed_mph }} mph</p>{% endif %}
+      {% if log.total_mileage_ft %}<p><strong>Total Distance:</strong> {{ log.total_mileage_ft }} ft</p>{% endif %}
+    </div>
+  </div>
+
+  <!-- Weather Info -->
+  {% if log.ground_weather_summary or log.wind_speed or log.max_gust or log.ground_temp_f or log.cloud_cover or log.visibility_miles or log.humidity_pct %}
+  <div class="card mb-4">
+    <div class="card-header fw-bold">Weather</div>
+    <div class="card-body">
+      {% if log.ground_weather_summary %}<p><strong>Conditions:</strong> {{ log.ground_weather_summary }}</p>{% endif %}
+      {% if log.wind_speed %}<p><strong>Ground Wind Speed:</strong> {{ log.wind_speed }} mph</p>{% endif %}
+      {% if log.max_gust %}<p><strong>Max Gust:</strong> {{ log.max_gust }} mph</p>{% endif %}
+      {% if log.ground_temp_f %}<p><strong>Temperature:</strong> {{ log.ground_temp_f }} °F</p>{% endif %}
+      {% if log.cloud_cover %}<p><strong>Cloud Cover:</strong> {{ log.cloud_cover }}</p>{% endif %}
+      {% if log.visibility_miles %}<p><strong>Visibility:</strong> {{ log.visibility_miles }} mi</p>{% endif %}
+      {% if log.humidity_pct %}<p><strong>Humidity:</strong> {{ log.humidity_pct }}%</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Notes -->
+  {% if log.notes %}
+  <div class="card mb-4">
+    <div class="card-header fw-bold">Notes</div>
+    <div class="card-body">
+      <p>{{ log.notes }}</p>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

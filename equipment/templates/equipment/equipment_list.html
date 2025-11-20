@@ -1,0 +1,166 @@
+{% extends 'index.html' %}
+{% load static %}
+{% load flightplan_tags %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="text-primary text-center mb-4 fw-light">Equipment Inventory</h2>
+
+  <!-- Top Actions -->
+  <div class="row align-items-center mb-4 gy-2">
+    <div class="col-12 col-md-auto">
+      <button class="btn btn-outline-primary w-100"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#addEquipmentForm"
+              aria-expanded="false"
+              aria-controls="addEquipmentForm">
+        <i class="fas fa-plus-circle"></i> Add New Equipment
+      </button>
+    </div>
+
+    <div class="col-12 col-md-auto ms-md-auto text-md-end">
+      <a href="{% url 'equipment:equipment_pdf' %}" target="_blank" class="btn btn-outline-danger w-100">
+        <i class="fas fa-file-pdf"></i> Export to PDF
+      </a>
+    </div>
+
+    <div class="col-12 col-md-auto text-md-end">
+      <a href="{% url 'equipment:export_equipment_csv' %}" class="btn btn-outline-success w-100">
+        <i class="fas fa-file-csv"></i> Export to CSV
+      </a>
+    </div>
+  </div>
+
+  <!-- Add Form -->
+  <div class="collapse mb-4" id="addEquipmentForm">
+    <form method="post" enctype="multipart/form-data" action="{% url 'equipment:equipment_create' %}">
+      {% csrf_token %}
+      {% include 'equipment/equipment_form.html' %}
+    </form>
+  </div>
+
+  <!-- Table -->
+  <div class="table-responsive">
+    <table class="table table-bordered table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th class="d-none d-md-table-cell">Brand</th>
+          <th>Model</th>
+          <th class="d-none d-md-table-cell">Serial</th>
+          <th class="d-none d-md-table-cell">Purchased</th>
+          <th class="text-center">Active</th>
+          <th class="text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in equipment %}
+          <tr class="{% if not item.active %}text-muted{% endif %}">
+            <td>{{ item.name }}</td>
+            <td>{{ item.equipment_type }}</td>
+            <td class="d-none d-md-table-cell">{{ item.brand }}</td>
+            <td>{{ item.model }}</td>
+            <td class="d-none d-md-table-cell">{{ item.serial_number }}</td>
+            <td class="d-none d-md-table-cell">{{ item.purchase_date|default:"—" }}</td>
+            <td class="text-center">
+              {% if item.active %}
+                <i class="fas fa-check-circle text-success" aria-label="Active"></i>
+              {% else %}
+                <i class="fas fa-times-circle text-muted" aria-label="Inactive"></i>
+              {% endif %}
+            </td>
+            <td>
+              <div class="d-flex justify-content-center align-items-center gap-2">
+                <button type="button"
+                        class="btn btn-sm btn-info"
+                        data-bs-toggle="modal"
+                        data-bs-target="#equipmentModal{{ item.pk }}"
+                        title="View">
+                  <i class="fas fa-eye"></i>
+                </button>
+                <a href="{% url 'equipment:equipment_edit' item.pk %}" class="btn btn-sm btn-primary" title="Edit">
+                  <i class="fas fa-edit"></i>
+                </a>
+                <a href="{% url 'equipment:equipment_delete' item.pk %}" class="btn btn-sm btn-danger" title="Delete">
+                  <i class="fas fa-trash-alt"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8" class="text-center">No equipment found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Equipment Detail Modals -->
+  {% for item in equipment %}
+  <div class="modal fade" id="equipmentModal{{ item.pk }}" tabindex="-1" aria-labelledby="equipmentModalLabel{{ item.pk }}" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="equipmentModalLabel{{ item.pk }}">{{ item.name }} Details</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <dl class="row small gy-2">
+            {% if item.equipment_type %}<dt class="col-sm-4">Type</dt><dd class="col-sm-8">{{ item.equipment_type }}</dd>{% endif %}
+            {% if item.brand %}<dt class="col-sm-4">Brand</dt><dd class="col-sm-8">{{ item.brand }}</dd>{% endif %}
+            {% if item.model %}<dt class="col-sm-4">Model</dt><dd class="col-sm-8">{{ item.model }}</dd>{% endif %}
+            {% if item.serial_number %}<dt class="col-sm-4">Serial Number</dt><dd class="col-sm-8">{{ item.serial_number }}</dd>{% endif %}
+            {% if item.faa_number %}<dt class="col-sm-4">FAA Registration</dt><dd class="col-sm-8">{{ item.faa_number }}</dd>{% endif %}
+
+            {# Drone-only flight stats (uses annotated values + duration_display) #}
+            {% if item.equipment_type == "Drone" %}
+              <dt class="col-sm-4">Flights</dt>
+              <dd class="col-sm-8">{{ item.flights_count|default:"0" }}</dd>
+
+              <dt class="col-sm-4">Flight Time</dt>
+              <dd class="col-sm-8">{{ item.total_duration|duration_display }}</dd>
+            {% endif %}
+
+            {% if item.faa_certificate %}
+              <dt class="col-sm-4">FAA Certificate</dt>
+              <dd class="col-sm-8">
+                <a href="{{ item.faa_certificate.url }}" target="_blank" rel="noopener">View Full Size</a><br>
+                <img src="{{ item.faa_certificate.url }}" alt="FAA Certificate" class="img-fluid mt-2" style="max-height: 150px;">
+              </dd>
+            {% endif %}
+
+            {% if item.receipt %}
+              <dt class="col-sm-4">Receipt</dt>
+              <dd class="col-sm-8">
+                <a href="{{ item.receipt.url }}" target="_blank" rel="noopener">Open</a><br>
+                {% if item.receipt.url|is_pdf %}
+                  {{ item.receipt.url|file_badge|safe }}
+                {% else %}
+                  <img src="{{ item.receipt.url }}" alt="Receipt" class="img-fluid mt-2" style="max-height: 150px;">
+                {% endif %}
+              </dd>
+            {% endif %}
+
+            {% if item.purchase_date %}<dt class="col-sm-4">Purchase Date</dt><dd class="col-sm-8">{{ item.purchase_date }}</dd>{% endif %}
+            {% if item.purchase_cost %}<dt class="col-sm-4">Purchase Cost</dt><dd class="col-sm-8">${{ item.purchase_cost|floatformat:2 }}</dd>{% endif %}
+            {% if item.date_sold %}<dt class="col-sm-4">Date Sold</dt><dd class="col-sm-8">{{ item.date_sold }}</dd>{% endif %}
+            {% if item.sale_price %}<dt class="col-sm-4">Sale Price</dt><dd class="col-sm-8">${{ item.sale_price|floatformat:2 }}</dd>{% endif %}
+            {% if item.deducted_full_cost is not None %}<dt class="col-sm-4">Deducted Full Cost</dt><dd class="col-sm-8">{{ item.deducted_full_cost|yesno:"Yes,No" }}</dd>{% endif %}
+            {% if item.notes %}<dt class="col-sm-4">Notes</dt><dd class="col-sm-8">{{ item.notes|linebreaksbr }}</dd>{% endif %}
+          </dl>
+        </div>
+
+        <div class="modal-footer">
+          <a href="{% url 'equipment:equipment_pdf_single' item.pk %}" target="_blank" class="btn btn-outline-secondary">
+            <i class="fas fa-file-pdf"></i> PDF
+          </a>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

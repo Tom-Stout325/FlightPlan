@@ -1,0 +1,77 @@
+{% extends 'index.html' %}
+{% load static %}
+{% load flightplan_tags %}
+
+{% block title %}
+  Drone Incident Report
+{% endblock %}
+
+
+{% block content %}
+<div class="container mt-5">
+  <h2 class="mb-4 text-primary text-center">Drone Incident Report Form</h2>
+
+  <!-- Step Navigation Pills -->
+  <ul class="nav nav-pills justify-content-center mb-4">
+    {% for step in wizard.steps.all %}
+      {% with step_index=forloop.counter %}
+        <li class="nav-item">
+          <span class="nav-link {% if forloop.counter0 == wizard.steps.step0 %}active{% else %}disabled{% endif %}">
+            Step {{ step_index }}: {{ step|capfirst }}
+          </span>
+        </li>
+      {% endwith %}
+    {% endfor %}
+  </ul>
+
+  <!-- Form Card -->
+  <div class="card shadow-sm">
+    <div class="card-body p-4">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {{ wizard.management_form }}
+
+        <div class="row g-3">
+          {% for field in form %}
+            <div class="col-md-6">
+              {% if field.field.widget.input_type == "checkbox" %}
+                <div class="form-check mt-2">
+                  {{ field|add_class:"form-check-input" }}
+                  <label class="form-check-label" for="{{ field.id_for_label }}">
+                    {{ field.label }}
+                  </label>
+                </div>
+              {% else %}
+                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                {{ field|add_class:"form-control" }}
+              {% endif %}
+        
+              {% if field.help_text %}
+                <div class="form-text">{{ field.help_text }}</div>
+              {% endif %}
+              {% if field.errors %}
+                <div class="text-danger small">{{ field.errors|striptags }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+        
+
+        <div class="d-flex justify-content-between mt-4">
+          <a href="{% url 'documents:incident_reporting_system' %}" class="btn btn-outline-danger">Cancel</a>
+          <div>
+            {% if wizard.steps.prev %}
+              <button name="wizard_goto_step" type="submit" value="{{ wizard.steps.prev }}" class="btn btn-secondary me-2">
+                Back
+              </button>
+            {% endif %}
+            <button type="submit" class="btn btn-primary">
+              {% if wizard.steps.last %}Submit{% else %}Continue{% endif %}
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

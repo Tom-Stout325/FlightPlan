@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Equipment Inventory PDF</title>
+    <style>
+        body { font-family: sans-serif; font-size: 12px; }
+        h2 { text-align: center; margin-bottom: 1em; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 2em; }
+        th, td { border: 1px solid #000; padding: 4px 8px; text-align: left; }
+        th { background-color: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <h2>Equipment Inventory</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Model</th>
+                <th>Serial</th>
+
+                <th>Purchased</th>
+                <th>Disposed</th>
+                <th>Notes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in equipment %}
+            <tr>
+                <td>{{ item.name }}</td>
+                <td>{{ item.equipment_type }}</td>
+                <td>{{ item.model }}</td>
+                <td>{{ item.serial_number }}</td>
+                <td>{{ item.purchase_date|default:"—" }}</td>
+                <td>{{ item.date_disposed|default:"—" }}</td>
+                <td>{{ item.notes|default:"" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{% extends 'index.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container w-50 justify-content-center bg-light border rounded">
+    <div class="py-4 text-center text-primary">
+        <h2>{% if form.instance.pk %}Edit Client{% else %}Add A Client{% endif %}</h2>
+    </div>
+    <div>
+        <form method="post">
+            {% csrf_token %}
+            {{ form|crispy }}
+            <button type="submit" class="btn btn-primary">Save</button>
+            <a href="{% url 'money:client_list' %}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+{% endblock %}

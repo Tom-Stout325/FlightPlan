@@ -1,0 +1,98 @@
+{% extends "index.html" %}
+{% load static %}
+{% load l10n %}
+{% load humanize %}
+
+{% block title %}Receipts{% endblock %}
+
+{% block content %}
+<div class="containerbg-light border rounded p-4">
+  <div>
+      <h2 class="text-center pb-3">Receipts</h2>
+      <hr class="w-50 mx-auto">
+  </div>
+
+  <!-- Search and Create Invoice Button -->
+  <div class="row d-flex justify-content-center align-items-center mb-3">
+      <div class="col-lg-8 col-md-10 col-12">
+          <form method="get" class="d-flex flex-column flex-md-row align-items-center">
+              <h4 class="mb-2 mb-md-0 me-md-3 text-center text-md-start">Find Receipt</h4>
+              <div class="input-group w-100">
+                  <input type="text" name="search" class="form-control" placeholder="Search by Invoice Number value="{{ request.GET.search }}">
+                  <button type="submit" class="btn btn-outline-secondary">
+                      <i class="fa-solid fa-magnifying-glass-dollar"></i>
+                  </button>
+              </div>
+          </form>
+      </div>
+      <div class="col-lg-4 col-md-2 col-12 mt-3 mt-md-0 text-center">
+          <a href="" class="btn btn-info w-100">
+              <i class="fas fa-plus"></i> Create A New Receipt
+          </a>
+      </div>
+  </div>
+
+  <!-- Invoice Table -->
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead>
+        <tr class="table-primary text-nowrap text-center">
+          <th>Date</th>
+          <th>Invoice #</th>
+          <th>Transaction</th>
+          <th>Amount</th>
+          <th class="text-center">Actions</th>
+         
+        </tr>
+      </thead>
+      <tbody>
+        {% for receipt in receipts %}
+          <tr class="text-center invoice-row">
+            <td>{{ receipt.date }}</td>
+            <td>{{receipt.transaction.invoice }}</td>
+            <td>{{ receipt.description }}</td>
+            <td>$ {{ receipt.amount|floatformat:2|intcomma }}</td>
+            <td>
+              <a href=""><i class="fa-solid fa-eye"></i>&nbsp;</a>
+              <a href="{% url 'receipt_detail' receipt.pk %}"><i class="fa-solid fa-pencil"></i>&nbsp;</a>
+              <a href=""><i class="fa-regular fa-file"></i>&nbsp;</a>
+         
+              <a href=""><i class="fa-regular fa-file"></i>&nbsp;</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div class="d-flex justify-content-center mt-3">
+      <nav>
+          <ul class="pagination">
+              {% if page_obj.has_previous %}
+              <li class="page-item">
+                  <a class="page-link" href="?page=1&search={{ request.GET.search }}">« First</a>
+              </li>
+              <li class="page-item">
+                  <a class="page-link" href="?page={{ page_obj.previous_page_number }}&search={{ request.GET.search }}">Previous</a>
+              </li>
+              {% endif %}
+              
+              <li class="page-item disabled">
+                  <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+              </li>
+
+              {% if page_obj.has_next %}
+              <li class="page-item">
+                  <a class="page-link" href="?page={{ page_obj.next_page_number }}&search={{ request.GET.search }}">Next</a>
+              </li>
+              <li class="page-item">
+                  <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&search={{ request.GET.search }}">Last »</a>
+              </li>
+              {% endif %}
+          </ul>
+      </nav>
+  </div>
+</div>
+
+{% endblock %}

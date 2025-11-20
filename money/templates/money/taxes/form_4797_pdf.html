@@ -1,0 +1,53 @@
+{% load humanize %}
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Form 4797</title>
+    <style>
+        body { font-family: 'Arial', sans-serif; font-size: 12px; margin: 40px; }
+        h1, h2 { text-align: center; margin: 0; }
+        .logo { text-align: center; margin-bottom: 20px; width: 150px; margin: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+        th, td { padding: 8px; border: 1px solid #333; text-align: right; }
+        th { background-color: #eee; }
+        td:first-child, th:first-child { text-align: left; }
+        .total { font-weight: bold; border-top: 2px solid #000; }
+    </style>
+</head>
+<body>
+    <div class="logo">
+        <img src="{% static 'images/logo2.png' %}" class="logo" alt="{{ BRAND.name }} Logo">  
+    </div>
+    <h1>Airborne Images</h1>
+    <h2>Form 4797 - Sales of Business Property</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Asset</th>
+                <th>Date Sold</th>
+                <th>Sale Price</th>
+                <th>Basis</th>
+                <th>Gain</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in report_data %}
+            <tr>
+                <td>{{ item.name }}</td>
+                <td>{{ item.date_sold }}</td>
+                <td>${{ item.sale_price|floatformat:2|intcomma }}</td>
+                <td>${{ item.basis|floatformat:2|intcomma }}</td>
+                <td>${{ item.gain|floatformat:2|intcomma }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" style="text-align:center;">No asset sales found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{% extends 'index.html' %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>{{ receipt|default:'Add A Receipt' }}</h2>
+  {% include 'mileage/components/_mileage_form.html' %}
+</div>
+{% endblock %}

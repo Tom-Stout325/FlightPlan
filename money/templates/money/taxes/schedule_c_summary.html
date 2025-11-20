@@ -1,0 +1,43 @@
+{% extends "index.html" %}
+{% load static %}
+{% load l10n %}
+{% load humanize %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-4 text-primary text-center">Schedule C Summary – {{ selected_year }}</h2>
+
+  <table class="table table-bordered">
+    <thead class="table-light">
+      <tr>
+        <th>Schedule C Line</th>
+        <th>Categories</th>
+        <th class="text-end">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in summary %}
+      <tr>
+        <td><strong>{{ row.line }}</strong></td>
+        <td>{{ row.categories|join:", " }}</td>
+        <td class="text-end">${{ row.total|floatformat:2|intcomma }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="table-success fw-bold">
+        <td colspan="2">Income (Line 1)</td>
+        <td class="text-end">${{ income_total|floatformat:2|intcomma }}</td>
+      </tr>
+      <tr class="table-danger fw-bold">
+        <td colspan="2">Net Profit (Line 31)</td>
+        <td class="text-end">${{ net_profit|floatformat:2|intcomma }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="text-end">
+    <a href="{% url 'money:schedule_c_summary_pdf' selected_year %}" class="btn btn-outline-danger">
+      <i class="fas fa-file-pdf"></i> Download PDF
+    </a>
+  </div>
+</div>
+{% endblock %}

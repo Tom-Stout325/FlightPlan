@@ -1,0 +1,10 @@
+{% extends 'index.html' %}
+{% load static %}
+
+
+{% block content %}
+<div class="w-50 mx-auto bg-light rounded p-5 t-5">
+    <h2>Email Sent!</h2>
+    <a href="{% url 'money:invoice_list' %}" class="btn btn-success">Back to Invoices</a>
+</div>
+{% endblock %}

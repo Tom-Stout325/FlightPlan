@@ -1,0 +1,14 @@
+
+{% block content %}
+<div class="container mt-5">
+    <h3>Update Mileage Rate</h3>
+    <form method="POST">
+        {% csrf_token %}
+        <div class="mb-3">
+            <label for="id_rate" class="form-label">Mileage Rate</label>
+            {{ form.rate }}
+        </div>
+        <button type="submit" class="btn btn-primary">Update Rate</button>
+    </form>
+</div>
+{% endblock %}

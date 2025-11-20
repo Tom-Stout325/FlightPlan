@@ -1,0 +1,16 @@
+{% extends "index.html" %}
+{% block content %}
+<div class="container mt-4">
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <h5 class="mb-3">Delete Ops Plan</h5>
+      <p>Are you sure you want to delete <strong>{{ plan.event_name|default:plan.event }}</strong> ({{ plan.plan_year }})?</p>
+      <form method="post">
+        {% csrf_token %}
+        <a href="{% url 'operations:ops_plan_list' plan.event_id %}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-danger">Delete</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

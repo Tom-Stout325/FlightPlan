@@ -1,0 +1,33 @@
+{% extends "index.html" %}
+{% load static %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <div class="text-center mb-5">
+        <img src="{% static 'images/logo2.png' %}" alt="FlightPlan Logo" class="img-fluid shadow-sm rounded" style="max-height: 150px;">
+    <h1 class="display-5 fw-bold">Welcome to Your Dashboard</h1>
+    <p class="text-muted">Choose a portal to get started</p>
+  </div>
+
+  <div class="row g-4 justify-content-center">
+    <div class="col-12 col-md-4">
+      <a href="{% url 'money:dashboard' %}" class="btn btn-outline-primary btn-lg w-100 py-4 shadow">
+        💰 Money Portal
+      </a>
+    </div>
+    <div class="col-12 col-md-4">
+      <a href="{% url 'flightlogs:drone_portal' %}" class="btn btn-outline-success btn-lg w-100 py-4 shadow d-flex align-items-center justify-content-center">
+        <img src="{% static 'images/logo.png' %}" alt="Drone App" style="height: 30px;" class="me-2">
+        <span>FlightPlan Portal</span>
+      </a>
+    </div>
+    
+    <div class="col-12 col-md-4">
+      <a href="{% url 'pilot:profile' %}" class="btn btn-outline-dark btn-lg w-100 py-4 shadow">
+        👨‍✈️ Pilot Profile
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

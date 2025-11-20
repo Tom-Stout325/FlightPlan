@@ -1,0 +1,56 @@
+{% extends 'index.html' %}
+{% load static %}
+{% load humanize %}
+{% block title %}Clients{% endblock %}
+
+
+
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Clients</h2>
+    <a href="{% url 'money:add_client' %}" class="btn btn-outline-primary">
+      <i class="fa-solid fa-plus"></i> Add Client
+    </a>
+  </div>
+
+  {% if clients %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Business</th>
+            <th>First Name</th>
+            <th>Last Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th class="text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for client in clients %}
+          <tr>
+            <td>{{ client.business }}</td>
+            <td>{{ client.first }}</td>
+            <td>{{ client.last }}</td>
+            <td>{{ client.email }}</td>
+            <td>{{ client.phone }}</td>
+            <td class="text-center">
+              <a href="{% url 'edit_client' client.pk %}" class="btn btn-sm btn-warning me-1">
+                <i class="fa-solid fa-pencil"></i>
+              </a>
+              <a href="{% url 'money:delete_client' client.pk %}" class="btn btn-sm btn-danger">
+                <i class="fa-solid fa-trash"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="text-muted">No clients found.</p>
+  {% endif %}
+</div>
+{% endblock %}

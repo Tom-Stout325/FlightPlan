@@ -1,0 +1,135 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Drone Incident Report</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 40px;
+      color: #333;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .logo {
+      width: 200px;
+      height: auto;
+    }
+    h1 {
+      font-size: 26px;
+      margin-top: 10px;
+      color: #2c3e50;
+    }
+    .section {
+      margin-bottom: 30px;
+    }
+    .section h2 {
+      font-size: 18px;
+      margin-bottom: 10px;
+      border-bottom: 2px solid #ccc;
+      padding-bottom: 5px;
+    }
+    .field {
+      margin-bottom: 8px;
+    }
+    .label {
+      font-weight: bold;
+      display: inline-block;
+      width: 200px;
+    }
+    .value {
+      display: inline-block;
+    }
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 12px;
+      color: #777;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <img src="{% static 'images/logo2.png' %}" alt="{{ BRAND.name }} Logo" class="logo">
+    <h1>Drone Incident Report</h1>
+  </div>
+
+  <div class="section">
+    <h2>General Information</h2>
+    <div class="field"><span class="label">Report Date:</span> <span class="value">{{ report.report_date }}</span></div>
+    <div class="field"><span class="label">Reported By:</span> <span class="value">{{ report.reported_by }}</span></div>
+    <div class="field"><span class="label">Contact:</span> <span class="value">{{ report.contact }}</span></div>
+    <div class="field"><span class="label">Role:</span> <span class="value">{{ report.role }}</span></div>
+  </div>
+
+  <div class="section">
+    <h2>Event Details</h2>
+    <div class="field"><span class="label">Event Date:</span> <span class="value">{{ report.event_date }}</span></div>
+    <div class="field"><span class="label">Event Time:</span> <span class="value">{{ report.event_time }}</span></div>
+    <div class="field"><span class="label">Location:</span> <span class="value">{{ report.location }}</span></div>
+    <div class="field"><span class="label">Event Type:</span> <span class="value">{{ report.event_type }}</span></div>
+    <div class="field"><span class="label">Description:</span> <span class="value">{{ report.description }}</span></div>
+    <div class="field"><span class="label">Injuries:</span> <span class="value">{{ report.injuries|yesno:"Yes,No" }}</span></div>
+    {% if report.injuries %}
+      <div class="field"><span class="label">Injury Details:</span> <span class="value">{{ report.injury_details }}</span></div>
+    {% endif %}
+    <div class="field"><span class="label">Damage:</span> <span class="value">{{ report.damage|yesno:"Yes,No" }}</span></div>
+    {% if report.damage %}
+      <div class="field"><span class="label">Damage Cost:</span> <span class="value">${{ report.damage_cost|floatformat:2 }}</span></div>
+      <div class="field"><span class="label">Damage Description:</span> <span class="value">{{ report.damage_desc }}</span></div>
+    {% endif %}
+  </div>
+
+  <div class="section">
+    <h2>Equipment Details</h2>
+    <div class="field"><span class="label">Drone Model:</span> <span class="value">{{ report.drone_model }}</span></div>
+    <div class="field"><span class="label">Registration:</span> <span class="value">{{ report.registration }}</span></div>
+    <div class="field"><span class="label">Controller:</span> <span class="value">{{ report.controller }}</span></div>
+    <div class="field"><span class="label">Payload:</span> <span class="value">{{ report.payload }}</span></div>
+    <div class="field"><span class="label">Battery:</span> <span class="value">{{ report.battery }}</span></div>
+  </div>
+
+  <div class="section">
+    <h2>Environmental Conditions</h2>
+    <div class="field"><span class="label">Weather:</span> <span class="value">{{ report.weather }}</span></div>
+    <div class="field"><span class="label">Wind:</span> <span class="value">{{ report.wind }}</span></div>
+    <div class="field"><span class="label">Temperature:</span> <span class="value">{{ report.temperature }}</span></div>
+    <div class="field"><span class="label">Lighting:</span> <span class="value">{{ report.lighting }}</span></div>
+  </div>
+
+  <div class="section">
+    <h2>Witnesses</h2>
+    <div class="field"><span class="label">Witnesses Present:</span> <span class="value">{{ report.witnesses|yesno:"Yes,No" }}</span></div>
+    {% if report.witnesses %}
+      <div class="field"><span class="label">Witness Details:</span> <span class="value">{{ report.witness_details }}</span></div>
+    {% endif %}
+  </div>
+
+  <div class="section">
+    <h2>Action Taken</h2>
+    <div class="field"><span class="label">Emergency Response:</span> <span class="value">{{ report.emergency|yesno:"Yes,No" }}</span></div>
+    <div class="field"><span class="label">Agency Response:</span> <span class="value">{{ report.agency_response }}</span></div>
+    <div class="field"><span class="label">Scene Actions:</span> <span class="value">{{ report.scene_action }}</span></div>
+    <div class="field"><span class="label">FAA Report Filed:</span> <span class="value">{{ report.faa_report|yesno:"Yes,No" }}</span></div>
+    {% if report.faa_ref %}
+      <div class="field"><span class="label">FAA Ref:</span> <span class="value">{{ report.faa_ref }}</span></div>
+    {% endif %}
+  </div>
+
+  <div class="section">
+    <h2>Follow-up</h2>
+    <div class="field"><span class="label">Cause:</span> <span class="value">{{ report.cause }}</span></div>
+    <div class="field"><span class="label">Notes:</span> <span class="value">{{ report.notes }}</span></div>
+    <div class="field"><span class="label">Signed By:</span> <span class="value">{{ report.signature }}</span></div>
+    <div class="field"><span class="label">Sign Date:</span> <span class="value">{{ report.sign_date }}</span></div>
+  </div>
+
+  <div class="footer">
+    &copy; {{ BRAND_NAME }} {{ now|date:"Y" }}
+  </div>
+</body>
+</html>

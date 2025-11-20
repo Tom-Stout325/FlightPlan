@@ -1,0 +1,33 @@
+
+    <div class="container w-50 justify-content-center bg-light border rounded">
+        <div class="py-4 text-center">
+            <h2 class="text-center">Sub-Categories</h2>
+            <a href="{% url 'money:add_sub_category' %}" class="btn btn-success px-5 my-3">Add A New Sub-Category</a>
+       </div>
+        <table class="table table-striped bg-light">
+            <thead>
+                <tr>
+                    <th>Sub-Category</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sub in sub_cat %}
+                    <tr>
+                        <td>{{ sub.sub_cat }}</td>
+                        <td>
+                            <a href="{% url 'money:edit_sub_category' sub.id %}" class="btn btn-warning btn-sm">Edit</a>
+                            <a href="{% url 'money:delete_sub_category' sub.id %}" class="btn btn-danger btn-sm">Delete</a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="2" class="text-center text-muted">No Sub-Categories available.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+            
+        </table>
+    </div>
+</div>
+

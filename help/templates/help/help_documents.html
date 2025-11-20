@@ -1,0 +1,64 @@
+{% extends "index.html" %}
+{% block content %}
+<div class="container mt-5">
+  <h2 class="mb-4">Documents Help</h2>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Uploading and Managing Documents</h5>
+      <div>
+        <h6>
+            The documents section allows you to store important documents related to your business and drone operations, and is 
+            divided into three document sections:  SOP, General, and Incidents.
+        </h6>
+      </div>
+      <ol class="list-group list-group-numbered">
+
+        <li class="list-group-item">Click on the Document type button to open the appropriate document section, or click on the Documents menu dropdown</li>
+        </ol>
+        <hr>
+        <li class="list-group-item"><strong>SOP Documents</strong> 
+          <ul class="mt-2">
+            <li>Click <strong>Upload New SOP</strong></li>
+            <li>Document Type Must be pdf</li>
+            <li>Consider SOPs for all operations, including Standard Drone Operations, Motion Picture and Television Operating Manual (MPTOM)</li>
+            <li>SOPs can be viewed, downloaded and deleted from the table</li>
+          </ul>
+        </li>
+        <hr>
+
+        <li class="list-group-item"><strong>General Documents</strong> 
+            <ul class="mt-2">
+                <li>Click <strong>Upload New SOP</strong></li>
+                <li>Document Type Must be pdf</li>
+                <li>General Documents have several categories and can be customized.  Categories include:
+                    <ul>
+                        <li>Insurance</li>
+                        <li>FAA Waivers</li>
+                        <li>Event Instructions</li>
+                        <li>Policies</li>
+                        <li>Compliance</li>
+                        <li>Legal</li>
+                        <li>Other</li>
+                    </ul>
+                <li>General Documents can be viewed, downloaded and deleted from the table</li>
+            </ul>
+        </li>
+        <hr>
+        <li class="list-group-item"><strong>Incident Reports</strong> 
+            <ul class="mt-2">
+                <li>Click <strong>Submit New Incident Report</strong></li>
+                <li>This is a multi-step form for details of any incident, such as a drone crash, with progress section at the top.</li>
+                <li>All fields are optional</li>
+                <li>Clicking on the incident will reveal the header and action buttons to view the full report, edit and delete the report</li>
+                <li>Clicking on View Report will direct you to the full report with a button to view and download the report.</li>
+            </ul>
+        </li>
+        <li class="list-group-item">After completing all steps, the report will appear in your list.</li>
+  
+    </div>
+  </div>
+
+  <a href="{% url 'help:help_home' %}" class="btn btn-secondary">← Back to Help Center</a>
+</div>
+{% endblock %}

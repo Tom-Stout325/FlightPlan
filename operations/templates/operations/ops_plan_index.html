@@ -1,0 +1,182 @@
+{% extends "index.html" %}
+
+
+{% block content %}
+<div><h3 class="text-center text-primary">Operations Plans</h3></div>
+<div class="container mt-4">
+
+  <!-- ===== Header ===== -->
+  <div class="text-right mb-5 bg-light p-4 w-50 mx-auto shadow-sm rounded ">
+
+    <h5 class="text-center">Create an Ops Plan</h5>
+    <div class="input-group input-group-sm w-auto">
+      <label class="input-group-text" for="eventSelect">Event</label>
+      <select id="eventSelect" class="form-select">
+        <option value="" selected>Select an event…</option>
+        {% for e in events %}
+          <option value="{{ e.id }}">{{ e }}</option>
+        {% endfor %}
+      </select>
+
+      <label class="input-group-text" for="yearInput">Year</label>
+      <input id="yearInput" type="number" class="form-control" min="2000" max="2100" value="{{ current_year }}">
+      <button id="newPlanBtn" class="btn btn-primary rounded" type="button">
+        <i class="fa-solid fa-plus"></i> New Ops Plan
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== Table ===== -->
+  {% if plans %}
+  <div class="table-responsive shadow-sm rounded">
+    <table class="table table-sm table-striped align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Updated</th>
+          <th>Event</th>
+          <th>Year</th>
+          <th>Client</th>
+          <th>Email</th>
+          <th class="text-center">Waivers?</th>
+          <th>Status</th>
+          <th class="text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in plans %}
+        <tr>
+          <td>{{ p.updated_at|date:"Y-m-d" }}</td>
+          <td>{{ p.event_name|default:p.event }}</td>
+          <td>{{ p.plan_year }}</td>
+          <td>{{ p.client|default:"—" }}</td>
+          <td>{{ p.client.email|default:"—" }}</td>
+          <td class="text-center">{{ p.waivers_required|yesno:"Yes,No" }}</td>
+
+          <!-- Status badge -->
+          <td>
+            {% if p.status == 'Approved' %}
+              <span class="badge bg-success">{{ p.status }}</span>
+            {% elif p.status == 'In Review' %}
+              <span class="badge bg-warning text-dark">{{ p.status }}</span>
+            {% elif p.status == 'Archived' %}
+              <span class="badge bg-secondary">{{ p.status }}</span>
+            {% else %}
+              <span class="badge bg-info text-dark">{{ p.status }}</span>
+            {% endif %}
+          </td>
+
+          <!-- Actions -->
+          <td class="text-center">
+            <div class="d-inline-flex flex-wrap justify-content-center align-items-center gap-2">
+
+              <!-- View -->
+              <a href="operations:ops_plan_detail' p.pk %}" class="btn btn-sm btn-outline-secondary" title="View Ops Plan">
+                <i class="fa-solid fa-eye"></i>
+              </a>
+
+              <!-- Delete -->
+              <form method="post"
+                    action="operations:ops_plan_delete' p.pk %}"
+                    class="d-inline border-0 bg-transparent shadow-none"
+                    onsubmit="return confirm('Delete this Ops Plan? This cannot be undone.');">
+                {% csrf_token %}
+                <button type="submit"
+                        class="btn btn-sm btn-outline-danger"
+                        title="Delete Ops Plan" aria-label="Delete Ops Plan">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </form>
+
+
+            <!-- Submit for Approval -->
+            {% if p.status != 'Approved' and p.status != 'In Review' %}
+
+              <a href" "
+                class="btn btn-sm btn-outline-success" 
+                title="Submit for Approval">
+                <i class="fa-solid fa-paper-plane"></i>
+              </a>
+
+
+
+
+            {% endif %}
+
+
+              <!-- Status selector -->
+              <form method="post"
+                    action="operations:ops_plan_change_status' p.pk 'Draft' %}"
+                    class="d-inline-flex align-items-center">
+                {% csrf_token %}
+                <select name="new_status"
+                        class="form-select form-select-sm"
+                        style="min-width: 9rem;"
+                        onchange="this.form.action=this.form.action.replace('Draft', encodeURIComponent(this.value)); this.form.submit();">
+                  {% for status in statuses %}
+                    <option value="{{ status }}" {% if status == p.status %}selected{% endif %}>
+                      {% if status == p.status %}✓ {% endif %}{{ status }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </form>
+
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% else %}
+  <!-- ===== Empty state ===== -->
+  <div class="text-center py-5">
+    <h5>No Operations Plans Found</h5>
+    <p class="text-muted">Create your first plan by selecting an event and year.</p>
+    <div class="d-inline-flex gap-2">
+      <select id="eventSelectEmpty" class="form-select">
+        <option value="" selected>Select an event…</option>
+        {% for e in events %}
+          <option value="{{ e.id }}">{{ e }}</option>
+        {% endfor %}
+      </select>
+      <input id="yearInputEmpty" type="number" class="form-control" min="2000" max="2100" value="{{ current_year }}">
+      <button id="newPlanBtnEmpty" class="btn btn-primary">
+        <i class="fa-solid fa-plus"></i> New Ops Plan
+      </button>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ===== JS for New Plan Buttons ===== -->
+<script>
+(function(){
+  function bind(btnId, eventSelId, yearId){
+    const btn = document.getElementById(btnId);
+    if(!btn) return;
+
+    btn.addEventListener('click', function(){
+      const eventEl = document.getElementById(eventSelId);
+      const yearEl  = document.getElementById(yearId);
+      const eventId = eventEl ? eventEl.value : "";
+      const year    = yearEl ? yearEl.value : "";
+
+      if(!eventId){
+        alert('Please select an event.');
+        return;
+      }
+
+      const qs  = year ? `?year=${encodeURIComponent(year)}` : "";
+      const url = `/events/${encodeURIComponent(eventId)}/ops-plans/new/${qs}`;
+      window.location.href = url;
+    });
+  }
+
+  bind('newPlanBtn','eventSelect','yearInput');
+  bind('newPlanBtnEmpty','eventSelectEmpty','yearInputEmpty');
+})();
+</script>
+
+
+{% endblock %}

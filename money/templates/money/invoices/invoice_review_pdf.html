@@ -1,0 +1,144 @@
+{% load static %}
+{% load humanize %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Invoice - {{ invoice.invoice_number }}</title>
+  <style>
+    @page { size: A4; margin: 1in; }
+    body { font-family: "Segoe UI", sans-serif; font-size: 12px; color: #333; }
+    h2, h5, h6 { margin: 0; }
+    .text-center { text-align: center; }
+    .text-muted { color: #777; }
+    .text-primary { color: #4682B4; }
+    .text-success { color: #2E8B57; }
+    .fw-light { font-weight: 300; }
+    .fw-bold { font-weight: bold; }
+    .logo { width: 140px; margin-bottom: 10px; }
+    .section { margin-top: 30px; }
+    .section-title { background: #4682B4; color: #fff; padding: 6px 12px; font-size: 14px; margin-bottom: 5px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11.5px; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; }
+    th { background: #f4f4f4; }
+    .footer { font-size: 10px; text-align: center; margin-top: 40px; color: #777; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="text-center">
+    <img src="{% static 'images/logo2.png' %}" alt="Logo" class="logo">
+    <h2 class="text-primary">Invoice Summary</h2>
+    <h5 class="text-muted">{{ invoice.event.title }} Invoice</h5>
+    <h6 class="fw-light">Invoice #: {{ invoice.invoice_number }}</h6>
+  </div>
+
+  <!-- Invoice Info -->
+  <div class="section">
+    <div class="section-title">Invoice Information</div>
+    <p><strong>Date:</strong> {{ invoice.date|date:"m/d/Y" }}</p>
+    <p><strong>Client:</strong> {{ invoice.client }}</p>
+    <p><strong>Event:</strong> {{ invoice.event.title }}</p>
+    <p><strong>Service:</strong> {{ invoice.service }}</p>
+    <p><strong>Invoice Amount:</strong> ${{ invoice.amount|floatformat:2|intcomma }}</p>
+  </div>
+
+  <!-- Transactions -->
+  <div class="section">
+    <div class="section-title">Associated Transactions</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Category</th>
+          <th>Sub-Category</th>
+          <th>Amount</th>
+          <th>Deductible</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in transactions %}
+        <tr>
+          <td>{{ t.date|date:"m/d/Y" }}</td>
+          <td>{{ t.sub_cat.category.category }}</td>
+          <td>{{ t.sub_cat.sub_cat }}</td>
+          <td>
+            ${{ t.amount|floatformat:2|intcomma }}
+            {% if t.sub_cat.slug == 'meals' %}
+              <br><small class="text-muted">(50%: ${{ t.deductible_amount|floatformat:2|intcomma }})</small>
+            {% endif %}
+          </td>
+          <td>
+            {% if t.sub_cat.slug == 'meals' %}50%
+            {% elif t.sub_cat.slug == 'fuel' and t.transport_type == 'personal_vehicle' %}No
+            {% else %}Yes{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5">No transactions found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Mileage -->
+  {% if mileage_entries %}
+  <div class="section">
+    <div class="section-title">Mileage Entries</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Total Miles</th>
+          <th>Rate</th>
+          <th>Amount</th>
+          <th>Client</th>
+          <th>Invoice</th>
+          <th>Event</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in mileage_entries %}
+        <tr>
+          <td>{{ m.date|date:"m/d/Y" }}</td>
+          <td>{{ m.miles|floatformat:1|intcomma }}</td>
+          <td>${{ mileage_rate|floatformat:2 }}</td>
+          <td>${{ m.amount|floatformat:2|intcomma }}</td>
+          <td>{{ m.client }}</td>
+          <td>{{ m.invoice_number }}</td>
+          <td>{{ m.event|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p><strong>Total Miles:</strong> {{ total_mileage_miles|floatformat:1|intcomma }}</p>
+    <p><strong>Total Mileage Amount:</strong> ${{ mileage_dollars|floatformat:2|intcomma }}</p>
+  </div>
+  {% endif %}
+
+  <!-- Summary -->
+  <div class="section">
+    <div class="section-title">Summary</div>
+    {% if has_income_transaction %}
+      <p>Invoice Amount: ${{ invoice_amount|floatformat:2|intcomma }}</p>
+      <p>Taxable Expenses: -${{ deductible_expenses|floatformat:2|intcomma }}</p>
+      <p>Mileage Deduction: -${{ mileage_dollars|floatformat:2|intcomma }}</p>
+      <p class="fw-bold text-success">Taxable Income: ${{ taxable_income|floatformat:2|intcomma }}</p>
+      <hr>
+      <p>Invoice Amount: ${{ invoice_amount|floatformat:2|intcomma }}</p>
+      <p>Total Expenses: -${{ total_expenses|floatformat:2|intcomma }}</p>
+      <p class="fw-bold text-success">Net Income: ${{ net_income|floatformat:2|intcomma }}</p>
+    {% else %}
+      <p>Invoice Amount: ${{ invoice_amount|floatformat:2|intcomma }}</p>
+      <p>Expenses: ${{ total_expenses|floatformat:2|intcomma }}</p>
+      <p>Mileage: ${{ mileage_dollars|floatformat:2|intcomma }}</p>
+      <p class="fw-bold text-danger">Expense Total: -${{ total_cost|floatformat:2|intcomma }}</p>
+    {% endif %}
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">Generated by Airborne Images • {{ now|date:"F j, Y" }}</div>
+</body>
+</html>

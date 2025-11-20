@@ -1,0 +1,28 @@
+{% extends 'index.html' %} 
+
+{% block content %}
+
+<div class="container w-50">
+  <h2 class="mb-4">{{ form.instance.pk|yesno:"Add Flight Logs" }}</h2>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %} 
+    {{ form.non_field_errors }}
+    <div class="mb-3">
+      {{ form.csv_file.label_tag }} 
+      {{ form.csv_file }} 
+      {{ form.csv_file.errors }}
+    </div>
+    <div class="text-center">
+      <button type="submit" class="btn btn-success w-50">Save</button>
+      <br>
+      <a href="{% url 'flightlogs:flightlog_list' %}" class="btn btn-secondary w-50 ">Cancel</a>
+    </div>
+  </form>
+  {% if messages %} 
+    {% for m in messages %}
+      <div class="alert alert-{{ m.tags }}">{{ m }}</div>
+    {% endfor %} 
+  {% endif %}
+</div>
+
+{% endblock %}

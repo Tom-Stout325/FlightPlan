@@ -1,0 +1,37 @@
+{% extends "index.html" %}
+{% block content %}
+<div class="container mt-5">
+  <h2 class="mb-4">Pilot Profile Help</h2>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Step-by-Step Guide</h5>
+      <ol class="list-group list-group-numbered">
+        <li class="list-group-item">Register for an account by creating a username, and password.</li>
+        <li class="list-group-item">After registering, you'll be redirected to the <strong>Login</strong> page where you will login for the first time.</li>
+        <li class="list-group-item">After you login you will be directed to the Drone Portal.  First click on the <strong>Edit</strong> button in the <strong>Your Information</strong> section.
+        </li>
+        <li class="list-group-item">Fill out your information details:
+          <ul class="mt-2">
+            <li>First and Last Name</li>
+            <li>Email Address</li>
+          </ul>
+        </li>
+            <li class="list-group-item">Next, click on the <strong>Edit</strong> button in the <strong>Pilot Credentials</strong> section.
+        <li class="list-group-item">Fill out your information details:
+          <ul class="mt-2">
+            <li>Pilot License Number (optional)</li>
+            <li>License Date (optional)</li>
+            <li>Upload an image of your Pilot License (optional)</li>
+          </ul>
+        </li>
+        <li class="list-group-item">Click <strong>Save</strong> to store your profile.</li>
+        <li class="list-group-item">You can edit your profile later by visiting the <strong>Profile</strong> section from the menu.</li>
+        <li class="list-group-item">Your <strong>Flight Summary</strong> section will be automatically completed when you upload flight logs.</li>
+      </ol>
+    </div>
+  </div>
+
+  <a href="{% url 'help:help_home' %}" class="btn btn-secondary">← Back to Help Center</a>
+</div>
+{% endblock %}

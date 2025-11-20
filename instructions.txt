@@ -1,0 +1,57 @@
+_FLIGHTPLAN/
+    manage.py
+    project/
+        settings/
+        context_processors.py
+        ...
+
+    flightplan/
+    money/
+
+    clients/
+        airborne/
+            templates/
+                base_brand.html
+                includes/
+                    navbar.html
+                    footer.html
+                emails/
+                    invoice_email.html
+            static/
+                css/
+                    brand.css
+                images/
+                    logo-full.svg
+                    logo-mark.svg
+                    favicon-32x32.png
+                    favicon-16x16.png
+                    social-card.jpg
+                js/
+                    brand.js
+
+        skyguy/
+            templates/
+                base_brand.html
+                includes/
+                    navbar.html
+                    footer.html
+                emails/
+                    invoice_email.html
+            static/
+                css/
+                    brand.css
+                images/
+                    logo-full.svg
+                    logo-mark.svg
+                    favicon-32x32.png
+                    favicon-16x16.png
+                    social-card.jpg
+                js/
+                    brand.js
+
+
+
+
+Bring over:
+Signals
+TemplateTags
