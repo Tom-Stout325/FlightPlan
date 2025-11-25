@@ -604,7 +604,7 @@ def update_mileage_rate(request):
         if form.is_valid():
             form.save()
             messages.success(request, "Mileage rate updated successfully!")
-            return redirect('mileage_log')
+            return redirect('money:mileage_log')
         else:
             messages.error(request, "Error updating mileage rate. Please check the form.")
     else:

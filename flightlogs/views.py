@@ -226,7 +226,7 @@ def flightlog_edit(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, 'Flight log updated.')
-            return redirect('flightlog_list')
+            return redirect('flightlogs:flightlog_list')
         messages.error(request, 'There was a problem updating the flight log.')
     else:
         form = FlightLogCSVUploadForm(instance=log)
@@ -242,7 +242,7 @@ def flightlog_business(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, 'Flight log updated.')
-            return redirect('flightlog_list')
+            return redirect('flightlogs:flightlog_list')
         messages.error(request, 'There was a problem updating the flight log.')
     else:
         form = FlightLogCSVUploadForm(instance=log)
@@ -257,7 +257,7 @@ def flightlog_delete(request, pk):
         title = log.flight_title or f'Log {pk}'
         log.delete()
         messages.success(request, f'{title} deleted.')
-        return redirect('flightlog_list')
+        return redirect('flighlogs:flightlog_list')
     return render(request, 'flightlogs/flightlog_confirm_delete.html', {'log': log, 'current_page': 'flightlogs'})
 
 
@@ -384,7 +384,7 @@ def upload_flightlog_csv(request):
                     print("Row error:", e, raw_row)
 
             messages.success(request, f"Flight log CSV processed. Created: {created}, Skipped: {skipped}, Errors: {errored}")
-            return redirect('flightlog_list')
+            return redirect('flightlogs:flightlog_list')
         else:
             messages.error(request, "Invalid form submission.")
     else:

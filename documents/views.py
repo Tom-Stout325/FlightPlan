@@ -262,7 +262,7 @@ def sop_upload(request):
         if form.is_valid():
             form.save()
             messages.success(request, "SOP added successfully.")
-            return redirect('sop_list')
+            return redirect('documents:sop_list')
         messages.error(request, "There was a problem uploading the document.")
     else:
         form = SOPDocumentForm()
@@ -297,7 +297,7 @@ def delete_sop(request, pk):
     sop = get_object_or_404(SOPDocument, pk=pk)
     sop.delete()
     messages.success(request, f"SOP '{sop.title}' deleted successfully.")
-    return redirect('sop_list')
+    return redirect('documents:sop_list')
 
 
 @login_required
@@ -333,7 +333,7 @@ def upload_general_document(request):
         if form.is_valid():
             form.save()
             messages.success(request, "File added successfully.")
-            return redirect('general_document_list')
+            return redirect('documents:general_document_list')
         messages.error(request, "There was a problem uploading the document.")
     else:
         form = GeneralDocumentForm()
@@ -346,4 +346,4 @@ def delete_document(request, pk):
     if request.method == 'POST':
         doc.delete()
         messages.success(request, "Document deleted successfully.")
-    return redirect('general_document_list')
+    return redirect('documents:general_document_list')

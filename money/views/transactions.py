@@ -218,7 +218,7 @@ class TransactionUpdateView(LoginRequiredMixin, UpdateView):
 class TransactionDeleteView(LoginRequiredMixin, DeleteView):
     model = Transaction
     template_name = "money/transactions/transaction_confirm_delete.html"
-    success_url = reverse_lazy('transactions')
+    success_url = reverse_lazy('money:transactions')
 
     def get_queryset(self):
         return Transaction.objects.filter(user=self.request.user)
@@ -231,15 +231,15 @@ class TransactionDeleteView(LoginRequiredMixin, DeleteView):
                 return response
         except models.ProtectedError:
             messages.error(self.request, "Cannot delete transaction due to related records.")
-            return redirect('transactions')
+            return redirect('money:transactions')
         except Exception as e:
             logger.error(f"Error deleting transaction for user {request.user.id}: {e}")
             messages.error(self.request, "Error deleting transaction.")
-            return redirect('transactions')
+            return redirect('money:transactions')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['current_page'] = 'transactions'
+        context['current_page'] = 'money:transactions'
         return context
 
 
@@ -310,7 +310,7 @@ class RecurringTransactionCreateView(LoginRequiredMixin, CreateView):
     model = RecurringTransaction
     form_class = RecurringTransactionForm
     template_name = 'money/transactions/recurring_form.html'
-    success_url = reverse_lazy('recurring_transaction_list')
+    success_url = reverse_lazy('money:recurring_transaction_list')
 
     def form_valid(self, form):
         form.instance.user = self.request.user
@@ -394,47 +394,6 @@ def recurring_report_view(request):
         'current_page': 'recurring_transactions',
     }
     return render(request, 'money/transactions/recurring_report.html', context)
-
-
-
-# @staff_member_required
-# def run_monthly_recurring_view(request):
-#     today = timezone.localdate()
-#     user = request.user
-
-#     recurrences = (RecurringTransaction.objects
-#                    .filter(user=user, active=True)
-#                    .exclude(last_created__year=today.year, last_created__month=today.month))
-#     created = 0
-#     for r in recurrences:
-#         try:
-#             last_day = monthrange(today.year, today.month)[1]
-#             run_day = min(max(1, r.day), last_day)
-#             trans_date = date(today.year, today.month, run_day)
-
-#             with db_tx.atomic():
-#                 Transaction.objects.create(
-#                     user=user,
-#                     trans_type=r.trans_type,
-#                     date=trans_date,
-#                     amount=r.amount,
-#                     transaction=r.transaction,
-#                     category=(r.sub_cat.category if r.sub_cat else r.category),
-#                     sub_cat=r.sub_cat,
-#                     team=r.team,
-#                     event=r.event,
-#                     invoice_number='',
-#                     recurring_template=r,
-# )
-#                 r.last_created = today
-#                 r.save(update_fields=['last_created'])
-#                 created += 1
-
-#         except Exception as e:
-#             logger.exception(f"Error creating recurring (id={r.id}) for user {user.id}: {e}")
-
-#     messages.success(request, f"Created {created} recurring transaction(s) for {today.strftime('%B %Y')}.")
-#     return redirect('recurring_transaction_list')
 
 
 

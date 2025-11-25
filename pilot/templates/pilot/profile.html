@@ -26,8 +26,8 @@
         </div>
         <div class="card-body">
           <ul class="list-group list-group-flush mb-3">
-            <li class="list-group-item d-flex justify-content-between"><strong>License Number:</strong><span>{{ profile.license_number|default:"—" }}</span></li>
-            <li class="list-group-item d-flex justify-content-between"><strong>License Date:</strong><span>{{ profile.license_date|date:"M d, Y"|default:"—" }}</span></li>
+            <li class="list-group-item d-flex justify-content-between"><strong>License Number:</strong> {{ profile.license_number|default:"—" }}</span></li>
+            <li class="list-group-item d-flex justify-content-between"><strong>License Date:</strong> {{ profile.license_date|date:"m/d/Y"|default:"—" }}</span></li>
             <li class="list-group-item text-center">
               {% if profile.license_image %}
                 <img src="{{ profile.license_image.url }}" class="img-thumbnail" style="max-height:200px;" alt="License Image">

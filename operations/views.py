@@ -95,7 +95,7 @@ class OpsPlanCreateView(LoginRequiredMixin, View):
                 messages.error(request, "Could not create Ops Plan (unique constraint).")
                 return redirect(reverse_lazy("ops_plan_list"))
 
-        return redirect("ops_plan_update", pk=plan.pk)
+        return redirect("operations:ops_plan_update", pk=plan.pk)
 
 
 class OpsPlanUpdateView(LoginRequiredMixin, UpdateView):
@@ -318,14 +318,14 @@ def change_ops_plan_status(request, pk, new_status):
     valid_statuses = [OpsPlan.DRAFT, OpsPlan.IN_REVIEW, OpsPlan.APPROVED, OpsPlan.ARCHIVED]
     if new_status not in valid_statuses:
         messages.error(request, f"Invalid status '{new_status}'.")
-        return redirect("ops_plan_index")
+        return redirect("operations:ops_plan_index")
 
     # Update the plan
     plan.status = new_status
     plan.save()
 
     messages.success(request, f"Ops Plan '{plan.event_name or plan.event}' updated to {new_status}.")
-    return redirect("ops_plan_index")
+    return redirect("operations:ops_plan_index")
 
 
 

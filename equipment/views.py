@@ -55,7 +55,7 @@ def equipment_list(request):
         if form.is_valid():
             form.save()
             messages.success(request, 'Equipment added.')
-            return redirect('equipment_list')
+            return redirect('equipment:equipment_list')
         messages.error(request, 'There was a problem saving the equipment.')
     else:
         form = EquipmentForm()
@@ -74,7 +74,7 @@ def equipment_create(request):
         if form.is_valid():
             form.save()
             messages.success(request, 'Equipment added.')
-            return redirect('equipment_list')
+            return redirect('equipment:equipment_list')
         # Log form errors for debugging
         print("POST data:", request.POST)
         print("FILES data:", request.FILES)
@@ -98,7 +98,7 @@ def equipment_edit(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, 'Equipment updated.')
-            return redirect('equipment_list')
+            return redirect('equipment:equipment_list')
         messages.error(request, 'There was a problem updating the equipment.')
     else:
         form = EquipmentForm(instance=item)
@@ -113,7 +113,7 @@ def equipment_delete(request, pk):
         name = equipment.name
         equipment.delete()
         messages.success(request, f'Equipment "{name}" deleted.')
-        return redirect('equipment_list')
+        return redirect('equipment:equipment_list')
     return render(request, 'equipment/equipment_confirm_delete.html', {'equipment': equipment, 'current_page': 'equipment'})
 
 

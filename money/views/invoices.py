@@ -61,7 +61,7 @@ class InvoiceCreateView(LoginRequiredMixin, CreateView):
     model = Invoice
     form_class = InvoiceForm
     template_name = 'money/invoices/invoice_add.html'
-    success_url = reverse_lazy('invoice_list')
+    success_url = reverse_lazy('money:invoice_list')
 
     def get_formset(self, data=None):
         return InvoiceItemFormSet(data)
@@ -142,7 +142,7 @@ class InvoiceUpdateView(LoginRequiredMixin, UpdateView):
     model = Invoice
     form_class = InvoiceForm
     template_name = 'money/invoices/invoice_update.html'
-    success_url = reverse_lazy('invoice_list')
+    success_url = reverse_lazy('money:invoice_list')
 
     def get_formset(self, data=None):
         return InvoiceItemFormSet(data, instance=self.object)
@@ -276,7 +276,7 @@ class InvoiceDetailView(LoginRequiredMixin, DetailView):
 class InvoiceDeleteView(LoginRequiredMixin, DeleteView):
     model = Invoice
     template_name = "money/invoices/invoice_confirm_delete.html"
-    success_url = reverse_lazy('invoice_list')
+    success_url = reverse_lazy('money:invoice_list')
 
     def delete(self, request, *args, **kwargs):
         try:
@@ -286,11 +286,11 @@ class InvoiceDeleteView(LoginRequiredMixin, DeleteView):
                 return response
         except models.ProtectedError:
             messages.error(self.request, "Cannot delete invoice due to related records.")
-            return redirect('invoice_list')
+            return redirect('money:invoice_list')
         except Exception as e:
             logger.error(f"Error deleting invoice for user {request.user.id}: {e}")
             messages.error(self.request, "Error deleting invoice.")
-            return redirect('invoice_list')
+            return redirect('money:invoice_list')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

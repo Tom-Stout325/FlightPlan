@@ -35,7 +35,7 @@ def profile(request):
             if user_form.is_valid():
                 user_form.save()
                 messages.success(request, "User info updated.")
-                return redirect('profile')
+                return redirect('pilot:profile')
 
         elif 'update_profile' in request.POST:
             form = PilotProfileForm(request.POST, request.FILES, instance=profile)
@@ -45,7 +45,7 @@ def profile(request):
             if form.is_valid():
                 form.save()
                 messages.success(request, "Pilot credentials updated.")
-                return redirect('profile')
+                return redirect('pilot:profile')
 
         elif 'add_training' in request.POST:
             training_form = TrainingForm(request.POST, request.FILES)
@@ -57,7 +57,7 @@ def profile(request):
                 training.pilot = profile
                 training.save()
                 messages.success(request, "Training record added.")
-                return redirect('profile')
+                return redirect('pilot:profile')
 
         else:
             form = PilotProfileForm(instance=profile)
@@ -78,7 +78,7 @@ def profile(request):
 
     drone_stats_qs = (
         FlightLog.objects
-        .values('drone_name', 'drone_serial')  
+        .values('drone_name', 'drone_serial')
         .annotate(
             flights=Count('id'),
             total_air_time=Coalesce(Sum('air_time'), datetime.timedelta(0)),
@@ -93,13 +93,13 @@ def profile(request):
         drone_stats.append(row)
 
     context = {
-        'profile': profile,
+        'profile': profile, 
         'form': form,
         'user_form': user_form,
         'training_form': training_form,
         'trainings': trainings,
         'years': [y.year for y in training_years],
-        'current_page': 'profile',
+        'current_page': 'pilot:profile',
         'highest_altitude_flight': FlightLog.objects.order_by('-max_altitude_ft').first(),
         'fastest_speed_flight':   FlightLog.objects.order_by('-max_speed_mph').first(),
         'longest_flight':         FlightLog.objects.order_by('-max_distance_ft').first(),
@@ -115,7 +115,7 @@ def edit_profile(request):
         form = PilotProfileForm(request.POST, request.FILES, instance=profile)
         if form.is_valid():
             form.save()
-            return redirect('profile')
+            return redirect('pilot:profile')
     else:
         form = PilotProfileForm(instance=profile)
     context = {'form': form} 
@@ -131,8 +131,8 @@ def delete_pilot_profile(request):
         profile.delete()
         user.delete()
         messages.success(request, "Your profile and account have been deleted.")
-        return redirect('login')
-    context = {'profile': profile} 
+        return redirect('accounts:login')
+    context = {'pilot:profile': profile} 
     return render(request, 'pilot/pilot_profile_delete.html', context)
 
 
@@ -145,7 +145,7 @@ def training_create(request):
             training = form.save(commit=False)
             training.pilot = profile
             training.save()
-            return redirect('profile')
+            return redirect('pilot:profile')
     else:
         form = TrainingForm()
     context = {'form': form} 
@@ -159,7 +159,7 @@ def training_edit(request, pk):
     form = TrainingForm(request.POST or None, request.FILES or None, instance=training)
     if form.is_valid():
         form.save()
-        return redirect('profile')
+        return redirect('pilot:profile')
     context = {'form': form} 
     return render(request, 'pilot/training_form.html', context)
 
@@ -170,7 +170,7 @@ def training_delete(request, pk):
     training = get_object_or_404(Training, pk=pk, pilot__user=request.user)
     if request.method == 'POST':
         training.delete()
-        return redirect('profile')
+        return redirect('pilot:profile')
     context = {'training': training} 
     return render(request, 'pilot/training_confirm_delete.html', context)
 
