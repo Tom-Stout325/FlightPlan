@@ -1,16 +1,22 @@
 # project/settings/airborne.py
-"""Airborne Images deployment configuration.
-
-This is a Suite deployment (Money + FlightPlan) with the
-CLIENT fixed to "airborne".
-"""
+"""Airborne Images deployment (Money + FlightPlan)."""
 
 import os
 
-# Ensure the CLIENT env var is set early so _client.py sees it.
+# Ensure CURRENT_CLIENT is set before base imports _client.py
 os.environ.setdefault("CLIENT", "airborne")
 
-from .suite import *  # noqa
+from .base import *  # noqa
 
-# Optional: make it very explicit in settings which client this is.
 CLIENT = "airborne"
+
+# Production-ish overrides live here:
+DEBUG = True
+
+ALLOWED_HOSTS = [
+    "airborne-images.net",
+    "www.airborne-images.net",
+    # add Heroku domain etc.
+]
+
+

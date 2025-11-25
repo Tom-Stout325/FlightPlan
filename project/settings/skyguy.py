@@ -1,14 +1,17 @@
 # project/settings/skyguy.py
-"""SkyGuy deployment configuration.
-
-This is a Suite deployment (Money + FlightPlan) with the
-CLIENT fixed to "skyguy".
-"""
+"""SkyGuy deployment (Money + FlightPlan)."""
 
 import os
 
 os.environ.setdefault("CLIENT", "skyguy")
 
-from .suite import *  # noqa
+from .base import *  # noqa
 
 CLIENT = "skyguy"
+
+DEBUG = True
+
+ALLOWED_HOSTS = [
+    "skyguy.example.com",
+
+]

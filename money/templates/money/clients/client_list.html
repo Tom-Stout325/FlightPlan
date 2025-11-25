@@ -37,7 +37,7 @@
             <td>{{ client.email }}</td>
             <td>{{ client.phone }}</td>
             <td class="text-center">
-              <a href="{% url 'edit_client' client.pk %}" class="btn btn-sm btn-warning me-1">
+              <a href="{% url 'money:edit_client' client.pk %}" class="btn btn-sm btn-warning me-1">
                 <i class="fa-solid fa-pencil"></i>
               </a>
               <a href="{% url 'money:delete_client' client.pk %}" class="btn btn-sm btn-danger">

@@ -1,13 +1,14 @@
 # project/settings/demo.py
-"""Demo deployment configuration.
-
-This is typically a FlightPlan-only deployment with generic branding.
-"""
+"""Demo deployment (Money + FlightPlan) with generic branding."""
 
 import os
 
 os.environ.setdefault("CLIENT", "demo")
 
-from .flightplan import *  # noqa
+from .base import *  # noqa
 
 CLIENT = "demo"
+
+DEBUG = True
+ALLOWED_HOSTS = ["*"]
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"

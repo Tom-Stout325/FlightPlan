@@ -11,7 +11,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # Initialize environment
 env = environ.Env()
 
-
 environ.Env.read_env()
 # ---- Brand configuration ----
 BRAND_NAME   = env("BRAND_NAME", default="Airborne Images")
@@ -39,7 +38,7 @@ DEBUG = env.bool('DEBUG', default=True)
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 
 INSTALLED_APPS = [
-    'storages',
+   'storages',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -48,11 +47,21 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.humanize',
     'django.contrib.sites',
-    
+
     'crispy_bootstrap5',
     'crispy_forms',
     'fontawesomefree',
     'bootstrap5',
+    
+    'accounts',
+    'clients',
+    'documents',
+    'equipment',
+    'flightlogs',
+    'operations',
+    'pilot',
+    'help',
+    'money',
 ]
 
 MIDDLEWARE = [
@@ -110,7 +119,6 @@ AUTH_PASSWORD_VALIDATORS = [
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
@@ -128,6 +136,31 @@ STATICFILES_STORAGE = (
     if not DEBUG else 'django.contrib.staticfiles.storage.StaticFilesStorage'
 )
 
+from ._client import (
+    CURRENT_CLIENT,
+    FEATURES,
+    BRAND,
+    CLIENT_TEMPLATE_DIR,
+    CLIENT_STATIC_DIR,
+)
+
+# 1) Per-client template directory first in search path
+TEMPLATES[0]["DIRS"] = [str(CLIENT_TEMPLATE_DIR)] + list(
+    TEMPLATES[0].get("DIRS", [])
+)
+
+# 2) Add per-client static folder
+STATICFILES_DIRS = [
+    *(STATICFILES_DIRS if "STATICFILES_DIRS" in globals() else []),
+    str(CLIENT_STATIC_DIR),
+]
+
+# 3) Expose branding + features to settings
+CLIENT          = CURRENT_CLIENT
+CLIENT_FEATURES = FEATURES
+BRAND_NAME      = BRAND["NAME"]
+BRAND_TAGLINE   = BRAND.get("TAGLINE", "")
+CLIENT_SLUG     = BRAND["SLUG"]
 
 
 USE_S3 = env.bool("USE_S3", default=False)

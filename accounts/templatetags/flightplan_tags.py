@@ -60,6 +60,26 @@ def minutes_to_hm(value):
     return f"{h}h {m}m" if h else f"{m}m"
 
 
+
+@register.filter
+def seconds_to_hms(value):
+    """
+    Convert seconds (int) to 'HH:MM:SS'.
+    Accepts int/str; returns '00:00:00' if empty/invalid.
+    """
+    if value in (None, ""):
+        return "00:00:00"
+
+    try:
+        total_seconds = int(value)
+    except (TypeError, ValueError):
+        return "00:00:00"
+
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+
 # -----------------------------
 # Files / Icons
 # -----------------------------

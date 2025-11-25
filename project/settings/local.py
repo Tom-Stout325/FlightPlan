@@ -1,16 +1,16 @@
 # project/settings/local.py
-"""Local development settings.
+"""Local development settings (Money + FlightPlan)."""
 
-Intended for running the Suite variant locally with relaxed security.
-You can point DJANGO_SETTINGS_MODULE here while developing.
-"""
+import os
 
-from .suite import *  # noqa
+# Pick a default client for local dev
+os.environ.setdefault("CLIENT", "airborne")
+
+from .base import *  # noqa
+
+CLIENT = os.getenv("CLIENT", "airborne")
 
 DEBUG = True
-
-# Allow everything in local dev
 ALLOWED_HOSTS = ["*"]
 
-# Local email: console backend
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"

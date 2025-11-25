@@ -1,0 +1,36 @@
+Password:  Password123!
+Hash Used:  pbkdf2_sha256$720000$OQMc4eUYpTvGsaK7YujBWT$s0v3ilMfXNjFr8jwY8XiMPfX6P6Li5DUE/piK7hICYA=
+
+Username: tom
+Password: Password123!
+
+
+How to load the data:
+python manage.py loaddata sample_data.json
+
+
+To Reset the DB:
+python manage.py flush
+python manage.py migrate
+python manage.py loaddata sample_data.json
+
+
+📊 4. What This Sample Data Gives You
+Accounts
+Admin user + profile + pilot profile
+Finance
+Categories + Sub-categories
+Event
+Invoice
+Income + Expense transactions
+Equipment
+A drone
+A drone battery
+FAA fields
+Dates
+Flight Logs
+One real FPV flight
+Operations
+An Ops Plan for NHRA event
+Documents
+A placeholder waiver document

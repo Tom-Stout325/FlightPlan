@@ -52,6 +52,3 @@ _FLIGHTPLAN/
 
 
 
-Bring over:
-Signals
-TemplateTags

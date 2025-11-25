@@ -77,3 +77,6 @@ dist/
 
 # In .gitignore
 !project/fixtures/finance_data.json
+
+
+*FlightPlan Docs.html
