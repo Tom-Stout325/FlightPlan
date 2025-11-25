@@ -42,7 +42,7 @@
   {% endblock meta %}
 
   {# --- iOS Web App Meta --- #}
-  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="{{ BRAND_NAME|default:'12Bytes Transactions' }}">
 
@@ -133,22 +133,7 @@
     </div>
   </main>
 
-  {# Optional footer if you want branding down there as well #}
-  {% block footer %}
-    <footer class="border-top py-3 mt-4">
-      <div class="container d-flex flex-wrap justify-content-between align-items-center small text-muted">
-        <div>
-          &copy; {{ BRAND_NAME|default:"12bytes" }} {% now "Y" %}
-          {% if BRAND_TAGLINE %}
-            &middot; {{ BRAND_TAGLINE }}
-          {% endif %}
-        </div>
-        <div>
-          <span class="text-uppercase">{{ CLIENT_SLUG }}</span>
-        </div>
-      </div>
-    </footer>
-  {% endblock footer %}
+
 
   {# Page-Specific Scripts #}
   {% block extra_js %}{% endblock %}

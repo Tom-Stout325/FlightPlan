@@ -1,29 +1,25 @@
 @import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Nunito:wght@300;400;600&display=swap");
 
-/* Global Reset & Base Styles */
+/* --------------------------------------------------
+   Global Reset & Base Styles
+-------------------------------------------------- */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   height: 100%;
   font-size: 16px;
   background-color: #f8f9fa;
   color: #212529;
-  font-family: 'Nunito', sans-serif;
+  font-family: "Nunito", sans-serif;
   line-height: 1.6;
 }
 
-/* Layout Helpers */
-.container {
-  width: 90%;
-  max-width: 1200px;
-  margin: auto;
-  padding: 2rem 1rem;
-}
-
+/* Simple helpers */
 .flex {
   display: flex;
   justify-content: space-between;
@@ -34,17 +30,26 @@ html, body {
   text-align: center;
 }
 
-/* Headings & Buttons: Montserrat */
-h1, h2, h3, h4, h5, h6,
+/* --------------------------------------------------
+   Typography – Montserrat headings & key UI text
+-------------------------------------------------- */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
 .btn,
 .navbar-brand,
 .card-title,
 .modal-title {
-  font-family: 'Montserrat', sans-serif;
+  font-family: "Montserrat", sans-serif;
   font-weight: 600;
 }
 
-/* Header & Footer */
+/* --------------------------------------------------
+   Header & Footer
+-------------------------------------------------- */
 header {
   background-color: #343a40;
   color: #ffffff;
@@ -67,7 +72,10 @@ footer {
   bottom: 0;
 }
 
-/* Forms */
+/* --------------------------------------------------
+   Forms – light card style (overrides only plain HTML,
+   Bootstrap .form-control/.form-select still apply)
+-------------------------------------------------- */
 form {
   background-color: #ffffff;
   padding: 2rem;
@@ -75,19 +83,22 @@ form {
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
-input, select, textarea, button {
+input,
+select,
+textarea,
+button {
   width: 100%;
   margin-bottom: 1rem;
   padding: 0.75rem;
   border: 1px solid #ccc;
   border-radius: 4px;
   font-size: 1rem;
-  font-family: 'Nunito', sans-serif;
+  font-family: "Nunito", sans-serif;
 }
 
 button {
   background-color: #007bff;
-  color: white;
+  color: #ffffff;
   border: none;
   cursor: pointer;
   transition: background 0.3s ease;
@@ -97,13 +108,15 @@ button:hover {
   background-color: #0056b3;
 }
 
-/* Alerts */
+/* --------------------------------------------------
+   Alerts
+-------------------------------------------------- */
 .alert {
   padding: 1rem;
   margin-bottom: 1rem;
   border-radius: 4px;
   font-weight: 500;
-  font-family: 'Nunito', sans-serif;
+  font-family: "Nunito", sans-serif;
 }
 
 .alert-success {
@@ -127,7 +140,9 @@ button:hover {
   color: #856404;
 }
 
-/* Custom Help Section */
+/* --------------------------------------------------
+   Custom Help / Brand Accent
+-------------------------------------------------- */
 .help-text,
 .text-custom {
   color: cornflowerblue !important;
@@ -142,13 +157,54 @@ button:hover {
 .btn-custom {
   background-color: cornflowerblue !important;
   border: 1px solid cornflowerblue !important;
-  color: white !important;
-  font-family: 'Montserrat', sans-serif;
+  color: #ffffff !important;
+  font-family: "Montserrat", sans-serif;
 }
 
 .btn-help:hover,
 .btn-custom:hover {
   background-color: #4169e1 !important;
   border-color: #4169e1 !important;
-  color: white !important;
+  color: #ffffff !important;
+}
+
+/* --------------------------------------------------
+   GLOBAL MOBILE LAYOUT
+   Make main content sections full width on phones
+   WITHOUT using transforms (keeps <select> popups
+   positioned correctly).
+-------------------------------------------------- */
+@media (max-width: 576.98px) {
+  /* Let Bootstrap containers breathe but use full width */
+  .container,
+  .container-fluid {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  /*
+    Any main content wrapper using one of these classes
+    will break out to 100vw and go edge-to-edge on mobile.
+    Use on the primary card/shell for each view, e.g.:
+
+      <div class="bg-light p-3 transactions-shell">…</div>
+  */
+  .full-width-mobile,
+  .content-shell,
+  .dashboard-shell,
+  .invoice-shell,
+  .invoices-shell,
+  .transactions-shell,
+  .help-shell,
+  .mobile-shell,
+  .mobile-edge {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    margin-left: calc(-50vw + 50%) !important;
+    border-radius: 0 !important;
+    border-left: none !important;
+    border-right: none !important;
+  }
 }

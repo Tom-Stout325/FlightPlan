@@ -142,7 +142,7 @@ class TransactionCreateView(LoginRequiredMixin, CreateView):
     model = Transaction
     form_class = TransForm
     template_name = 'money/transactions/transaction_add.html'
-    success_url = reverse_lazy('add_transaction_success')
+    success_url = reverse_lazy('money:add_transaction_success')
 
     def form_valid(self, form):
         form.instance.user = self.request.user
@@ -174,7 +174,7 @@ class TransactionUpdateView(LoginRequiredMixin, UpdateView):
     model = Transaction
     form_class = TransForm
     template_name = 'money/transactions/transactions/transaction_edit.html'
-    success_url = reverse_lazy('transactions')
+    success_url = reverse_lazy('money:transactions')
 
     def get_queryset(self):
         return Transaction.objects.filter(user=self.request.user)
@@ -331,7 +331,7 @@ class RecurringTransactionUpdateView(LoginRequiredMixin, UpdateView):
     model = RecurringTransaction
     form_class = RecurringTransactionForm
     template_name = 'money/transactions/recurring_form.html'
-    success_url = reverse_lazy('recurring_transaction_list')
+    success_url = reverse_lazy('money:recurring_transaction_list')
     context = { 'current_page': 'recurring transactions', }
 
     def get_queryset(self):
@@ -350,7 +350,7 @@ class RecurringTransactionUpdateView(LoginRequiredMixin, UpdateView):
 class RecurringTransactionDeleteView(LoginRequiredMixin, DeleteView):
     model = RecurringTransaction
     template_name = 'money/transactions/recurring_confirm_delete.html'
-    success_url = reverse_lazy('recurring_transaction_list')
+    success_url = reverse_lazy('money:recurring_transaction_list')
     context = { 'current_page': 'recurring transactions', }
 
     def get_queryset(self):
@@ -467,7 +467,7 @@ def run_monthly_recurring_view(request):
         request,
         f"Created {created_count} recurring transaction(s) for {today.strftime('%B %Y')}."
     )
-    return redirect('recurring_transaction_list')
+    return redirect('money:recurring_transaction_list')
 
 
 

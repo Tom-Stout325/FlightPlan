@@ -4,137 +4,271 @@
 
 {% block title %}Invoices{% endblock %}
 
+{% block extra_css %}
+<style>
+  /* Status dots for paid/unpaid */
+  .status-dot {
+    display: inline-block;
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+  }
+  .status-paid {
+    background-color: #28a745; /* green */
+  }
+  .status-unpaid {
+    background-color: #dc3545; /* red */
+  }
+
+  /* Make search card a bit nicer */
+  .invoice-search-card {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  @media (max-width: 576.98px) {
+    .invoice-actions .btn-icon {
+      font-size: 1rem;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div>
-  <h2 class="text-center text-primary">INVOICES</h2>
-</div>
-<div class="container bg-light border rounded p-4">
 
-  <!-- Search -->
-  <div class="d-flex flex-column flex-md-row align-items-center mb-4 w-50">
-    <h4 class="text-primary mb-3 mb-md-0">Search Invoices</h4>
-    <form method="get" class="d-flex flex-column flex-md-row gap-2 w-100 w-md-auto">
-      <div class="input-group">
-        <input type="text" name="search" class="form-control" placeholder="Search invoices..." value="{{ search_query }}">
-        <button type="submit" class="btn btn-outline-secondary">
-          <i class="fa-solid fa-magnifying-glass-dollar fa-sm"></i>
-        </button>
+<div class="container-fluid px-0 px-md-5 mt-4">
+  <h2 class="text-center text-primary mb-3">INVOICES</h2>
+
+  <div class="bg-light border rounded p-3 p-md-4 invoices-shell">
+
+    {# SEARCH + BUTTONS #}
+    <div class="row g-3 align-items-start mb-3">
+      <div class="col-12 col-lg-7">
+        <div class="card shadow-sm invoice-search-card">
+          <div class="card-body">
+            <h4 class="text-primary text-center mb-3">Search Invoices</h4>
+            <form method="get" class="d-flex flex-column gap-2">
+              <div class="input-group">
+                <input
+                  type="text"
+                  name="search"
+                  class="form-control"
+                  placeholder="Search invoices..."
+                  value="{{ search_query }}"
+                >
+                <button type="submit" class="btn btn-outline-secondary">
+                  <i class="fa-solid fa-magnifying-glass-dollar fa-sm"></i>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       </div>
-    </form>
-  </div>
 
-  <!-- Actions -->
-  <div class="d-flex flex-wrap justify-content-center gap-2 mb-3">
-    <a href="{% url 'money:create_invoice' %}" class="btn btn-outline-primary">
-      <i class="fas fa-plus"></i> New Invoice
-    </a>
-    <a href="{% url 'money:export_invoices_csv' %}?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}" class="btn btn-outline-success">
-      <i class="fa-solid fa-file-csv"></i> CSV
-    </a>
-  </div>
+      <div class="col-12 col-lg-5 d-flex flex-column flex-sm-row justify-content-lg-end gap-2 mt-2 mt-lg-0">
+        <a href="{% url 'money:create_invoice' %}" class="btn btn-outline-primary w-100 w-sm-auto">
+          <i class="fas fa-plus"></i> New Invoice
+        </a>
+        <a href="{% url 'money:export_invoices_csv' %}?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}"
+           class="btn btn-outline-success w-100 w-sm-auto">
+          <i class="fa-solid fa-file-csv"></i> CSV
+        </a>
+      </div>
+    </div>
 
-  <!-- Table -->
-  <div class="table-responsive">
-    <table class="table table-hover align-middle">
-      <thead class="table-primary text-center">
-        <tr>
+    {# TABLE #}
+    <div class="table-responsive mt-3">
+      <table class="table table-hover align-middle">
+        <thead class="table-primary text-center">
+          <tr>
+            {# Invoice # - sortable, short label on mobile #}
+            <th>
+              <a href="?{% for key, value in request.GET.items %}{% if key not in 'sort direction page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}sort=invoice_number__invoice_numb&direction={% if current_sort == 'invoice_number__invoice_numb' and current_direction == 'asc' %}desc{% else %}asc{% endif %}">
+                <span class="d-none d-md-inline">Invoice #</span>
+                <span class="d-inline d-md-none">#</span>
+                {% if current_sort == 'invoice_number__invoice_numb' %}
+                  {% if current_direction == 'asc' %}↑{% else %}↓{% endif %}
+                {% endif %}
+              </a>
+            </th>
 
-          <th>
-            <a href="?{% for key, value in request.GET.items %}{% if key not in 'sort direction page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}sort=invoice_number__invoice_numb&direction={% if current_sort == 'invoice_number__invoice_numb' and current_direction == 'asc' %}desc{% else %}asc{% endif %}">
-              Invoice #
-              {% if current_sort == 'invoice_number__invoice_numb' %}
-                {% if current_direction == 'asc' %}↑{% else %}↓{% endif %}
+            {# Client / Event – desktop only #}
+            <th class="d-none d-md-table-cell">
+              <a href="?{% for key, value in request.GET.items %}{% if key not in 'sort direction page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}sort=client__business&direction={% if current_sort == 'client__business' and current_direction == 'asc' %}desc{% else %}asc{% endif %}">
+                Client
+                {% if current_sort == 'client__business' %}
+                  {% if current_direction == 'asc' %}↑{% else %}↓{% endif %}
+                {% endif %}
+              </a>
+            </th>
+            <th class="d-none d-md-table-cell">Event</th>
+
+            {# Amount – sortable, “AMT” on mobile #}
+            <th>
+              <a href="?{% for key, value in request.GET.items %}{% if key not in 'sort direction page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}sort=amount&direction={% if current_sort == 'amount' and current_direction == 'asc' %}desc{% else %}asc{% endif %}">
+                <span class="d-none d-md-inline">Amount</span>
+                <span class="d-inline d-md-none">AMT</span>
+                {% if current_sort == 'amount' %}
+                  {% if current_direction == 'asc' %}↑{% else %}↓{% endif %}
+                {% endif %}
+              </a>
+            </th>
+
+            {# Date – desktop only #}
+            <th class="d-none d-md-table-cell">Date</th>
+
+            {# Due – shown everywhere #}
+            <th>
+              <span class="d-none d-md-inline">Due</span>
+              <span class="d-inline d-md-none">Due</span>
+            </th>
+
+            {# Status (paid/unpaid) – S on mobile #}
+            <th>
+              <span class="d-none d-md-inline">Status</span>
+              <span class="d-inline d-md-none">S</span>
+            </th>
+
+            {# Days – desktop only #}
+            <th class="d-none d-md-table-cell">Days</th>
+
+            {# Actions – A on mobile #}
+            <th>
+              <span class="d-none d-md-inline">Actions</span>
+              <span class="d-inline d-md-none">A</span>
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for invoice in invoices %}
+          <tr class="text-center">
+            <td>{{ invoice.invoice_number }}</td>
+
+            <td class="d-none d-md-table-cell">{{ invoice.client }}</td>
+            <td class="d-none d-md-table-cell">{{ invoice.event }}</td>
+
+            <td>${{ invoice.amount|floatformat:2|intcomma }}</td>
+
+            <td class="d-none d-md-table-cell">
+              {{ invoice.date|date:"m/d/y" }}
+            </td>
+
+            <td>{{ invoice.due|date:"m/d/y" }}</td>
+
+            <td>
+              <span class="status-dot {% if invoice.paid_date %}status-paid{% else %}status-unpaid{% endif %}"></span>
+              <span class="d-none d-md-inline ms-1">
+                {% if invoice.paid_date %}
+                  {{ invoice.paid_date|date:"m/d/y" }}
+                {% else %}
+                  Unpaid
+                {% endif %}
+              </span>
+            </td>
+
+            <td class="d-none d-md-table-cell">
+              {% if invoice.paid_date %}
+                {{ invoice.days_to_pay }} days
+              {% else %}
+                <span class="text-muted">—</span>
               {% endif %}
-            </a>
-          </th>
-          <th>
-            <a href="?{% for key, value in request.GET.items %}{% if key not in 'sort direction page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}sort=client__business&direction={% if current_sort == 'client__business' and current_direction == 'asc' %}desc{% else %}asc{% endif %}">
-              Client
-              {% if current_sort == 'client__business' %}
-                {% if current_direction == 'asc' %}↑{% else %}↓{% endif %}
-              {% endif %}
-            </a>
-          </th>
-          <th>Event</th>
-   
-          <th>
-            <a href="?{% for key, value in request.GET.items %}{% if key not in 'sort direction page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}sort=amount&direction={% if current_sort == 'amount' and current_direction == 'asc' %}desc{% else %}asc{% endif %}">
-              Amount
-              {% if current_sort == 'amount' %}
-                {% if current_direction == 'asc' %}↑{% else %}↓{% endif %}
-              {% endif %}
-            </a>
-          </th>
-          <th>Date</th>
-          <th>Due</th>
-          <th>Paid</th>
-          <th>Days</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for invoice in invoices %}
-        <tr class="text-center">
-          <td>{{ invoice.invoice_number }}</td>
-          <td>{{ invoice.client }}</td>
-          <td>{{ invoice.event }}</td>
-          <td>${{ invoice.amount|floatformat:2|intcomma }}</td>
-          <td>{{ invoice.date }}</td>
-          <td>{{ invoice.due }}</td>
-          <td>
-            <span class="badge {% if invoice.paid_date %}bg-success{% else %}bg-danger{% endif %}">
-              {% if invoice.paid_date %}{{ invoice.paid_date|date:"m-d-y" }}{% else %}No{% endif %}
+            </td>
+
+            <td class="text-nowrap invoice-actions">
+              {# View – always visible (mobile + desktop) #}
+              <a href="{% url 'money:invoice_detail' invoice.pk %}"
+                 class="text-decoration-none me-2 btn-icon"
+                 target="_blank"
+                 title="View">
+                <i class="fa-solid fa-eye text-primary"></i>
+              </a>
+
+              {# Edit / Review / Delete / Email – desktop only #}
+              <span class="d-none d-md-inline">
+                <a href="{% url 'money:update_invoice' invoice.pk %}"
+                   class="text-decoration-none me-2 btn-icon"
+                   title="Edit">
+                  <i class="fa-solid fa-pencil text-primary"></i>
+                </a>
+                <a href="{% url 'money:invoice_review' invoice.pk %}"
+                   class="text-decoration-none me-2 btn-icon"
+                   title="Review PDF">
+                  <i class="fa-regular fa-file text-primary"></i>
+                </a>
+                <a href="{% url 'money:invoice_delete' invoice.pk %}"
+                   class="text-decoration-none me-2 btn-icon"
+                   title="Delete">
+                  <i class="fa-solid fa-trash-can text-primary"></i>
+                </a>
+                <a href="{% url 'money:send_invoice_email' invoice.id %}"
+                   class="send-email text-decoration-none btn-icon"
+                   data-url="{% url 'money:send_invoice_email' invoice.id %}"
+                   data-invoice-id="{{ invoice.id }}"
+                   data-invoice-number="{{ invoice.invoice_number }}"
+                   title="Send Email">
+                  <i class="fa-regular fa-paper-plane text-primary"></i>
+                  <span class="spinner-border spinner-border-sm d-none" role="status"></span>
+                </a>
+              </span>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="9" class="text-center text-muted">No invoices found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# PAGINATION #}
+    <div class="d-flex justify-content-center mt-3">
+      <nav>
+        <ul class="pagination">
+          {% if page_obj.has_previous %}
+            <li class="page-item">
+              <a class="page-link"
+                 href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}page=1">
+                « First
+              </a>
+            </li>
+            <li class="page-item">
+              <a class="page-link"
+                 href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">
+                Previous
+              </a>
+            </li>
+          {% endif %}
+
+          <li class="page-item disabled">
+            <span class="page-link">
+              Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
             </span>
-          </td>
-          <td>
-            {% if invoice.paid_date %}
-              {{ invoice.days_to_pay }} days
-            {% else %}
-              <span class="text-muted">—</span>
-            {% endif %}
-          </td>
-          <td class="text-nowrap">
-            <a href="{% url 'money:invoice_detail' invoice.pk %}" class="text-decoration-none me-2" target="_blank"><i class="fa-solid fa-eye text-primary"></i></a>
-            <a href="{% url 'money:update_invoice' invoice.pk %}" class="text-decoration-none me-2"><i class="fa-solid fa-pencil text-primary"></i></a>
-            <a href="{% url 'money:invoice_review' invoice.pk %}" class="text-decoration-none me-2"><i class="fa-regular fa-file text-primary"></i></a>
-            <a href="{% url 'money:invoice_delete' invoice.pk %}" class="text-decoration-none me-2"><i class="fa-solid fa-trash-can text-primary"></i></a>
-            <a href="{% url 'money:send_invoice_email' invoice.id %}"
-              class="send-email text-decoration-none"
-              data-url="{% url 'money:send_invoice_email' invoice.id %}"
-              data-invoice-id="{{ invoice.id }}"
-              data-invoice-number="{{ invoice.invoice_number }}">
-              <i class="fa-regular fa-paper-plane text-primary"></i>
-              <span class="spinner-border spinner-border-sm d-none" role="status"></span>
-            </a>
-          </td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="12" class="text-center text-muted">No invoices found.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+          </li>
 
-  <!-- Pagination -->
-  <div class="d-flex justify-content-center mt-3">
-    <nav>
-      <ul class="pagination">
-        {% if page_obj.has_previous %}
-          <li class="page-item"><a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}page=1">« First</a></li>
-          <li class="page-item"><a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">Previous</a></li>
-        {% endif %}
-        <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
-        {% if page_obj.has_next %}
-          <li class="page-item"><a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">Next</a></li>
-          <li class="page-item"><a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}">Last »</a></li>
-        {% endif %}
-      </ul>
-    </nav>
-  </div>
+          {% if page_obj.has_next %}
+            <li class="page-item">
+              <a class="page-link"
+                 href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">
+                Next
+              </a>
+            </li>
+            <li class="page-item">
+              <a class="page-link"
+                 href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}">
+                Last »
+              </a>
+            </li>
+          {% endif %}
+        </ul>
+      </nav>
+    </div>
 
+  </div>
 </div>
 
-<!-- Email Button Logic -->
+{# Email Button Logic (unchanged) #}
 <script>
   function getCookie(name) {
     const m = document.cookie.match(new RegExp('(^|; )' + name + '=([^;]+)'));
@@ -185,6 +319,5 @@
     }
   });
 </script>
-
 
 {% endblock %}
