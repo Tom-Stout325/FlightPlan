@@ -31,11 +31,20 @@ from .views.invoices import (
     InvoiceUpdateView,
     invoice_review,
     invoice_review_pdf,
-    send_invoice_email,
     unpaid_invoices,
     export_invoices_csv,
     export_invoices_pdf,
+    send_invoice_email,
     invoice_summary,
+    
+    InvoiceV2ListView,
+    InvoiceV2DetailView,
+    InvoiceV2UpdateView,
+    InvoiceV2MarkPaidView,
+    InvoiceV2CreateView,
+    InvoiceV2IssueView,
+    invoice_v2_pdf_view,
+    invoice_v2_send_email,
 )
 
 # Categories, Subcategories, Clients
@@ -124,6 +133,18 @@ urlpatterns = [
     path("unpaid-invoices/", unpaid_invoices, name="unpaid_invoices"),
     path("invoices/export/csv/", export_invoices_csv, name="export_invoices_csv"),
     path("invoices/export/pdf/", export_invoices_pdf, name="export_invoices_pdf"),
+    
+    # New Invoices
+    path("invoices/v2/", InvoiceV2ListView.as_view(), name="invoice_v2_list"),
+    path("invoices/v2/new/", InvoiceV2CreateView.as_view(), name="invoice_v2_create"),
+    path("invoices/v2/<int:pk>/", InvoiceV2DetailView.as_view(), name="invoice_v2_detail"),
+    path("invoices/v2/<int:pk>/edit/", InvoiceV2UpdateView.as_view(), name="invoice_v2_edit"),
+    path("invoices/v2/<int:pk>/mark-paid/", InvoiceV2MarkPaidView.as_view(), name="invoice_v2_mark_paid"),
+    path("invoices/v2/<int:pk>/issue/", InvoiceV2IssueView.as_view(), name="invoice_v2_issue"),
+    path("invoices/v2/<int:pk>/pdf/", invoice_v2_pdf_view, name="invoice_v2_pdf"),
+    path("invoices/v2/<int:pk>/send-email/", invoice_v2_send_email, name="invoice_v2_send_email"),
+    
+    
 
     # Categories & Subcategories
     path("category-report/", CategoryListView.as_view(), name="category_page"),

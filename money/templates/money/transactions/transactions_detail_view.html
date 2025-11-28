@@ -92,9 +92,9 @@
 
       <!-- Action Buttons -->
       <div class="mt-4 d-flex justify-content-end gap-2">
-        <a href="{% url 'edit_transaction' transaction.id %}" class="btn btn-warning">Edit</a>
+        <a href="{% url 'money:edit_transaction' transaction.id %}" class="btn btn-warning">Edit</a>
         <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#confirmDeleteModal">Delete</button>
-        <a href="{% url 'transactions' %}" class="btn btn-secondary">Back</a>
+        <a href="{% url 'money:transactions' %}" class="btn btn-secondary">Back</a>
       </div>
     </div>
   </div>
@@ -104,7 +104,7 @@
 <div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
-      <form method="post" action="{% url 'delete_transaction' transaction.id %}?next={% url 'transactions' %}">
+      <form method="post" action="{% url 'money:delete_transaction' transaction.id %}?next={% url 'money:transactions' %}">
         {% csrf_token %}
         <div class="modal-header">
           <h5 class="modal-title" id="confirmDeleteModalLabel">Confirm Delete</h5>

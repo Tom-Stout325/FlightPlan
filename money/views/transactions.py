@@ -122,7 +122,7 @@ class Transactions(LoginRequiredMixin, ListView):
 
 class TransactionDetailView(LoginRequiredMixin, DetailView):
     model = Transaction
-    template_name = 'money/transactions/transactions/transactions_detail_view.html'
+    template_name = 'money/transactions/transactions_detail_view.html'
     context_object_name = 'transaction'
 
     def get_queryset(self):
@@ -168,51 +168,65 @@ class TransactionCreateView(LoginRequiredMixin, CreateView):
 
 
 
-
-
 class TransactionUpdateView(LoginRequiredMixin, UpdateView):
     model = Transaction
     form_class = TransForm
-    template_name = 'money/transactions/transactions/transaction_edit.html'
-    success_url = reverse_lazy('money:transactions')
+    template_name = "money/transactions/transaction_edit.html"
+    success_url = reverse_lazy("money:transactions")
 
     def get_queryset(self):
+        """
+        Limit updates to the logged-in user's transactions.
+        """
         return Transaction.objects.filter(user=self.request.user)
 
-    def post(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        form = self.get_form()
-        if form.is_bound:
-            logger.info("Form is bound with data: %s", request.POST)
-        else:
-            logger.warning("Form is NOT bound!")
-        if form.is_valid():
-            logger.info("Form is valid, proceeding to save.")
-            return self.form_valid(form)
-        else:
-            logger.warning("Form is invalid with errors: %s", form.errors)
-            return self.form_invalid(form)
-
     def form_valid(self, form):
+        """
+        Save a valid transaction inside an atomic block.
+        Django handles POST + FILES binding for us.
+        """
         try:
             with transaction.atomic():
-                response = super().form_valid(form)
-                messages.success(self.request, 'Transaction updated successfully!')
-                return response
+                self.object = form.save()
+            messages.success(self.request, "Transaction updated successfully!")
+            return redirect(self.get_success_url())
         except Exception as e:
-            logger.error(f"Error updating transaction {self.get_object().id} for user {self.request.user.id}: {e}")
-            messages.error(self.request, 'Error updating transaction. Please check the form.')
+            logger.error(
+                "Error updating transaction %s for user %s: %s",
+                getattr(self.object, "id", "unknown"),
+                getattr(self.request.user, "id", "anon"),
+                e,
+            )
+            messages.error(self.request, "Error updating transaction. Please check the form.")
             return self.form_invalid(form)
+
+    def form_invalid(self, form):
+        """
+        DEBUG: log exactly why the first POST is failing, which is
+        what forces you to pick the file a second time.
+        """
+        logger.warning(
+            "TransactionUpdateView.form_invalid for user %s. Errors: %s",
+            getattr(self.request.user, "id", "anon"),
+            form.errors,
+        )
+        print("==== TransactionUpdateView.form_invalid ====")
+        print("FORM VALID:", form.is_valid())
+        print("FORM ERRORS:", form.errors)
+
+        messages.error(self.request, "There were errors in the transaction form.")
+        return self.render_to_response(self.get_context_data(form=form))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['current_page'] = 'transactions'
-        sub_cat = self.object.sub_cat
+        context["current_page"] = "transactions"
+
+        sub_cat = getattr(self.object, "sub_cat", None)
         if sub_cat:
-            context['selected_category'] = sub_cat.category
+            context["selected_category"] = sub_cat.category
+
         return context
-    
-    
+
     
     
 class TransactionDeleteView(LoginRequiredMixin, DeleteView):

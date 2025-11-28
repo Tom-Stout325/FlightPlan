@@ -85,8 +85,7 @@ form {
 
 input,
 select,
-textarea,
-button {
+textarea {
   width: 100%;
   margin-bottom: 1rem;
   padding: 0.75rem;
@@ -94,18 +93,6 @@ button {
   border-radius: 4px;
   font-size: 1rem;
   font-family: "Nunito", sans-serif;
-}
-
-button {
-  background-color: #007bff;
-  color: #ffffff;
-  border: none;
-  cursor: pointer;
-  transition: background 0.3s ease;
-}
-
-button:hover {
-  background-color: #0056b3;
 }
 
 /* --------------------------------------------------
@@ -207,4 +194,12 @@ button:hover {
     border-left: none !important;
     border-right: none !important;
   }
+}
+
+
+/* Hide DELETE checkboxes in invoice item rows; we use a trash button instead */
+#invoice-items-table input[type="checkbox"][name$="-DELETE"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
 }

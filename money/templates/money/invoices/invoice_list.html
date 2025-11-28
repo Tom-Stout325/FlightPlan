@@ -157,10 +157,15 @@
             <td>{{ invoice.due|date:"m/d/y" }}</td>
 
             <td>
-              <span class="status-dot {% if invoice.paid_date %}status-paid{% else %}status-unpaid{% endif %}"></span>
-              <span class="d-none d-md-inline ms-1">
+              {# Mobile: show red dot only when unpaid #}
+              {% if not invoice.paid_date %}
+                <span class="status-dot status-unpaid d-inline d-md-none"></span>
+              {% endif %}
+
+              {# Desktop: show "Paid" / "Unpaid" text only #}
+              <span class="d-none d-md-inline">
                 {% if invoice.paid_date %}
-                  {{ invoice.paid_date|date:"m/d/y" }}
+                  Paid
                 {% else %}
                   Unpaid
                 {% endif %}

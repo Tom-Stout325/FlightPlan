@@ -1,0 +1,336 @@
+{% extends "index.html" %}
+{% load static %}
+
+{% block title %}
+  {% if invoice and invoice.pk %}
+    Edit Invoice {{ invoice.invoice_number|default:"(draft)" }}
+  {% else %}
+    New Invoice
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5" style="max-width: 900px;">
+
+  <a href="{% url 'money:invoice_v2_list' %}" class="btn btn-link btn-sm px-0 mb-3">
+    ← Back to invoices
+  </a>
+
+  <div class="card shadow-sm invoice-shell">
+    <div class="card-body">
+      <h1 class="h4 mb-3">
+        {% if invoice and invoice.pk %}
+          Edit Invoice {{ invoice.invoice_number|default:"(draft)" }}
+        {% else %}
+          New Invoice
+        {% endif %}
+      </h1>
+      <p class="text-muted small mb-4">
+        Set the invoice details and line items. Amount will be calculated from the items.
+      </p>
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <!-- Header fields -->
+        <div class="row g-3 mb-4">
+          <!-- Client -->
+          <div class="col-12 col-md-6">
+            <label for="{{ form.client.id_for_label }}" class="form-label">Client</label>
+            {{ form.client }}
+            {% if form.client.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.client.errors|striptags }}
+              </div>
+            {% endif %}
+          </div>
+
+          <!-- Service -->
+          <div class="col-12 col-md-6">
+            <label for="{{ form.service.id_for_label }}" class="form-label">Service</label>
+            {{ form.service }}
+            {% if form.service.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.service.errors|striptags }}
+              </div>
+            {% endif %}
+          </div>
+
+          <!-- Event -->
+          <div class="col-12 col-md-6">
+            <label for="{{ form.event.id_for_label }}" class="form-label">Event (optional)</label>
+            {{ form.event }}
+            {% if form.event.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.event.errors|striptags }}
+              </div>
+            {% endif %}
+          </div>
+
+          <!-- Event name -->
+          <div class="col-12 col-md-6">
+            <label for="{{ form.event_name.id_for_label }}" class="form-label">Event name (display)</label>
+            {{ form.event_name }}
+            {% if form.event_name.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.event_name.errors|striptags }}
+              </div>
+            {% endif %}
+          </div>
+
+          <!-- Location -->
+          <div class="col-12">
+            <label for="{{ form.location.id_for_label }}" class="form-label">Location</label>
+            {{ form.location }}
+            {% if form.location.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.location.errors|striptags }}
+              </div>
+            {% endif %}
+          </div>
+
+          <!-- Dates -->
+          <div class="col-6 col-md-4">
+            <label for="{{ form.date.id_for_label }}" class="form-label">Invoice date</label>
+            {{ form.date }}
+            {% if form.date.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.date.errors|striptags }}
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="col-6 col-md-4">
+            <label for="{{ form.due.id_for_label }}" class="form-label">Due date</label>
+            {{ form.due }}
+            {% if form.due.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.due.errors|striptags }}
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="col-6 col-md-4">
+            <label for="{{ form.paid_date.id_for_label }}" class="form-label">Paid date</label>
+            {{ form.paid_date }}
+            {% if form.paid_date.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.paid_date.errors|striptags }}
+              </div>
+            {% endif %}
+          </div>
+
+          <!-- Status -->
+          <div class="col-6 col-md-4">
+            <label for="{{ form.status.id_for_label }}" class="form-label">Status</label>
+            {{ form.status }}
+            {% if form.status.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.status.errors|striptags }}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Line items -->
+        <h2 class="h6 mb-2">Line items</h2>
+        <p class="small text-muted mb-2">
+          Add one or more items. Category will follow the selected sub-category.
+        </p>
+
+        <div class="table-responsive mb-3">
+          <table class="table table-sm align-middle mb-0 invoice-items-table" id="invoice-items-table">
+            <thead class="table-light">
+              <tr>
+                <th>Description</th>
+                <th style="width: 90px;" class="text-end">Qty</th>
+                <th style="width: 120px;" class="text-end">Price</th>
+                <th style="width: 220px;">Sub Category</th>
+                <th style="width: 70px;" class="text-center">Delete</th>
+              </tr>
+            </thead>
+            <tbody id="invoice-items-body">
+              {{ items_formset.management_form }}
+              {% for f in items_formset %}
+                <tr>
+                  {% if f.id %}{{ f.id }}{% endif %}
+
+                  <td>
+                    {{ f.description }}
+                    {% if f.description.errors %}
+                      <div class="invalid-feedback d-block small">
+                        {{ f.description.errors|striptags }}
+                      </div>
+                    {% endif %}
+                  </td>
+
+                  <td class="text-end">
+                    {{ f.qty }}
+                    {% if f.qty.errors %}
+                      <div class="invalid-feedback d-block small text-start">
+                        {{ f.qty.errors|striptags }}
+                      </div>
+                    {% endif %}
+                  </td>
+
+                  <td class="text-end">
+                    {{ f.price }}
+                    {% if f.price.errors %}
+                      <div class="invalid-feedback d-block small text-start">
+                        {{ f.price.errors|striptags }}
+                      </div>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    {{ f.sub_cat }}
+                    {% if f.sub_cat.errors %}
+                      <div class="invalid-feedback d-block small">
+                        {{ f.sub_cat.errors|striptags }}
+                      </div>
+                    {% endif %}
+                  </td>
+
+                  <td class="text-center">
+                    {% if items_formset.can_delete %}
+                      {{ f.DELETE }}  {# hidden via CSS #}
+                      <button type="button"
+                              class="btn btn-outline-danger btn-sm js-delete-row"
+                              title="Remove line">
+                        &#128465;
+                      </button>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+
+            <tfoot class="table-light">
+              <tr>
+                <th colspan="3" class="text-end">Last saved total:</th>
+                <th class="text-end">
+                  {% if invoice and invoice.amount %}
+                    ${{ invoice.amount|floatformat:2 }}
+                  {% else %}
+                    $0.00
+                  {% endif %}
+                </th>
+                <th></th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- Hidden template row for new items -->
+        <template id="item-empty-form-template">
+          {% with f=items_formset.empty_form %}
+          <tr>
+            {% if f.id %}{{ f.id }}{% endif %}
+
+            <td>
+              {{ f.description }}
+            </td>
+
+            <td class="text-end">
+              {{ f.qty }}
+            </td>
+
+            <td class="text-end">
+              {{ f.price }}
+            </td>
+
+            <td>
+              {{ f.sub_cat }}
+            </td>
+
+            <td class="text-center">
+              {% if items_formset.can_delete %}
+                {{ f.DELETE }}  {# hidden via CSS #}
+                <button type="button"
+                        class="btn btn-outline-danger btn-sm js-delete-row"
+                        title="Remove line">
+                  &#128465;
+                </button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endwith %}
+        </template>
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+          <button type="button" class="btn btn-outline-primary btn-sm" id="add-line-item-btn">
+            + Add line item
+          </button>
+          <span class="small text-muted">
+            Totals update after saving the invoice.
+          </span>
+        </div>
+
+        <!-- Footer actions -->
+        <div class="d-flex justify-content-between">
+          <a href="{% url 'money:invoice_v2_list' %}" class="btn btn-outline-secondary">
+            Cancel
+          </a>
+          <button type="submit" class="btn btn-primary">
+            {% if invoice and invoice.pk %}
+              Save changes
+            {% else %}
+              Create invoice
+            {% endif %}
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  (function () {
+    const addBtn = document.getElementById("add-line-item-btn");
+    const tbody = document.getElementById("invoice-items-body");
+    const template = document.getElementById("item-empty-form-template");
+    if (!tbody || !template) return;
+
+    const totalFormsInput = document.querySelector("input[name$='-TOTAL_FORMS']");
+
+    // Add new row from the empty-form template
+    if (addBtn && totalFormsInput) {
+      addBtn.addEventListener("click", function () {
+        const currentCount = parseInt(totalFormsInput.value, 10) || 0;
+        let html = template.innerHTML;
+
+        // Replace __prefix__ with the new index for IDs/names
+        html = html.replace(/__prefix__/g, currentCount);
+
+        const wrapper = document.createElement("tbody");
+        wrapper.innerHTML = html.trim();
+        const newRow = wrapper.firstElementChild;
+
+        tbody.appendChild(newRow);
+
+        // Bump TOTAL_FORMS so Django knows about the new form
+        totalFormsInput.value = currentCount + 1;
+      });
+    }
+
+    // Delegate delete button clicks → mark DELETE checkbox + hide row
+    tbody.addEventListener("click", function (event) {
+      const btn = event.target.closest(".js-delete-row");
+      if (!btn) return;
+
+      const row = btn.closest("tr");
+      if (!row) return;
+
+      const checkbox = row.querySelector("input[type='checkbox'][name$='-DELETE']");
+      if (checkbox) {
+        checkbox.checked = true;
+      }
+
+      // Hide the row visually; Django will handle deletion via DELETE flag
+      row.style.display = "none";
+    });
+  })();
+</script>
+{% endblock %}

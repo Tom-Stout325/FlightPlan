@@ -1,0 +1,209 @@
+{% extends "index.html" %}
+{% load static %}
+
+{% block title %}Invoices (v2){% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+
+  <!-- Header -->
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-4">
+    <div>
+      <h1 class="h3 mb-1">Invoices (v2)</h1>
+      <p class="text-muted mb-0">
+        Browse and filter your new invoice set.
+      </p>
+    </div>
+    <div>
+      <a href="{% url 'money:invoice_v2_create' %}" class="btn btn-primary btn-sm">
+        New Invoice
+      </a>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <form method="get" class="card mb-4">
+    <div class="card-body">
+      <div class="row g-2 g-md-3 align-items-end">
+        <!-- Status -->
+        <div class="col-12 col-md-3">
+          <label class="form-label mb-1">Status</label>
+          <select name="status" class="form-select form-select-sm">
+            <option value="">All</option>
+            {% for value,label in status_choices %}
+              <option value="{{ value }}" {% if value == selected_status %}selected{% endif %}>
+                {{ label }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Year -->
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1">Year</label>
+          <select name="year" class="form-select form-select-sm">
+            <option value="">All</option>
+            {% for y in years %}
+              <option value="{{ y }}" {% if y|stringformat:"s" == selected_year %}selected{% endif %}>
+                {{ y }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Client -->
+        <div class="col-12 col-md-4">
+          <label class="form-label mb-1">Client</label>
+          <select name="client" class="form-select form-select-sm">
+            <option value="">All</option>
+            {% for c in clients %}
+              <option value="{{ c.id }}" {% if c.id|stringformat:"s" == selected_client %}selected{% endif %}>
+                {{ c.business }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Actions -->
+        <div class="col-12 col-md-3 d-flex justify-content-md-end justify-content-start gap-2 align-items-end mb-3">
+          <button type="submit" class="btn btn-primary btn-sm px-4">
+            Apply
+          </button>
+          <a href="{% url 'money:invoice_v2_list' %}"
+            class="btn btn-outline-secondary btn-sm px-4">
+            Reset
+          </a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <!-- Invoice table -->
+  <div class="card shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th scope="col">Invoice #</th>
+            <th scope="col">Client</th>
+            <th scope="col" class="d-none d-sm-table-cell">Event</th>
+            <th scope="col">Date</th>
+            <th scope="col" class="text-end">Amount</th>
+            <th scope="col" class="text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for invoice in invoices %}
+            <tr>
+              <!-- Invoice number -->
+              <td>
+                <a href="{% url 'money:invoice_v2_detail' invoice.pk %}"
+                   class="text-decoration-none">
+                  {{ invoice.invoice_number|default:"(draft)" }}
+                </a>
+              </td>
+
+              <!-- Client / location -->
+              <td>
+                {{ invoice.client.business }}
+                {% if invoice.location %}
+                  <div class="small text-muted">
+                    {{ invoice.location }}
+                  </div>
+                {% endif %}
+              </td>
+
+              <!-- Event -->
+              <td class="d-none d-sm-table-cell">
+                {% if invoice.event %}
+                  {{ invoice.event.title }}
+                {% elif invoice.event_name %}
+                  {{ invoice.event_name }}
+                {% else %}
+                  <span class="text-muted small">—</span>
+                {% endif %}
+              </td>
+
+              <!-- Dates -->
+              <td>
+                {{ invoice.date|date:"M j, Y" }}
+                {% if invoice.due %}
+                  <div class="small text-muted">
+                    Due {{ invoice.due|date:"M j" }}
+                  </div>
+                {% endif %}
+              </td>
+
+              <!-- Amount -->
+              <td class="text-end">
+                ${{ invoice.amount|floatformat:2 }}
+              </td>
+
+              <!-- Status badge -->
+              <td class="text-center">
+                {% if invoice.status == "Paid" %}
+                  <span class="badge bg-success">Paid</span>
+                {% elif invoice.status == "Partial" %}
+                  <span class="badge bg-warning text-dark">Partial</span>
+                {% else %}
+                  <span class="badge bg-secondary">Unpaid</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-center py-4 text-muted">
+                No invoices found for the selected filters.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+      <div class="card-footer">
+        <nav aria-label="Invoice pagination">
+          <ul class="pagination justify-content-center mb-0 small">
+            {% with status=selected_status year=selected_year client=selected_client %}
+              {% if page_obj.has_previous %}
+                <li class="page-item">
+                  <a class="page-link"
+                     href="?page={{ page_obj.previous_page_number }}{% if status %}&status={{ status }}{% endif %}{% if year %}&year={{ year }}{% endif %}{% if client %}&client={{ client }}{% endif %}">
+                    Previous
+                  </a>
+                </li>
+              {% else %}
+                <li class="page-item disabled">
+                  <span class="page-link">Previous</span>
+                </li>
+              {% endif %}
+
+              <li class="page-item disabled">
+                <span class="page-link">
+                  Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </span>
+              </li>
+
+              {% if page_obj.has_next %}
+                <li class="page-item">
+                  <a class="page-link"
+                     href="?page={{ page_obj.next_page_number }}{% if status %}&status={{ status }}{% endif %}{% if year %}&year={{ year }}{% endif %}{% if client %}&client={{ client }}{% endif %}">
+                    Next
+                  </a>
+                </li>
+              {% else %}
+                <li class="page-item disabled">
+                  <span class="page-link">Next</span>
+                </li>
+              {% endif %}
+            {% endwith %}
+          </ul>
+        </nav>
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

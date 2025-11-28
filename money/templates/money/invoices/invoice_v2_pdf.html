@@ -1,0 +1,299 @@
+{% load humanize %}
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>Invoice {{ invoice.invoice_number|default:"(draft)" }}</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 1in;
+      }
+
+      body {
+        font-family: "Segoe UI", Arial, sans-serif;
+        font-size: 12px;
+        color: #333;
+      }
+
+      h1, h2, h3, h4, h5, h6 {
+        margin: 0;
+      }
+
+      .text-right {
+        text-align: right;
+      }
+
+      .text-muted {
+        color: #777;
+      }
+
+      .badge {
+        display: inline-block;
+        font-size: 10px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      .badge-success { background: #2e8b57; color: #fff; }
+      .badge-warning { background: #ffc107; color: #000; }
+      .badge-secondary { background: #6c757d; color: #fff; }
+
+      .mt-1 { margin-top: 4px; }
+      .mt-2 { margin-top: 8px; }
+      .mt-3 { margin-top: 12px; }
+      .mt-4 { margin-top: 16px; }
+      .mb-0 { margin-bottom: 0; }
+      .mb-1 { margin-bottom: 4px; }
+      .mb-2 { margin-bottom: 8px; }
+      .mb-3 { margin-bottom: 12px; }
+
+      .row {
+      display: flex;
+      flex-wrap: nowrap;
+      justify-content: space-between;
+      align-items: center;   /* center vertically for header */
+      }
+
+      .col + .col {
+      margin-left: 24px;
+  }
+
+      .col {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+
+      .card {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 12px 14px;
+        margin-top: 16px;
+      }
+
+      .card-title {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+        font-size: 11.5px;
+      }
+
+      th, td {
+        border: 1px solid #ccc;
+        padding: 6px 8px;
+        vertical-align: top;
+      }
+
+      th {
+        background: #f4f4f4;
+        text-align: left;
+      }
+
+      .text-end {
+        text-align: right;
+      }
+
+      .small {
+        font-size: 11px;
+      }
+
+      .footer {
+        position: fixed;
+        bottom: 0.5in;          
+        left: 1in;
+        right: 1in;
+        text-align: center;
+        font-size: 10px;
+        color: #777;
+      }
+
+      .footer-line {
+        margin-bottom: 4px;
+        font-weight: 500;
+      }
+
+      .footer-contact {
+        margin-top: 2px;
+      }
+
+    </style>
+  </head>
+  <body>
+  <!-- HEADER -->
+  <div class="row" style="align-items: center; margin-bottom: 20px;">
+
+    <!-- LEFT COLUMN: Invoice + event -->
+    <div class="col" style="flex: 1;">
+      <h1 style="margin-bottom: 4px;">Invoice</h1>
+      <p class="text-muted mb-0" style="font-size: 13px;">
+        {% if invoice.event %}
+          {{ invoice.event.title }}
+        {% elif invoice.event_name %}
+          {{ invoice.event_name }}
+        {% else %}
+          {{ invoice.service }}
+        {% endif %}
+      </p>
+    </div>
+
+
+
+    <!-- CENTER COLUMN: LOGO (or brand name) -->
+    <div class="col" style="flex: 1; text-align: center;">
+      {% if BRAND_LOGO_URL %}
+        <img src="{{ BRAND_LOGO_URL }}"
+            alt="{{ BRAND_PROFILE.name|default:'Brand Logo' }}"
+            style="max-height: 120px; width: auto;">
+      {% elif BRAND_PROFILE %}
+        <strong style="font-size: 18px;">
+          {{ BRAND_PROFILE.name }}
+        </strong>
+      {% else %}
+        <!-- optional fallback text -->
+        <strong style="font-size: 18px;">INVOICE</strong>
+      {% endif %}
+    </div>
+
+
+
+    <!-- RIGHT COLUMN: Invoice # + date -->
+    <div class="col text-right" style="flex: 1; text-align: right;">
+      <h3 style="margin-bottom: 4px;">
+        Invoice Number: {{ invoice.invoice_number|default:"(draft)" }}
+      </h3>
+      <p class="mb-0" style="font-size: 13px;">
+        <strong>Date:</strong>
+        {% if invoice.issued_at %}
+          {{ invoice.issued_at|date:"M j, Y" }}
+        {% else %}
+          {{ invoice.date|date:"M j, Y" }}
+        {% endif %}
+      </p>
+    </div>
+
+  </div>
+
+
+
+
+
+
+    <!-- Client / Meta card -->
+    <div class="card">
+      <div class="row">
+        <div class="col">
+          <div class="card-title">Bill To</div>
+          <p class="mb-1">
+            <strong>{{ invoice.client.business }}</strong><br>
+            {{ invoice.client.first }} {{ invoice.client.last }}<br>
+            {% if invoice.client.email %}
+              <span class="text-muted small">{{ invoice.client.email }}</span><br>
+            {% endif %}
+          </p>
+        </div>
+        <div class="col">
+          <div class="card-title">Details</div>
+          <p class="mb-1 small">
+            {% if invoice.location %}
+              <strong>Location:</strong> {{ invoice.location }}<br>
+            {% endif %}
+            {% if invoice.event %}
+              <strong>Event:</strong> {{ invoice.event.title }}<br>
+            {% elif invoice.event_name %}
+              <strong>Event:</strong> {{ invoice.event_name }}<br>
+            {% endif %}
+            {% if invoice.service %}
+              <strong>Service:</strong> {{ invoice.service }}<br>
+            {% endif %}
+            <strong>Items:</strong> {{ invoice.items.count }} item{{ invoice.items.count|pluralize }}<br>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Line Items -->
+    <div class="card">
+      <div class="card-title">Line Items</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Description</th>
+
+            <th class="text-end small">Qty</th>
+            <th class="text-end small">Price</th>
+            <th class="text-end small">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in invoice.items.all %}
+            <tr>
+              <td>{{ item.description }}</td>
+              <td class="text-end small">{{ item.qty|floatformat:"0" }}</td>
+              <td class="text-end small">${{ item.price|floatformat:2|intcomma }}</td>
+              <td class="text-end small">${{ item.line_total|floatformat:2|intcomma }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted small">
+                No line items added yet.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Totals -->
+    <div class="card">
+      <div class="card-title"></div>
+      <table>
+        <tbody>
+          <tr>
+            <td><strong>Invoice Amount</strong></td>
+            <td class="text-end">
+              ${{ invoice.amount|floatformat:2|intcomma }}
+            </td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+
+    <div class="footer">
+      <div class="footer-line">
+        Thank you for your business.
+      </div>
+      {% if BRAND_PROFILE %}
+        <div class="footer-contact">
+          {# Line 1: Brand name #}
+          {% if BRAND_PROFILE.display_name%}
+            {{ BRAND_PROFILE.display_name }}
+          {% endif %}
+        </div>
+        <div class="footer-contact">
+          {% if BRAND_PROFILE.billing_contact_email %}
+            {{ BRAND_PROFILE.billing_contact_email }} •
+          {% endif %}
+          {% if BRAND_PROFILE.main_phone %}
+            {{ formatted_brand_phone }}
+
+          {% endif %}
+        </div>
+        <div class="footer-contact">
+          {% if BRAND_PROFILE.website %}
+            {{ BRAND_PROFILE.website }}
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </body>
+</html>
+

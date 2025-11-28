@@ -1,0 +1,17 @@
+{% load humanize %}
+
+{{ brand_name }} Invoice {{ invoice.invoice_number }}
+
+Hi {{ invoice.client.first }},
+
+Attached is your invoice for {{ invoice.event.title|default:invoice.event_name|default:invoice.service }}.
+
+Invoice Number: {{ invoice.invoice_number }}
+Amount: ${{ invoice.amount|floatformat:2|intcomma }}
+Date: {% if invoice.issued_at %}{{ invoice.issued_at|date:"M j, Y" }}{% else %}{{ invoice.date|date:"M j, Y" }}{% endif %}
+
+If you have any questions about this invoice, please reply to this email.
+
+Thank you for your business!
+
+{{ brand_name }}

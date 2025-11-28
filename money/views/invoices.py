@@ -13,6 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.mail import EmailMessage
 from django.db import transaction
+from django.views import View
 from django.db.models import (
     Case,
     DecimalField,
@@ -29,6 +30,7 @@ from django.template.loader import get_template, render_to_string
 from django.urls import reverse_lazy
 from django.utils.functional import cached_property
 from django.utils.timezone import now
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
@@ -37,10 +39,34 @@ from weasyprint import CSS, HTML
 from ..forms.invoices.invoices import (
     InvoiceForm,
     InvoiceItemFormSet,
+    InvoiceV2Form,
+    InvoiceItemV2FormSet,
 )
 from ..models import *
 
+from ..models import Client, ClientProfile
 
+
+
+from weasyprint import HTML
+
+from money.models import InvoiceV2, ClientProfile  # adjust path if needed
+
+class InvoiceV2FormsetMixin:
+    """
+    Mixin to attach an InvoiceItemV2 inline formset to Create/Update views.
+    """
+
+    def get_items_formset(self, instance=None):
+        if self.request.method == "POST":
+            return InvoiceItemV2FormSet(self.request.POST, instance=instance)
+        return InvoiceItemV2FormSet(instance=instance)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        instance = getattr(self, "object", None)
+        context.setdefault("items_formset", self.get_items_formset(instance=instance))
+        return context
 
 
 
@@ -83,7 +109,6 @@ class InvoiceCreateView(LoginRequiredMixin, CreateView):
         else:
             ctx['formset'] = self.get_formset()
         ctx['current_page'] = 'invoices'
-        # client_profile is already injected by context processor; no need to add explicitly
         return ctx
 
     def form_valid(self, form):
@@ -96,8 +121,6 @@ class InvoiceCreateView(LoginRequiredMixin, CreateView):
         try:
             with transaction.atomic():
                 invoice = form.save(commit=False)
-
-                # Ensure issue/due are filled (in case user cleared them)
                 profile = ClientProfile.get_active()
                 if not getattr(invoice, "date", None):
                     invoice.date = _today_in_profile_tz()
@@ -110,13 +133,7 @@ class InvoiceCreateView(LoginRequiredMixin, CreateView):
                 if hasattr(invoice, "locale") and profile:
                     invoice.locale = getattr(profile, "default_locale", "en_US")
 
-                # Placeholder for future snapshot of “from” fields (once added to Invoice)
-                # if profile:
-                #     invoice.from_name = profile.name_for_display
-                #     invoice.from_address = "\n".join(profile.full_address_lines())
-                #     ...
-
-                invoice.amount = 0  # will be recalculated after items save
+                invoice.amount = 0  
                 invoice.save()
 
                 for item_form in formset:
@@ -124,8 +141,6 @@ class InvoiceCreateView(LoginRequiredMixin, CreateView):
                         item = item_form.save(commit=False)
                         item.invoice = invoice
                         item.save()
-
-                # Recalculate totals
                 invoice.update_amount()
 
                 messages.success(self.request, "Invoice created successfully.")
@@ -136,7 +151,6 @@ class InvoiceCreateView(LoginRequiredMixin, CreateView):
             print(traceback.format_exc())
             messages.error(self.request, f"Error saving invoice: {e}")
             return self.render_to_response(self.get_context_data(form=form, formset=formset))
-
 
 class InvoiceUpdateView(LoginRequiredMixin, UpdateView):
     model = Invoice
@@ -149,10 +163,28 @@ class InvoiceUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['formset'] = self.get_formset(self.request.POST if self.request.method == 'POST' else None)
+        ctx['formset'] = self.get_formset(
+            self.request.POST if self.request.method == 'POST' else None
+        )
         ctx['invoice'] = self.object
         ctx['current_page'] = 'invoices'
         return ctx
+
+    def form_invalid(self, form):
+        """
+        DEBUG: see exactly why the POST is not redirecting.
+        """
+        formset = self.get_formset(self.request.POST)
+
+        print("==== InvoiceUpdateView.form_invalid ====")
+        print("FORM VALID:", form.is_valid())
+        print("FORM ERRORS:", form.errors)
+        print("FORMSET VALID:", formset.is_valid())
+        print("FORMSET NON-FORM ERRORS:", formset.non_form_errors())
+        print("FORMSET PER-FORM ERRORS:", [f.errors for f in formset.forms])
+
+        messages.error(self.request, "There were errors in the invoice or items.")
+        return self.render_to_response(self.get_context_data(form=form, formset=formset))
 
     def form_valid(self, form):
         formset = self.get_formset(self.request.POST)
@@ -164,8 +196,6 @@ class InvoiceUpdateView(LoginRequiredMixin, UpdateView):
         try:
             with transaction.atomic():
                 invoice = form.save(commit=False)
-
-                # If someone clears dates on edit, reapply profile defaults
                 profile = ClientProfile.get_active()
                 if not getattr(invoice, "date", None):
                     invoice.date = _today_in_profile_tz()
@@ -400,21 +430,17 @@ def invoice_review(request, pk):
 def invoice_review_pdf(request, pk):
     invoice = get_object_or_404(Invoice, pk=pk)
 
-    # Transactions
     transactions = (
         Transaction.objects
         .filter(event=invoice.event, invoice_number=invoice.invoice_number)
         .select_related('sub_cat__category')
     )
-
-    # Mileage rate
     try:
         r = MileageRate.objects.first()
         rate = Decimal(str(r.rate)) if r and r.rate is not None else Decimal("0.70")
     except Exception:
         rate = Decimal("0.70")
 
-    # Mileage rows (filter by invoice_number; Miles has no Invoice FK)
     base_mileage = (
         Miles.objects
         .filter(invoice_number=invoice.invoice_number, user=request.user, mileage_type="Taxable")
@@ -422,7 +448,6 @@ def invoice_review_pdf(request, pk):
         .order_by('date')
     )
 
-    # miles = total if present, else end - begin, else 0
     miles_expr = ExpressionWrapper(
         Coalesce(F('total'), F('end') - F('begin'), Value(0)),
         output_field=DecimalField(max_digits=12, decimal_places=1),
@@ -447,8 +472,6 @@ def invoice_review_pdf(request, pk):
     )
     total_mileage_miles = totals['total_mileage_miles'] or Decimal('0')
     mileage_dollars = totals['mileage_dollars'] or Decimal('0')
-
-    # Income/expense summaries
     total_income = Decimal("0.00")
     total_expenses = Decimal("0.00")
     deductible_expenses = Decimal("0.00")
@@ -559,7 +582,7 @@ def export_invoices_pdf(request):
         return redirect('money:invoice_list')
 
     try:
-        template = get_template('money/invoices/invoice_pdf_export.html')
+        template = get_template('money/invoice_pdf_export.html')
         html_string = template.render({'invoices': invoices, 'current_page': 'invoices'})
         with tempfile.NamedTemporaryFile(delete=True) as output:
             HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf(output.name)
@@ -573,66 +596,6 @@ def export_invoices_pdf(request):
         messages.error(request, "Error generating PDF.")
         return redirect('money:invoice_list')
     
-
-
-@require_POST
-def send_invoice_email(request, invoice_id):
-    invoice = get_object_or_404(Invoice, pk=invoice_id)
-
-    # Safe access helpers (handles minor model field name variations)
-    def get_first_name(client):
-        return getattr(client, "first", None) or getattr(client, "first_name", "") or client.__class__.__name__
-
-    def get_invoice_number(inv):
-        return getattr(inv, "invoice_number", None) or getattr(inv, "invoice_number", None) or str(inv.pk)
-
-    try:
-        # Render invoice HTML (the same template you already use) and build PDF
-        html_string = render_to_string(
-            "money/invoice/invoice_detail.html",
-            {"invoice": invoice, "current_page": "invoices"}
-        )
-        # base_url should be the site root so /static/... resolves in WeasyPrint
-        pdf_file = HTML(string=html_string, base_url=request.build_absolute_uri("/")).write_pdf()
-
-        inv_no = get_invoice_number(invoice)
-        client_first = get_first_name(invoice.client)
-
-        # Subject & body using brand settings
-        subject = f"Invoice #{inv_no} from {settings.BRAND_NAME}"
-
-
-        # Option A: inline body (simple + reliable)
-        body = render_to_string(
-                "money/invoice/invoice_email.html",
-                {"client_first": client_first, "invoice": invoice}
-            )
-
-
-        # Fallback recipient logic
-        recipient_email = invoice.client.email if getattr(invoice.client, "email", None) else getattr(settings, "DEFAULT_FROM_EMAIL", None)
-        if not recipient_email:
-            raise ValueError("No valid recipient email found (client email missing and DEFAULT_FROM_EMAIL not set).")
-
-        email = EmailMessage(
-            subject=subject,
-            body=body,
-            from_email=settings.BRAND_EMAIL or settings.DEFAULT_FROM_EMAIL,
-            to=[recipient_email],
-            bcc=list(settings.BRAND_BCC) if isinstance(settings.BRAND_BCC, (list, tuple)) else [settings.BRAND_BCC],
-            reply_to=[settings.BRAND_EMAIL or settings.DEFAULT_FROM_EMAIL],
-        )
-        email.content_subtype = "html"
-        email.attach(f"Invoice_{inv_no}.pdf", pdf_file, "application/pdf")
-        email.send()
-
-        return JsonResponse({"status": "success", "message": "Invoice emailed successfully!"})
-
-    except Exception as e:
-        logger.error(f"Error sending email for invoice {invoice_id} by user {getattr(request.user, 'id', 'anon')}: {e}")
-        return JsonResponse({"status": "error", "message": "Failed to send email"}, status=500)
-
-
 
 
 @login_required
@@ -677,88 +640,434 @@ def invoice_summary(request: HttpRequest) -> HttpResponse:
         .filter(date__year=selected_year, user=request.user, mileage_type="Taxable")
     )
 
-    from collections import defaultdict
-    tx_index = defaultdict(list)
-    for t in year_txns:
-        key = (t.event_id, t.invoice_number or "")
-        tx_index[key].append(t)
 
-    for inv in invoices:
-        key = (inv.event_id, inv.invoice_number or "")
 
-        txns = tx_index.get(key, [])
+@require_POST
+def send_invoice_email(request, invoice_id):
+    invoice = get_object_or_404(Invoice, pk=invoice_id)
 
-        total_income = Decimal("0")
-        total_expenses = Decimal("0")
-        deductible_expenses = Decimal("0")
+    # Safe access helpers (handles minor model field name variations)
+    def get_first_name(client):
+        return getattr(client, "first", None) or getattr(client, "first_name", "") or client.__class__.__name__
 
-        for t in txns:
-            if t.trans_type == Transaction.INCOME:
-                total_income += t.amount
-            else:
-                total_expenses += t.amount
-                if getattr(t, "sub_cat", None) and getattr(t.sub_cat, "slug", "") == "meals":
-                    deductible_expenses += getattr(t, "deductible_amount", Decimal("0"))
-                elif getattr(t, "sub_cat", None) and getattr(t.sub_cat, "slug", "") == "fuel" and t.transport_type == "personal_vehicle":
-                    pass
-                else:
-                    deductible_expenses += t.amount
+    def get_invoice_number(inv):
+        return getattr(inv, "invoice_number", None) or getattr(inv, "invoice_number", None) or str(inv.pk)
 
-        inv_miles_qs = base_mileage.filter(
-            event=inv.event, invoice_number=inv.invoice_number
+    try:
+        # Render invoice HTML (the same template you already use) and build PDF
+        html_string = render_to_string(
+            "money/invoice_detail.html",
+            {"invoice": invoice, "current_page": "invoices"}
         )
+        # base_url should be the site root so /static/... resolves in WeasyPrint
+        pdf_file = HTML(string=html_string, base_url=request.build_absolute_uri("/")).write_pdf()
 
-        miles_expr = ExpressionWrapper(
-            F("total"),
-            output_field=Transaction._meta.get_field("amount") 
-        )
-        miles_total = inv_miles_qs.aggregate(
-            _sum=Sum(
-                Case(
-                    When(total__isnull=False, then=F("total")),
-                    default=F("end") - F("begin"),
-                )
+        inv_no = get_invoice_number(invoice)
+        client_first = get_first_name(invoice.client)
+
+        # Subject & body using brand settings
+        subject = f"Invoice #{inv_no} from {settings.BRAND_NAME}"
+
+
+        # Option A: inline body (simple + reliable)
+        body = render_to_string(
+                "money/invoice_email.html",
+                {"client_first": client_first, "invoice": invoice}
             )
-        )["_sum"] or Decimal("0")
 
-        mileage_dollars = (miles_total or Decimal("0")) * mileage_rate
 
-        has_income = total_income > 0
-        net_income = (total_income - total_expenses) if has_income else None
-        taxable_income = (total_income - deductible_expenses - mileage_dollars) if has_income else None
+        # Fallback recipient logic
+        recipient_email = invoice.client.email if getattr(invoice.client, "email", None) else getattr(settings, "DEFAULT_FROM_EMAIL", None)
+        if not recipient_email:
+            raise ValueError("No valid recipient email found (client email missing and DEFAULT_FROM_EMAIL not set).")
 
-        rows.append({
-            "pk": inv.pk,
-            "invoice_number": inv.invoice_number or "",
-            "event": inv.event,
-            "invoice_amount": inv.amount or Decimal("0"),
-            "total_expenses": total_expenses,
-            "net_income": net_income,
-            "taxable_income": taxable_income,
-        })
+        email = EmailMessage(
+            subject=subject,
+            body=body,
+            from_email=settings.BRAND_EMAIL or settings.DEFAULT_FROM_EMAIL,
+            to=[recipient_email],
+            bcc=list(settings.BRAND_BCC) if isinstance(settings.BRAND_BCC, (list, tuple)) else [settings.BRAND_BCC],
+            reply_to=[settings.BRAND_EMAIL or settings.DEFAULT_FROM_EMAIL],
+        )
+        email.content_subtype = "html"
+        email.attach(f"Invoice_{inv_no}.pdf", pdf_file, "application/pdf")
+        email.send()
 
-    def _sum(key):
-        total = Decimal("0")
-        for r in rows:
-            val = r.get(key)
-            if val is not None:
-                total += val
-        return total
+        return JsonResponse({"status": "success", "message": "Invoice emailed successfully!"})
 
-    totals = {
-        "invoice_amount": _sum("invoice_amount"),
-        "total_expenses": _sum("total_expenses"),
-        "net_income":     _sum("net_income"),
-        "taxable_income": _sum("taxable_income"),
+    except Exception as e:
+        logger.error(f"Error sending email for invoice {invoice_id} by user {getattr(request.user, 'id', 'anon')}: {e}")
+        return JsonResponse({"status": "error", "message": "Failed to send email"}, status=500)
+
+
+
+
+
+
+#------------------------------------------------------------------------------------------------------  N E W   I N V O I C E S
+
+class InvoiceV2CreateView(LoginRequiredMixin, CreateView):
+    model = InvoiceV2
+    form_class = InvoiceV2Form
+    template_name = "money/invoices/invoice_v2_form.html"
+    context_object_name = "invoice"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.request.method == "POST":
+            context["items_formset"] = InvoiceItemV2FormSet(self.request.POST)
+        else:
+            context["items_formset"] = InvoiceItemV2FormSet()
+        return context
+
+    def form_valid(self, form):
+        context = self.get_context_data()
+        items_formset = context["items_formset"]
+
+        if not items_formset.is_valid():
+            return self.render_to_response(self.get_context_data(form=form))
+
+        # Save invoice first
+        self.object = form.save()
+
+        # Attach items to this invoice and save
+        items_formset.instance = self.object
+        items_formset.save()
+
+        # Recalculate amount
+        self.object.update_amount()
+
+        return redirect(self.get_success_url())
+
+    def get_success_url(self):
+        return reverse_lazy("money:invoice_v2_detail", kwargs={"pk": self.object.pk})
+
+
+class InvoiceV2UpdateView(LoginRequiredMixin, UpdateView):
+    model = InvoiceV2
+    form_class = InvoiceV2Form
+    template_name = "money/invoices/invoice_v2_form.html"
+    context_object_name = "invoice"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.request.method == "POST":
+            context["items_formset"] = InvoiceItemV2FormSet(
+                self.request.POST,
+                instance=self.object,
+            )
+        else:
+            # 👈 This is what makes existing line items appear on edit
+            context["items_formset"] = InvoiceItemV2FormSet(instance=self.object)
+        return context
+
+    def form_valid(self, form):
+        context = self.get_context_data()
+        items_formset = context["items_formset"]
+
+        if not items_formset.is_valid():
+            return self.render_to_response(self.get_context_data(form=form))
+
+        self.object = form.save()
+
+        items_formset.instance = self.object
+        items_formset.save()
+
+        self.object.update_amount()
+
+        return redirect(self.get_success_url())
+
+    def get_success_url(self):
+        return reverse_lazy("money:invoice_v2_detail", kwargs={"pk": self.object.pk})
+
+class InvoiceV2ListView(LoginRequiredMixin, ListView):
+    model = InvoiceV2
+    template_name = "money/invoices/invoice_v2_list.html"
+    context_object_name = "invoices"
+    paginate_by = 20
+
+    def get_queryset(self):
+        qs = (
+            InvoiceV2.objects
+            .select_related("client", "event", "service")
+            .prefetch_related("items__sub_cat", "items__category")
+            .order_by("-date", "-invoice_number")
+        )
+
+        status = self.request.GET.get("status")
+        year = self.request.GET.get("year")
+        client_id = self.request.GET.get("client")
+
+        if status:
+            qs = qs.filter(status=status)
+
+        if year:
+            qs = qs.filter(date__year=year)
+
+        if client_id:
+            qs = qs.filter(client_id=client_id)
+
+        return qs
+
+    def get_context_data(self, **kwargs):
+        from django.db.models import Min, Max
+        context = super().get_context_data(**kwargs)
+
+        # For simple filters
+        years = (
+            InvoiceV2.objects
+            .order_by()
+            .values_list("date__year", flat=True)
+            .distinct()
+        )
+        context["years"] = sorted(set(y for y in years if y))
+
+        context["status_choices"] = InvoiceV2.STATUS_CHOICES
+        context["selected_status"] = self.request.GET.get("status") or ""
+        context["selected_year"] = self.request.GET.get("year") or ""
+        context["selected_client"] = self.request.GET.get("client") or ""
+
+        # You can swap this later to only show active clients
+        context["clients"] = Client.objects.all().order_by("business")
+
+        return context
+
+
+class InvoiceV2DetailView(LoginRequiredMixin, DetailView):
+    model = InvoiceV2
+    template_name = "money/invoices/invoice_v2_detail.html"
+    context_object_name = "invoice"
+
+    def get_queryset(self):
+        return (
+            InvoiceV2.objects
+            .select_related("client", "event", "service")
+            .prefetch_related("items__sub_cat", "items__category")
+        )
+
+
+
+class InvoiceV2MarkPaidView(LoginRequiredMixin, View):
+    """
+    POST-only view to mark an invoice as Paid and create an income Transaction
+    based on the first invoice item’s SubCategory.
+    """
+
+    def post(self, request, pk, *args, **kwargs):
+        invoice = get_object_or_404(
+            InvoiceV2.objects.select_related("client", "event", "service"),
+            pk=pk,
+        )
+
+        # Safety: don’t double-mark as paid
+        if invoice.is_paid:
+            messages.info(request, "This invoice is already marked as paid.")
+            return redirect("money:invoice_v2_detail", pk=invoice.pk)
+
+        try:
+            invoice.mark_as_paid(user=request.user)
+        except Exception as exc:
+            messages.error(
+                request,
+                f"Unable to mark invoice as paid: {exc}",
+            )
+        else:
+            messages.success(
+                request,
+                "Invoice marked as paid and income transaction created.",
+            )
+
+        return redirect("money:invoice_v2_detail", pk=invoice.pk)
+
+
+
+
+class InvoiceV2IssueView(LoginRequiredMixin, View):
+    """
+    POST-only view to 'issue' an invoice:
+    - snapshots business details from the active ClientProfile
+    - sets issued_at
+    - leaves status alone (you control Paid/Unpaid separately)
+    """
+
+    def post(self, request, pk, *args, **kwargs):
+        invoice = get_object_or_404(InvoiceV2, pk=pk)
+
+        if invoice.is_locked:
+            messages.info(request, "This invoice has already been issued.")
+            return redirect("money:invoice_v2_detail", pk=invoice.pk)
+
+        # Get the active client profile for branding/snapshot
+        profile = ClientProfile.objects.filter(is_active=True).first()
+        if not profile:
+            messages.error(
+                request,
+                "No active client profile is configured. Set one in the admin before issuing invoices.",
+            )
+            return redirect("money:invoice_v2_detail", pk=invoice.pk)
+
+        # Try to build an absolute logo URL if a logo exists
+        absolute_logo_url = None
+        logo = getattr(profile, "logo", None)
+        if logo:
+            try:
+                absolute_logo_url = request.build_absolute_uri(logo.url)
+            except Exception:
+                absolute_logo_url = None
+
+        # Snapshot "From" details from the active profile
+        invoice.snapshot_from_profile(profile, absolute_logo_url=absolute_logo_url)
+
+        # Mark as issued (locks the invoice via is_locked property)
+        if not invoice.issued_at:
+            invoice.issued_at = timezone.now()
+
+        invoice.save()
+
+        messages.success(request, "Invoice issued and business details snapshotted.")
+        return redirect("money:invoice_v2_detail", pk=invoice.pk)
+
+
+
+
+
+def invoice_pdf_view(request, pk):
+    invoice = get_object_or_404(Invoice, pk=pk)
+
+    context = {
+        "invoice": invoice,
+        # include anything else your detail template expects:
+        # "line_items": invoice.items.all(),
+        # "client": invoice.client,
     }
 
-    return render(
-        request,
-        "money/invoices/invoice_summary.html",
+    html_string = render_to_string(
+        "money/invoices/invoice_pdf.html",  # new template below
+        context=context,
+        request=request,
+    )
+
+    html = HTML(
+        string=html_string,
+        base_url=request.build_absolute_uri("/")  # resolves static files
+    )
+
+    pdf_bytes = html.write_pdf()
+
+    filename = f"Invoice-{invoice.invoice_number or invoice.id}.pdf"
+
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    return response
+
+
+
+
+
+ 
+
+
+@login_required
+def invoice_v2_pdf_view(request, pk):
+    invoice = get_object_or_404(InvoiceV2, pk=pk)
+
+    context = {
+        "invoice": invoice,
+    }
+
+    # Render HTML with context processors (branding, etc.)
+    html_string = render_to_string(
+        "money/invoices/invoice_v2_pdf.html",
+        context,
+        request=request,     # <-- important so BRAND_LOGO_URL is available
+    )
+
+    # Create WeasyPrint HTML object
+    weasy_html = HTML(
+        string=html_string,
+        base_url=request.build_absolute_uri("/"),
+    )
+
+    # Generate the PDF bytes
+    pdf_bytes = weasy_html.write_pdf()
+
+    filename = f"Invoice-{invoice.invoice_number or invoice.pk}.pdf"
+
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    return response
+
+
+
+@login_required
+def invoice_v2_send_email(request, pk):
+    """
+    Generate a PDF for InvoiceV2 and email it to the client.
+    Records sent_at, sent_to, and sent_by on the invoice.
+    """
+    invoice = get_object_or_404(InvoiceV2, pk=pk)
+
+    # Require issued/locked before emailing
+    if not invoice.is_locked:
+        messages.error(request, "You must issue this invoice before emailing it.")
+        return redirect("money:invoice_v2_detail", pk=invoice.pk)
+
+    # Require client email
+    to_email = getattr(invoice.client, "email", None)
+    if not to_email:
+        messages.error(request, "This client does not have an email address.")
+        return redirect("money:invoice_v2_detail", pk=invoice.pk)
+
+    # Brand info from active ClientProfile
+    brand_profile = ClientProfile.get_active()
+    brand_name = brand_profile.name_for_display if brand_profile else "Invoice"
+
+    # HTML for PDF
+    html_string = render_to_string(
+        "money/invoices/invoice_v2_pdf.html",
+        {"invoice": invoice},
+        request=request,  # important so branding context runs
+    )
+
+    # Generate PDF bytes with WeasyPrint
+    weasy_html = HTML(
+        string=html_string,
+        base_url=request.build_absolute_uri("/"),
+    )
+    pdf_bytes = weasy_html.write_pdf()
+    filename = f"Invoice-{invoice.invoice_number or invoice.pk}.pdf"
+
+    # Email subject/body
+    subject = f"{brand_name} Invoice {invoice.invoice_number}"
+    body = render_to_string(
+        "money/invoices/email_invoice_v2_body.txt",
         {
-            "rows": rows,
-            "years": years,
-            "selected_year": selected_year,
-            "totals": totals,
+            "invoice": invoice,
+            "brand_name": brand_name,
         },
     )
+
+    from django.conf import settings
+    from_email = (
+        getattr(brand_profile, "invoice_reply_to_email", "") 
+        or getattr(settings, "DEFAULT_FROM_EMAIL", "") 
+        or to_email
+    )
+
+    email = EmailMessage(
+        subject=subject,
+        body=body,
+        from_email=from_email,
+        to=[to_email],
+    )
+    email.attach(filename, pdf_bytes, "application/pdf")
+    email.send()
+
+    # Record metadata
+    invoice.sent_at = timezone.now()
+    invoice.sent_to = to_email
+    invoice.sent_by = request.user
+    invoice.save(update_fields=["sent_at", "sent_to", "sent_by"])
+
+    messages.success(request, f"Invoice emailed to {to_email}.")
+    return redirect("money:invoice_v2_detail", pk=invoice.pk)
