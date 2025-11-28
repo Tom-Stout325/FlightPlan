@@ -33,6 +33,8 @@ from django.utils.timezone import now
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
+import hashlib
+from django.core.files.base import ContentFile
 
 from weasyprint import CSS, HTML
 
@@ -48,9 +50,53 @@ from ..models import Client, ClientProfile
 
 
 
-from weasyprint import HTML
+def generate_invoice_v2_pdf_snapshot(invoice: InvoiceV2, request) -> bytes:
+    """
+    Render the InvoiceV2 PDF, store it on the invoice as pdf_snapshot,
+    update pdf_url + pdf_sha256, and return the PDF bytes.
+    Always generates a NEW snapshot based on the current template.
+    """
+    # 1) Render HTML
+    html_string = render_to_string(
+        "money/invoices/invoice_v2_pdf.html",
+        {"invoice": invoice},
+        request=request,  # ensures context processors (branding, etc.) run
+    )
 
-from money.models import InvoiceV2, ClientProfile  # adjust path if needed
+    # 2) HTML -> PDF bytes with WeasyPrint
+    weasy_html = HTML(
+        string=html_string,
+        base_url=request.build_absolute_uri("/"),
+    )
+    pdf_bytes = weasy_html.write_pdf()
+
+    # 3) Hash for integrity + filename
+    sha256 = hashlib.sha256(pdf_bytes).hexdigest()
+    short_hash = sha256[:8]
+    filename = f"invoice-{invoice.invoice_number or invoice.pk}-{short_hash}.pdf"
+
+    # 4) Store file via default storage
+    invoice.pdf_snapshot.save(filename, ContentFile(pdf_bytes), save=False)
+    invoice.pdf_sha256 = sha256
+
+    try:
+        invoice.pdf_url = invoice.pdf_snapshot.url
+    except Exception:
+        invoice.pdf_url = ""
+
+    invoice.pdf_snapshot_created_at = timezone.now()
+    invoice.save(
+        update_fields=[
+            "pdf_snapshot",
+            "pdf_sha256",
+            "pdf_url",
+            "pdf_snapshot_created_at",
+        ]
+    )
+
+    return pdf_bytes
+
+
 
 class InvoiceV2FormsetMixin:
     """
@@ -67,9 +113,6 @@ class InvoiceV2FormsetMixin:
         instance = getattr(self, "object", None)
         context.setdefault("items_formset", self.get_items_formset(instance=instance))
         return context
-
-
-
 
 
 def _today_in_profile_tz():
@@ -151,6 +194,8 @@ class InvoiceCreateView(LoginRequiredMixin, CreateView):
             print(traceback.format_exc())
             messages.error(self.request, f"Error saving invoice: {e}")
             return self.render_to_response(self.get_context_data(form=form, formset=formset))
+
+
 
 class InvoiceUpdateView(LoginRequiredMixin, UpdateView):
     model = Invoice
@@ -301,8 +346,6 @@ class InvoiceDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-
-
 class InvoiceDeleteView(LoginRequiredMixin, DeleteView):
     model = Invoice
     template_name = "money/invoices/invoice_confirm_delete.html"
@@ -327,8 +370,6 @@ class InvoiceDeleteView(LoginRequiredMixin, DeleteView):
         context['current_page'] = 'invoices'
         return context
     
-
-
 
 @login_required
 def invoice_review(request, pk):
@@ -832,7 +873,6 @@ class InvoiceV2ListView(LoginRequiredMixin, ListView):
 
         return context
 
-
 class InvoiceV2DetailView(LoginRequiredMixin, DetailView):
     model = InvoiceV2
     template_name = "money/invoices/invoice_v2_detail.html"
@@ -845,6 +885,82 @@ class InvoiceV2DetailView(LoginRequiredMixin, DetailView):
             .prefetch_related("items__sub_cat", "items__category")
         )
 
+    def get_context_data(self, **kwargs):
+        from decimal import Decimal  # ok to keep local or use module-level
+
+        context = super().get_context_data(**kwargs)
+        invoice: InvoiceV2 = self.object
+
+        # ---------- Transactions / Net Income ----------
+        # All transactions linked to this invoice number
+        tx_qs = Transaction.objects.filter(invoice_number=invoice.invoice_number)
+        has_transactions = tx_qs.exists()
+
+        # Base net income from model helper (may be 0 if no transactions)
+        net_income = invoice.net_income or Decimal("0.00")
+
+        # If there are no transactions, treat Net Income as the invoice amount
+        if not has_transactions:
+            net_income_effective = invoice.amount or Decimal("0.00")
+        else:
+            net_income_effective = net_income
+
+        # ---------- Mileage dollars (Taxable only) ----------
+        try:
+            rate_obj = MileageRate.objects.first()
+            mileage_rate = (
+                Decimal(str(rate_obj.rate))
+                if rate_obj and rate_obj.rate is not None
+                else Decimal("0.70")
+            )
+        except Exception:
+            mileage_rate = Decimal("0.70")
+
+        base_mileage = Miles.objects.filter(
+            invoice_v2=invoice,
+            user=self.request.user,
+            mileage_type="Taxable",
+        )
+
+        miles_expr = ExpressionWrapper(
+            Coalesce(F("total"), F("end") - F("begin"), Value(0)),
+            output_field=DecimalField(max_digits=12, decimal_places=1),
+        )
+
+        amount_expr = ExpressionWrapper(
+            F("miles") * Value(mileage_rate),
+            output_field=DecimalField(max_digits=12, decimal_places=2),
+        )
+
+        mileage_qs = (
+            base_mileage
+            .annotate(miles=miles_expr)
+            .annotate(amount=amount_expr)
+        )
+
+        totals = mileage_qs.aggregate(
+            total_miles=Sum("miles"),
+            mileage_dollars=Sum("amount"),
+        )
+        mileage_dollars = totals["mileage_dollars"] or Decimal("0.00")
+        total_mileage_miles = totals["total_miles"] or Decimal("0.0")
+
+        # ---------- Taxable income = Net income (effective) - mileage dollars ----------
+        taxable_income = net_income_effective - mileage_dollars
+
+        context.update(
+            {
+                "has_transactions": has_transactions,
+                "net_income_effective": net_income_effective,
+                "mileage_entries": mileage_qs,
+                "mileage_rate": mileage_rate,
+                "mileage_dollars": mileage_dollars,
+                "total_mileage_miles": total_mileage_miles,
+                "taxable_income": taxable_income,
+            }
+        )
+
+        return context
 
 
 class InvoiceV2MarkPaidView(LoginRequiredMixin, View):
@@ -881,21 +997,26 @@ class InvoiceV2MarkPaidView(LoginRequiredMixin, View):
 
 
 
-
 class InvoiceV2IssueView(LoginRequiredMixin, View):
     """
     POST-only view to 'issue' an invoice:
     - snapshots business details from the active ClientProfile
     - sets issued_at
-    - leaves status alone (you control Paid/Unpaid separately)
+    - generates a permanent PDF snapshot
     """
 
     def post(self, request, pk, *args, **kwargs):
         invoice = get_object_or_404(InvoiceV2, pk=pk)
 
+        # Already issued? Just bounce back.
         if invoice.is_locked:
             messages.info(request, "This invoice has already been issued.")
             return redirect("money:invoice_v2_detail", pk=invoice.pk)
+
+        # Must have at least one line item
+        if not invoice.items.exists():
+            messages.error(request, "Add at least one line item before issuing this invoice.")
+            return redirect("money:invoice_v2_edit", pk=invoice.pk)
 
         # Get the active client profile for branding/snapshot
         profile = ClientProfile.objects.filter(is_active=True).first()
@@ -922,9 +1043,17 @@ class InvoiceV2IssueView(LoginRequiredMixin, View):
         if not invoice.issued_at:
             invoice.issued_at = timezone.now()
 
+        # If due is empty, compute from invoice.date + profile.default_net_days
+        if not invoice.due and invoice.date:
+            net_days = getattr(profile, "default_net_days", 30) or 30
+            invoice.due = invoice.date + timedelta(days=int(net_days))
+
         invoice.save()
 
-        messages.success(request, "Invoice issued and business details snapshotted.")
+        # 🔐 Generate and store the permanent PDF snapshot
+        generate_invoice_v2_pdf_snapshot(invoice, request)
+
+        messages.success(request, "Invoice issued and PDF snapshot created.")
         return redirect("money:invoice_v2_detail", pk=invoice.pk)
 
 
@@ -966,44 +1095,34 @@ def invoice_pdf_view(request, pk):
 
  
 
-
 @login_required
 def invoice_v2_pdf_view(request, pk):
     invoice = get_object_or_404(InvoiceV2, pk=pk)
 
-    context = {
-        "invoice": invoice,
-    }
-
-    # Render HTML with context processors (branding, etc.)
-    html_string = render_to_string(
-        "money/invoices/invoice_v2_pdf.html",
-        context,
-        request=request,     # <-- important so BRAND_LOGO_URL is available
-    )
-
-    # Create WeasyPrint HTML object
-    weasy_html = HTML(
-        string=html_string,
-        base_url=request.build_absolute_uri("/"),
-    )
-
-    # Generate the PDF bytes
-    pdf_bytes = weasy_html.write_pdf()
+    # Prefer stored snapshot if exists
+    if getattr(invoice, "has_pdf_snapshot", None) and invoice.has_pdf_snapshot:
+        pdf_bytes = invoice.pdf_snapshot.read()
+    else:
+        # If somehow missing (e.g. old invoice before snapshots), generate now
+        pdf_bytes = generate_invoice_v2_pdf_snapshot(invoice, request)
 
     filename = f"Invoice-{invoice.invoice_number or invoice.pk}.pdf"
-
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="{filename}"'
     return response
 
 
 
+
 @login_required
 def invoice_v2_send_email(request, pk):
     """
-    Generate a PDF for InvoiceV2 and email it to the client.
-    Records sent_at, sent_to, and sent_by on the invoice.
+    Email InvoiceV2 to the client.
+
+    - Requires the invoice to be issued (locked).
+    - Uses the stored PDF snapshot if available.
+    - If no snapshot exists, generates one with generate_invoice_v2_pdf_snapshot().
+    - Records sent_at, sent_to, and sent_by on the invoice.
     """
     invoice = get_object_or_404(InvoiceV2, pk=pk)
 
@@ -1022,23 +1141,22 @@ def invoice_v2_send_email(request, pk):
     brand_profile = ClientProfile.get_active()
     brand_name = brand_profile.name_for_display if brand_profile else "Invoice"
 
-    # HTML for PDF
-    html_string = render_to_string(
-        "money/invoices/invoice_v2_pdf.html",
-        {"invoice": invoice},
-        request=request,  # important so branding context runs
-    )
+    # ---- PDF bytes: prefer stored snapshot, else generate now ----
+    if getattr(invoice, "has_pdf_snapshot", None) and invoice.has_pdf_snapshot:
+        # Read existing snapshot file
+        pdf_filefield = invoice.pdf_snapshot
+        pdf_bytes = pdf_filefield.read()
+        filename = (
+            os.path.basename(pdf_filefield.name)
+            or f"Invoice-{invoice.invoice_number or invoice.pk}.pdf"
+        )
+    else:
+        # Create a new snapshot and use its bytes
+        pdf_bytes = generate_invoice_v2_pdf_snapshot(invoice, request)
+        filename = f"Invoice-{invoice.invoice_number or invoice.pk}.pdf"
 
-    # Generate PDF bytes with WeasyPrint
-    weasy_html = HTML(
-        string=html_string,
-        base_url=request.build_absolute_uri("/"),
-    )
-    pdf_bytes = weasy_html.write_pdf()
-    filename = f"Invoice-{invoice.invoice_number or invoice.pk}.pdf"
-
-    # Email subject/body
-    subject = f"{brand_name} Invoice {invoice.invoice_number}"
+    # ---- Email subject/body ----
+    subject = f"{brand_name} Invoice {invoice.invoice_number or invoice.pk}"
     body = render_to_string(
         "money/invoices/email_invoice_v2_body.txt",
         {
@@ -1047,10 +1165,9 @@ def invoice_v2_send_email(request, pk):
         },
     )
 
-    from django.conf import settings
     from_email = (
-        getattr(brand_profile, "invoice_reply_to_email", "") 
-        or getattr(settings, "DEFAULT_FROM_EMAIL", "") 
+        getattr(brand_profile, "invoice_reply_to_email", "")
+        or getattr(settings, "DEFAULT_FROM_EMAIL", "")
         or to_email
     )
 
@@ -1071,3 +1188,4 @@ def invoice_v2_send_email(request, pk):
 
     messages.success(request, f"Invoice emailed to {to_email}.")
     return redirect("money:invoice_v2_detail", pk=invoice.pk)
+

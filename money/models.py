@@ -16,6 +16,7 @@ from django.utils import timezone
 from django.apps import apps
 from django.db.models.functions import Cast
 from django.db.models import IntegerField
+
 from django.db.models import (
     F,
     Sum,
@@ -32,6 +33,7 @@ except ImportError:
     SearchVectorField = None
 
 
+
     
 
 class Category(models.Model):
@@ -43,8 +45,6 @@ class Category(models.Model):
 
     def __str__(self):
         return self.category or "Unnamed Category"
-
-
 
 
 class SubCategory(models.Model):
@@ -90,8 +90,6 @@ class Client(models.Model):
         return self.business
     
 
-
-
 class Event(models.Model):
     EVENT_TYPE_CHOICES = [
         ('race', 'Race'),
@@ -118,6 +116,14 @@ class Event(models.Model):
         return self.title
 
 
+class Service(models.Model):
+    service = models.CharField(max_length=500, blank=True, null=True) 
+    
+    def __str__(self):
+        return self.service
+
+
+
 
 
 
@@ -134,17 +140,6 @@ class InvoiceItem(models.Model):
     def total(self):
         return (self.qty or 0) * (self.price or 0)
     
-    
-    
-    
-class Service(models.Model):
-    service = models.CharField(max_length=500, blank=True, null=True) 
-    
-    def __str__(self):
-        return self.service
-
-
-
 class Invoice(models.Model):
     # ------- existing core fields -------
     invoice_number = models.CharField(max_length=25, blank=True, null=True)
@@ -287,6 +282,8 @@ class Invoice(models.Model):
 
 
     
+    
+    
 class Transaction(models.Model):
     TRANSPORT_CHOICES = [
         ('personal_vehicle', 'Personal Vehicle'),
@@ -349,33 +346,89 @@ class MileageRate(models.Model):
 
 
 
+# money/models.py (where Miles lives)
+
 class Miles(models.Model):
     MILEAGE_TYPE_CHOICES = [
-        ('Taxable', 'Taxable'),
-        ('Reimbursed', 'Reimbursed'),
+        ("Taxable", "Taxable"),
+        ("Reimbursed", "Reimbursed"),
     ]
 
-    user            = models.ForeignKey(User, on_delete=models.CASCADE)
-    date            = models.DateField()
-    begin           = models.DecimalField(max_digits=10, decimal_places=1, null=True, validators=[MinValueValidator(0)])
-    end             = models.DecimalField(max_digits=10, decimal_places=1, null=True, validators=[MinValueValidator(0)])
-    total           = models.DecimalField(max_digits=10, decimal_places=1, null=True, editable=False)
-    client          = models.ForeignKey('Client', on_delete=models.PROTECT)  
-    event           = models.ForeignKey('Event', on_delete=models.SET_NULL, null=True, blank=True) 
-    invoice_number  = models.CharField(max_length=255, null=True, blank=True, db_index=True)
-    vehicle         = models.CharField(max_length=255, blank=False, null=True, default="Lead Foot")
-    mileage_type    = models.CharField(max_length=20, choices=MILEAGE_TYPE_CHOICES, default='Taxable')
+    user   = models.ForeignKey(User, on_delete=models.CASCADE)
+    date   = models.DateField()
+
+    begin  = models.DecimalField(
+        max_digits=10,
+        decimal_places=1,
+        null=True,
+        validators=[MinValueValidator(0)],
+    )
+    end    = models.DecimalField(
+        max_digits=10,
+        decimal_places=1,
+        null=True,
+        validators=[MinValueValidator(0)],
+    )
+    total  = models.DecimalField(
+        max_digits=10,
+        decimal_places=1,
+        null=True,
+        editable=False,
+    )
+
+    client = models.ForeignKey("Client", on_delete=models.PROTECT)
+    event  = models.ForeignKey(
+        "Event",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Event this mileage was associated with (for event-level cost analysis).",
+    )
+
+    # 🔹 NEW: formal link to Invoice V2
+    invoice_v2 = models.ForeignKey(
+        "InvoiceV2",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="mileage_entries",
+        help_text="If set, this mileage entry is tied to an Invoice V2.",
+    )
+
+    # Legacy / denormalized string for older reports
+    invoice_number = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Legacy invoice number string. For new entries, usually mirrors InvoiceV2.invoice_number.",
+    )
+
+    vehicle = models.CharField(
+        max_length=255,
+        blank=False,
+        null=True,
+        default="Lead Foot",
+    )
+
+    mileage_type = models.CharField(
+        max_length=20,
+        choices=MILEAGE_TYPE_CHOICES,
+        default="Taxable",
+    )
 
     class Meta:
         indexes = [
-            models.Index(fields=['user', 'date']),
-            models.Index(fields=['mileage_type']),
+            models.Index(fields=["user", "date"]),
+            models.Index(fields=["mileage_type"]),
         ]
         verbose_name_plural = "Miles"
-        ordering = ['-date']
+        ordering = ["-date"]
 
     def __str__(self):
-        return f"{self.invoice_number} – {self.client} ({self.date})"
+        label = self.invoice_number or (self.invoice_v2.invoice_number if self.invoice_v2 else "No invoice")
+        return f"{label} – {self.client} ({self.date})"
+
 
 
 
@@ -633,7 +686,12 @@ class ClientProfile(models.Model):
 
 
 
-# -------------------  N E W  M O D E L S ---------------------- #
+
+
+# --------------------------------------------  N E W  M O D E L S ---------------------- #
+
+
+
 
 class InvoiceV2(models.Model):
     """
@@ -645,18 +703,63 @@ class InvoiceV2(models.Model):
     """
 
     # ---------- Identity & relationships ----------
-    invoice_number  = models.CharField(max_length=25,blank=True,null=True, help_text="Human-visible invoice ID (YYNNNN format; auto-generated if blank).",)
-    client          = models.ForeignKey("Client", on_delete=models.PROTECT, related_name="invoices_v2",)
-    event           = models.ForeignKey("Event", on_delete=models.PROTECT, related_name="invoices_v2", null=True, blank=True, help_text="Optional: link this invoice to a specific event/race.",)
-    event_name      = models.CharField(max_length=500, blank=True, null=True, help_text="Display name of the event at time of invoicing.",)
-    location        = models.CharField(max_length=500, blank=True, null=True, help_text="Display location (city/track) at time of invoicing.",)
-    service         = models.ForeignKey("Service", on_delete=models.PROTECT, related_name="invoices_v2", help_text="Primary service for this invoice.",)
+    invoice_number = models.CharField(
+        max_length=25,
+        blank=True,
+        null=True,
+        help_text="Human-visible invoice ID (YYNNNN format; auto-generated if blank).",
+    )
+    client = models.ForeignKey(
+        "Client",
+        on_delete=models.PROTECT,
+        related_name="invoices_v2",
+    )
+    event = models.ForeignKey(
+        "Event",
+        on_delete=models.PROTECT,
+        related_name="invoices_v2",
+        null=True,
+        blank=True,
+        help_text="Optional: link this invoice to a specific event/race.",
+    )
+    event_name = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="Display name of the event at time of invoicing.",
+    )
+    location = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="Display location (city/track) at time of invoicing.",
+    )
+    service = models.ForeignKey(
+        "Service",
+        on_delete=models.PROTECT,
+        related_name="invoices_v2",
+        help_text="Primary service for this invoice.",
+    )
 
     # ---------- Money & dates ----------
-    amount          = models.DecimalField(default=Decimal("0.00"), max_digits=12, decimal_places=2, editable=False, help_text="Total invoice amount, calculated from line items.",)
-    date            = models.DateField(help_text="Invoice date.")
-    due             = models.DateField(help_text="Due date.")
-    paid_date       = models.DateField(null=True, blank=True, help_text="Date fully paid.")
+    amount = models.DecimalField(
+        default=Decimal("0.00"),
+        max_digits=12,
+        decimal_places=2,
+        editable=False,
+        help_text="Total invoice amount, calculated from line items.",
+    )
+    date = models.DateField(
+        help_text="Invoice date.",
+    )
+    due = models.DateField(
+        help_text="Due date.",
+    )
+    paid_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date fully paid.",
+    )
 
     STATUS_UNPAID = "Unpaid"
     STATUS_PAID = "Paid"
@@ -667,15 +770,34 @@ class InvoiceV2(models.Model):
         (STATUS_PAID, "Paid"),
         (STATUS_PARTIAL, "Partial"),
     ]
-    status          = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_UNPAID,)
-    
-    # ---------- Issuance / archiving ----------
-    issued_at       = models.DateTimeField(null=True, blank=True, help_text="Set when the invoice is officially issued/sent.",)
-    version         = models.PositiveIntegerField(default=1, help_text="Revision number; bump when you create a new version.",)
-    pdf_url         = models.URLField(blank=True, help_text="Location of the archived PDF (e.g., S3).",)
-    pdf_sha256      = models.CharField(max_length=64, blank=True, help_text="Optional SHA-256 hash of the archived PDF for integrity checks.",)
 
-    # NEW: email-sent metadata
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_UNPAID,
+    )
+
+    # ---------- Issuance / archiving ----------
+    issued_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Set when the invoice is officially issued/sent.",
+    )
+    version = models.PositiveIntegerField(
+        default=1,
+        help_text="Revision number; bump when you create a new version.",
+    )
+    pdf_url = models.URLField(
+        blank=True,
+        help_text="Location of the archived PDF (e.g., S3).",
+    )
+    pdf_sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="Optional SHA-256 hash of the archived PDF for integrity checks.",
+    )
+
+    # ---------- Email metadata ----------
     sent_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -696,7 +818,7 @@ class InvoiceV2(models.Model):
     )
 
     # Optional Postgres search vector
-    if "SearchVectorField" in globals() and SearchVectorField:
+    if SearchVectorField is not None:
         search_vector = SearchVectorField(null=True, blank=True)
 
     # ---------- Immutable "From" snapshot ----------
@@ -709,9 +831,16 @@ class InvoiceV2(models.Model):
         blank=True,
         help_text="Postal address block as printed on this invoice.",
     )
-    from_phone = models.CharField(max_length=50, blank=True)
-    from_email = models.EmailField(blank=True)
-    from_website = models.URLField(blank=True)
+    from_phone = models.CharField(
+        max_length=50,
+        blank=True,
+    )
+    from_email = models.EmailField(
+        blank=True,
+    )
+    from_website = models.URLField(
+        blank=True,
+    )
     from_tax_id = models.CharField(
         max_length=64,
         blank=True,
@@ -723,7 +852,9 @@ class InvoiceV2(models.Model):
         blank=True,
         help_text="Absolute or storage URL to logo used on this invoice.",
     )
-    from_header_logo_max_width_px = models.PositiveIntegerField(default=320)
+    from_header_logo_max_width_px = models.PositiveIntegerField(
+        default=320,
+    )
 
     # Policy defaults captured at issue time
     from_terms = models.CharField(
@@ -755,24 +886,17 @@ class InvoiceV2(models.Model):
         default="America/Indiana/Indianapolis",
     )
 
-    # ---------- Issuance / archiving ----------
-    issued_at = models.DateTimeField(
+    # ---------- Stored PDF snapshot ----------
+    pdf_snapshot = models.FileField(
+        upload_to="invoices_v2/",
+        blank=True,
+        null=True,
+        help_text="Archived PDF snapshot stored in default storage.",
+    )
+    pdf_snapshot_created_at = models.DateTimeField(
         null=True,
         blank=True,
-        help_text="Set when the invoice is officially issued/sent.",
-    )
-    version = models.PositiveIntegerField(
-        default=1,
-        help_text="Revision number; bump when you create a new version.",
-    )
-    pdf_url = models.URLField(
-        blank=True,
-        help_text="Location of the archived PDF (e.g., S3).",
-    )
-    pdf_sha256 = models.CharField(
-        max_length=64,
-        blank=True,
-        help_text="Optional SHA-256 hash of the archived PDF for integrity checks.",
+        help_text="When the snapshot was generated.",
     )
 
     class Meta:
@@ -806,7 +930,7 @@ class InvoiceV2(models.Model):
     def _generate_invoice_number(self) -> str:
         """
         Generates invoice numbers like:
-        YYNNNN
+            YYNNNN
         where:
             YY   = last 2 digits of year
             NNNN = sequence starting at 0100 each year
@@ -817,7 +941,6 @@ class InvoiceV2(models.Model):
         year_short = str(self.date.year)[-2:]  # "2026" -> "26"
         prefix = year_short  # all numbers begin with YY
 
-        # Grab the highest numeric invoice starting with YY
         last_invoice = (
             InvoiceV2.objects
             .filter(
@@ -892,6 +1015,10 @@ class InvoiceV2(models.Model):
             return (self.paid_date - self.date).days
         return None
 
+    @property
+    def has_pdf_snapshot(self) -> bool:
+        return bool(self.pdf_snapshot)
+
     # ---------- Snapshot helpers ----------
     def has_from_snapshot(self) -> bool:
         """
@@ -899,7 +1026,12 @@ class InvoiceV2(models.Model):
         """
         return bool(self.from_name or self.from_logo_url or self.from_address)
 
-    def snapshot_from_profile(self, profile, absolute_logo_url: str | None = None, overwrite: bool = False):
+    def snapshot_from_profile(
+        self,
+        profile,
+        absolute_logo_url: str | None = None,
+        overwrite: bool = False,
+    ):
         """
         Copy active business/profile details into this invoice's snapshot fields.
         Set overwrite=True ONLY if you explicitly want to replace an existing snapshot.
@@ -939,6 +1071,7 @@ class InvoiceV2(models.Model):
                 except Exception:
                     logo_url = ""
             self.from_logo_url = logo_url
+
         self.from_header_logo_max_width_px = getattr(
             profile,
             "header_logo_max_width_px",
@@ -988,7 +1121,6 @@ class InvoiceV2(models.Model):
         return income_total - expense_total
 
     # ---------- Income transaction helpers ----------
-
     def _get_income_subcat_from_items(self):
         """
         Use the sub-category from the first line item on this invoice.
@@ -1023,6 +1155,7 @@ class InvoiceV2(models.Model):
         - If amount is not provided, uses the invoice amount.
         """
         from django.utils import timezone
+
         Transaction = apps.get_model("money", "Transaction")
 
         if not self.invoice_number:
@@ -1037,7 +1170,6 @@ class InvoiceV2(models.Model):
         tx_event = event if event is not None else self.event
         tx_amount = amount if amount is not None else self.amount
 
-        # Basic description for the transaction
         description = self.event_name or f"Invoice {self.invoice_number}"
 
         transaction = Transaction.objects.create(
