@@ -11,12 +11,11 @@ from .base import *  # noqa
 CLIENT = "airborne"
 
 # Production-ish overrides live here:
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = [
+    "12bytes.airborne-images.net",
     "airborne-images.net",
     "www.airborne-images.net",
-    # add Heroku domain etc.
+    "serene-parrot-plxxk4ab6u3sadwd5h494x3u.herokudns.com"
 ]
-
-

@@ -109,7 +109,7 @@ DATABASES = {
 if DEBUG:
     db = DATABASES['default']
     if (db.get('HOST') or '').strip() not in ('', '127.0.0.1', 'localhost'):
-        raise RuntimeError("Refusing remote DB while DEBUG=True")
+        raise RuntimeError("Refusing remote DB while DEBUG=False")
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
