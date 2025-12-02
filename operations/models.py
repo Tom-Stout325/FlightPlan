@@ -81,6 +81,7 @@ class OpsPlan(models.Model):
             models.Index(fields=["updated_at"]),
             models.Index(fields=["approved_at"]),
         ]
+        db_table = "flightplan_opsplan"
         ordering = ["-plan_year", "-updated_at"]
 
     def __str__(self):

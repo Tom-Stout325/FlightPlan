@@ -54,3 +54,4 @@ class Equipment(models.Model):
     class Meta:
         ordering = ['equipment_type', 'name']
         verbose_name_plural = "Equipment"
+        db_table = "flightplan_equipment"

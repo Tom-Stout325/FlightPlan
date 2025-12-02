@@ -21,6 +21,7 @@ class Training(models.Model):
 
 
     class Meta:
+        db_table = "flightplan_equipment"
         ordering = ['-date_completed']
 
     def __str__(self):

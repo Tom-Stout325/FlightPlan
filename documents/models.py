@@ -61,6 +61,12 @@ class DroneIncidentReport(models.Model):
     def __str__(self):
         return f"{self.report_date} - {self.reported_by}"
 
+    class Meta:
+        db_table = "flightplan_droneincidentreport"
+        ordering = ["-report_date"]
+
+
+
 
 class SOPDocument(models.Model):
     title       = models.CharField(max_length=255)
@@ -70,6 +76,10 @@ class SOPDocument(models.Model):
 
     def __str__(self):
         return self.title
+
+    class Meta:
+        db_table = "flightplan_sopdocument"
+        ordering = ["-title"]
 
 
 
@@ -94,3 +104,6 @@ class GeneralDocument(models.Model):
     def __str__(self):
         return f"{self.title} ({self.category})"
 
+    class Meta:
+        db_table = "flightplan_generaldocument"
+        ordering = ["-title"]
