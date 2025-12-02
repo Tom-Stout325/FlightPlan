@@ -78,7 +78,7 @@ Documents
                 </div>
                 <div class="modal-footer">
                   <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                  <form method="post" action="{% url 'delete_document' doc.pk %}">
+                  <form method="post" action="{% url documents:'delete_document' doc.pk %}">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-danger">Yes, Delete</button>
                   </form>

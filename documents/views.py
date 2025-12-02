@@ -279,7 +279,7 @@ def sop_list(request):
         )
     sops = sops.order_by('-created_at')
 
-    paginator = Paginator(sops, 10)  # ✅ removed stray period
+    paginator = Paginator(sops, 10) 
     page_obj = paginator.get_page(request.GET.get('page'))
 
     context = {
