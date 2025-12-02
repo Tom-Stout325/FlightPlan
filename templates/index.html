@@ -17,7 +17,7 @@
   </title>
 
   {# --- SEO & Open Graph (overrideable per page) --- #}
-  {% comment %} {% block meta %}
+  {% block meta %}
     <meta name="description"
           content="Upload, parse, and manage DJI drone flight logs. Track your flight time, speed, altitude, and more with this intuitive drone logbook web app.">
 
@@ -39,7 +39,7 @@
           content="Upload and analyze your DJI drone logs. Track all key metrics from your drone flights." />
     <meta name="twitter:image"
           content="{% block twitter_image %}{% static 'images/logo2.jpg.jpg' %}{% endblock %}" />
-  {% endblock meta %} {% endcomment %}
+  {% endblock meta %}
 
   {# --- iOS Web App Meta --- #}
   <meta name="mobile-web-app-capable" content="yes">
