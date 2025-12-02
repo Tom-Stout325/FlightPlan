@@ -88,5 +88,10 @@ class FlightLog(models.Model):
     def __str__(self):
         return f"{self.flight_title or 'Flight'} on {self.flight_date}"
 
+    class Meta:
+        db_table = "flightplan_flightlog" 
+        ordering = ["-flight_date"]
+
+
 
 
