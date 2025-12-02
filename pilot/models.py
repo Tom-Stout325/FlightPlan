@@ -21,7 +21,7 @@ class Training(models.Model):
 
 
     class Meta:
-        db_table = "flightplan_equipment"
+        db_table = "app_training"
         ordering = ['-date_completed']
 
     def __str__(self):
@@ -67,5 +67,7 @@ class PilotProfile(models.Model):
         return self.user.username
     
 
+    class Meta:
+        db_table = "app_pilotprofile"
 
 
