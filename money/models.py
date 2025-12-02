@@ -140,6 +140,12 @@ class InvoiceItem(models.Model):
     def total(self):
         return (self.qty or 0) * (self.price or 0)
     
+    
+    
+    
+    
+    
+    
 class Invoice(models.Model):
     # ------- existing core fields -------
     invoice_number = models.CharField(max_length=25, blank=True, null=True)
@@ -189,9 +195,11 @@ class Invoice(models.Model):
     # ------- NEW: issuance / archiving hooks (minimal) -------
     issued_at  = models.DateTimeField(null=True, blank=True)     # set when you officially "issue"
     version    = models.PositiveIntegerField(default=1)           # bump if you create a revision
-    pdf_url    = models.URLField(blank=True)                      # final archived PDF url (optional)
-    pdf_sha256 = models.CharField(max_length=64, blank=True)      # integrity hash (optional)
-
+    pdf_url    = models.URLField(
+        blank=True,
+        max_length=1000,
+    )                      
+    pdf_sha256 = models.CharField(max_length=64, blank=True)    
     class Meta:
         ordering = ['invoice_number']
 
@@ -789,6 +797,7 @@ class InvoiceV2(models.Model):
     )
     pdf_url = models.URLField(
         blank=True,
+        max_length=1500,  # increased for S3 / long URLs
         help_text="Location of the archived PDF (e.g., S3).",
     )
     pdf_sha256 = models.CharField(

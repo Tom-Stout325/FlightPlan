@@ -52,3 +52,9 @@ _FLIGHTPLAN/
 
 
 
+Run Migrations on Heroku:
+heroku run -a 12bytes-airborne-images -- python manage.py migrate money --noinput
+
+
+Heroku logs:
+heroku logs --tail -a heroku-12bytes
