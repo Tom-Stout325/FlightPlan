@@ -4,11 +4,11 @@
 import os
 
 # Pick a default client for local dev
-os.environ.setdefault("CLIENT", "airborne")
+os.environ.setdefault("CLIENT", "skyguy")
 
 from .base import *  # noqa
 
-CLIENT = os.getenv("CLIENT", "airborne")
+CLIENT = os.getenv("CLIENT", "skyguy")
 
 DEBUG = True
 ALLOWED_HOSTS = ["*"]

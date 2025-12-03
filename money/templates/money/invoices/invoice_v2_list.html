@@ -101,13 +101,6 @@
                    class="text-decoration-none">
                   {{ row.invoice_number|default:"(draft)" }}
                 </a>
-                {% if row.is_v2 %}
-                  <span class="badge bg-success ms-1">V2</span>
-                {% elif row.is_legacy_model %}
-                  <span class="badge bg-secondary ms-1">Legacy</span>
-                {% elif row.is_legacy_file %}
-                  <span class="badge bg-dark ms-1">Legacy PDF</span>
-                {% endif %}
               </td>
 
               <!-- Client -->
