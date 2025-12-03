@@ -144,7 +144,8 @@ urlpatterns = [
     path("invoices/v2/<int:pk>/pdf/", invoice_v2_pdf_view, name="invoice_v2_pdf"),
     path("invoices/v2/<int:pk>/send-email/", invoice_v2_send_email, name="invoice_v2_send_email"),
     
-    
+    path("transaction/<int:pk>/", TransactionDetailView.as_view(), name="transaction_view"),
+    # money/urls.py (or wherever)
 
     # Categories & Subcategories
     path("category-report/", CategoryListView.as_view(), name="category_page"),

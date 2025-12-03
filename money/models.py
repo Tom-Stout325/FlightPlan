@@ -1,13 +1,11 @@
 from django.db import models
 
 # Create your models here.
-from django.db import models
 from django.core.validators import MinValueValidator
 from django.contrib.auth.models import User
 from datetime import timedelta, date
 from decimal import Decimal
 from django.conf import settings
-from decimal import Decimal
 from django.utils.text import slugify
 from django import forms
 from django.core.exceptions import ValidationError
@@ -15,14 +13,14 @@ from django.core.validators import RegexValidator
 from django.utils import timezone
 from django.apps import apps
 from django.db.models.functions import Cast
-from django.db.models import IntegerField
 
 from django.db.models import (
     F,
     Sum,
     DecimalField,
     ExpressionWrapper,
-    Q
+    Q,
+    IntegerField
 )
 
 try:
@@ -34,17 +32,27 @@ except ImportError:
 
 
 
-    
+
 
 class Category(models.Model):
+    INCOME = "Income"
+    EXPENSE = "Expense"
+
+    CATEGORY_TYPE_CHOICES = [
+        (INCOME, "Income"),
+        (EXPENSE, "Expense"),
+    ]
     category = models.CharField(max_length=500, blank=True, null=True)
     schedule_c_line = models.CharField(max_length=10, blank=True, null=True, help_text="Enter Schedule C line number (e.g., '8', '9', '27a')")
-    
+    category_type = models.CharField(max_length=10, choices=CATEGORY_TYPE_CHOICES, default=EXPENSE,help_text="Default accounting nature for this category.",)
+
     class Meta:
         verbose_name_plural = "Categories"
 
     def __str__(self):
         return self.category or "Unnamed Category"
+
+
 
 
 class SubCategory(models.Model):
@@ -65,6 +73,12 @@ class SubCategory(models.Model):
             self.slug = slugify(self.sub_cat)
         super().save(*args, **kwargs)
 
+    @property
+    def category_type(self):
+        # Fallback to Expense if something is misconfigured
+        if self.category and hasattr(self.category, "category_type"):
+            return self.category.category_type
+        return Category.EXPENSE
 
 
 
@@ -700,10 +714,10 @@ class ClientProfile(models.Model):
 
 
 
-
 class InvoiceV2(models.Model):
     """
     New invoice model, designed to coexist with legacy Invoice.
+
     - Invoice-centric
     - Multi-client friendly
     - Event is optional
@@ -797,7 +811,7 @@ class InvoiceV2(models.Model):
     )
     pdf_url = models.URLField(
         blank=True,
-        max_length=1500,  # increased for S3 / long URLs
+        max_length=1000,
         help_text="Location of the archived PDF (e.g., S3).",
     )
     pdf_sha256 = models.CharField(
@@ -948,7 +962,7 @@ class InvoiceV2(models.Model):
         Next: 260101, 260102, etc.
         """
         year_short = str(self.date.year)[-2:]  # "2026" -> "26"
-        prefix = year_short  # all numbers begin with YY
+        prefix = year_short
 
         last_invoice = (
             InvoiceV2.objects
@@ -1129,20 +1143,36 @@ class InvoiceV2(models.Model):
         )
         return income_total - expense_total
 
-    # ---------- Income transaction helpers ----------
+    # ---------- Income subcategory helper ----------
     def _get_income_subcat_from_items(self):
         """
-        Use the sub-category from the first line item on this invoice.
-        Assumes all invoice items use the same income subcategory.
-        """
-        first_item = self.items.select_related("sub_cat", "sub_cat__category").first()
-        if not first_item or not first_item.sub_cat:
-            raise ValueError(
-                "Cannot determine income SubCategory from invoice items. "
-                "Add at least one line item with a Sub Category before marking as paid."
-            )
-        return first_item.sub_cat
+        Pick the *income* sub-category from this invoice's line items.
 
+        We look for the first line item where the linked SubCategory's
+        category_type == Category.INCOME.
+
+        Raises ValueError if no such sub-category can be found.
+        """
+        # Category is defined earlier in this models module
+        from .models import Category  # or simply use Category if already in scope
+
+        items = self.items.select_related("sub_cat__category")
+
+        for item in items:
+            sub_cat = getattr(item, "sub_cat", None)
+            if not sub_cat:
+                continue
+
+            if sub_cat.category_type == Category.INCOME:
+                return sub_cat
+
+        raise ValueError(
+            "Cannot determine income SubCategory from invoice items. "
+            "Add at least one line item with an Income category "
+            "before marking this invoice as paid."
+        )
+
+    # ---------- Income transaction creator ----------
     def create_income_transaction(
         self,
         *,
@@ -1152,28 +1182,33 @@ class InvoiceV2(models.Model):
         team=None,
         event=None,
         transport_type=None,
+        overwrite_existing: bool = False,
     ):
         """
-        Create a single Income Transaction linked to this invoice.
+        Create (or optionally update) a single Income Transaction for this invoice.
 
-        - Uses the SubCategory from the first invoice item.
-        - Derives category from sub_cat.category for tax reporting.
+        - Uses the *income* SubCategory derived from line items.
+        - Derives Category from sub_cat.category.
         - Uses this invoice's invoice_number as the bridge.
         - If event is not provided, falls back to invoice.event.
-        - If date is not provided, uses paid_date, then invoice date, then today.
-        - If amount is not provided, uses the invoice amount.
+        - If date is not provided, uses paid_date, then invoice.date, then today.
+        - If amount is not provided, uses the invoice.amount.
+        - If overwrite_existing=True and an income transaction already exists
+          for this invoice_number, its amount/date/etc. will be updated instead
+          of creating a duplicate.
         """
-        from django.utils import timezone
-
         Transaction = apps.get_model("money", "Transaction")
 
         if not self.invoice_number:
             raise ValueError("Cannot create income transaction without invoice_number.")
 
+        # Figure out which SubCategory should be used for income
         sub_cat = self._get_income_subcat_from_items()
         category = getattr(sub_cat, "category", None)
         if category is None:
-            raise ValueError("Selected sub_cat has no category; cannot create Transaction.")
+            raise ValueError(
+                "Selected income SubCategory has no Category; cannot create Transaction."
+            )
 
         tx_date = date or self.paid_date or self.date or timezone.now().date()
         tx_event = event if event is not None else self.event
@@ -1181,6 +1216,26 @@ class InvoiceV2(models.Model):
 
         description = self.event_name or f"Invoice {self.invoice_number}"
 
+        # Optionally reuse an existing income transaction for this invoice
+        existing_qs = Transaction.objects.filter(
+            invoice_number=self.invoice_number,
+            trans_type=Transaction.INCOME,
+        ).order_by("pk")
+
+        if overwrite_existing and existing_qs.exists():
+            tx = existing_qs.first()
+            tx.category = category
+            tx.sub_cat = sub_cat
+            tx.amount = tx_amount
+            tx.transaction = description
+            tx.team = team or tx.team
+            tx.event = tx_event
+            tx.date = tx_date
+            tx.transport_type = transport_type or tx.transport_type
+            tx.save()
+            return tx
+
+        # Default behavior: create a new income transaction
         transaction = Transaction.objects.create(
             user=user,
             trans_type=Transaction.INCOME,
@@ -1196,6 +1251,7 @@ class InvoiceV2(models.Model):
         )
         return transaction
 
+    # ---------- Mark as paid ----------
     def mark_as_paid(
         self,
         *,
@@ -1211,18 +1267,19 @@ class InvoiceV2(models.Model):
 
         - Sets paid_date (to payment_date or today).
         - Sets status to 'Paid'.
-        - Creates one Income Transaction for the full invoice amount.
-        - Uses the SubCategory from the first invoice item.
-        - Returns the created Transaction.
+        - Creates ONE Income Transaction for the full invoice amount,
+          using the income SubCategory from the line items.
+        - If an income transaction already exists for this invoice_number,
+          it will be updated rather than duplicated.
         """
-        from django.utils import timezone
-
         pay_date = payment_date or timezone.now().date()
         self.paid_date = pay_date
         self.status = self.STATUS_PAID
 
         if commit:
-            self.save(update_fields=["paid_date", "status"])
+            # Ensure the invoice amount is correct first, then save once
+            self.update_amount(save=False)
+            self.save(update_fields=["amount", "paid_date", "status"])
 
         income_tx = self.create_income_transaction(
             user=user,
@@ -1231,6 +1288,7 @@ class InvoiceV2(models.Model):
             team=team,
             event=event,
             transport_type=transport_type,
+            overwrite_existing=True,
         )
         return income_tx
 
@@ -1238,7 +1296,7 @@ class InvoiceV2(models.Model):
 
 
 
-# -------------------  N E W  M O D E L  ---------------------- #
+
 
 
 

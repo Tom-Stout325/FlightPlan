@@ -559,7 +559,7 @@ def invoice_review_pdf(request, pk):
     response = HttpResponse(pdf, content_type='application/pdf')
     response['Content-Disposition'] = f'filename=invoice_{invoice.invoice_number}.pdf'
     return response
-    return response
+
 
 
 
@@ -784,6 +784,9 @@ class InvoiceV2CreateView(LoginRequiredMixin, CreateView):
         return reverse_lazy("money:invoice_v2_detail", kwargs={"pk": self.object.pk})
 
 
+
+
+
 class InvoiceV2UpdateView(LoginRequiredMixin, UpdateView):
     model = InvoiceV2
     form_class = InvoiceV2Form
@@ -820,6 +823,8 @@ class InvoiceV2UpdateView(LoginRequiredMixin, UpdateView):
 
     def get_success_url(self):
         return reverse_lazy("money:invoice_v2_detail", kwargs={"pk": self.object.pk})
+
+
 
 class InvoiceV2ListView(LoginRequiredMixin, ListView):
     model = InvoiceV2
@@ -873,6 +878,9 @@ class InvoiceV2ListView(LoginRequiredMixin, ListView):
 
         return context
 
+
+
+
 class InvoiceV2DetailView(LoginRequiredMixin, DetailView):
     model = InvoiceV2
     template_name = "money/invoices/invoice_v2_detail.html"
@@ -886,26 +894,59 @@ class InvoiceV2DetailView(LoginRequiredMixin, DetailView):
         )
 
     def get_context_data(self, **kwargs):
-        from decimal import Decimal  # ok to keep local or use module-level
-
         context = super().get_context_data(**kwargs)
         invoice: InvoiceV2 = self.object
 
-        # ---------- Transactions / Net Income ----------
-        # All transactions linked to this invoice number
-        tx_qs = Transaction.objects.filter(invoice_number=invoice.invoice_number)
-        has_transactions = tx_qs.exists()
+        # ------------------------------------------------------------------
+        # Transactions linked to this invoice (same matching as legacy)
+        # ------------------------------------------------------------------
+        transactions_qs = (
+            Transaction.objects
+            .filter(event=invoice.event, invoice_number=invoice.invoice_number)
+            .select_related("sub_cat__category")
+        )
+        has_transactions = transactions_qs.exists()
 
-        # Base net income from model helper (may be 0 if no transactions)
-        net_income = invoice.net_income or Decimal("0.00")
+        total_income = Decimal("0.00")
+        total_expenses = Decimal("0.00")
+        deductible_expenses = Decimal("0.00")
 
-        # If there are no transactions, treat Net Income as the invoice amount
-        if not has_transactions:
-            net_income_effective = invoice.amount or Decimal("0.00")
+        # Meals / fuel logic copied from legacy invoice_review_pdf
+        for t in transactions_qs:
+            if t.trans_type == Transaction.INCOME:
+                total_income += t.amount
+            elif t.trans_type == Transaction.EXPENSE:
+                total_expenses += t.amount
+
+                if t.sub_cat and t.sub_cat.slug == "meals":
+                    # 50% deductible for tax, full hit for Net Income
+                    deductible_expenses += t.deductible_amount
+                elif (
+                    t.sub_cat
+                    and t.sub_cat.slug == "fuel"
+                    and t.transport_type == "personal_vehicle"
+                ):
+                    # Personal vehicle fuel: NOT tax-deductible at all
+                    # (still counted in total_expenses for Net Income)
+                    continue
+                else:
+                    # All other expenses fully deductible
+                    deductible_expenses += t.amount
+
+        # ------------------------------------------------------------------
+        # Effective "income" baseline
+        # ------------------------------------------------------------------
+        if has_transactions:
+            effective_income = total_income or (invoice.amount or Decimal("0.00"))
         else:
-            net_income_effective = net_income
+            effective_income = invoice.amount or Decimal("0.00")
 
-        # ---------- Mileage dollars (Taxable only) ----------
+        # Net income: always subtract FULL expenses
+        net_income_effective = effective_income - total_expenses
+
+        # ------------------------------------------------------------------
+        # Mileage (Taxable only) using Miles.invoice_v2
+        # ------------------------------------------------------------------
         try:
             rate_obj = MileageRate.objects.first()
             mileage_rate = (
@@ -945,28 +986,48 @@ class InvoiceV2DetailView(LoginRequiredMixin, DetailView):
         mileage_dollars = totals["mileage_dollars"] or Decimal("0.00")
         total_mileage_miles = totals["total_miles"] or Decimal("0.0")
 
-        # ---------- Taxable income = Net income (effective) - mileage dollars ----------
-        taxable_income = net_income_effective - mileage_dollars
+        # ------------------------------------------------------------------
+        # Taxable income & summary figures
+        # ------------------------------------------------------------------
+        taxable_income = effective_income - deductible_expenses - mileage_dollars
 
+        # NEW: totals for display
+        transactions_total = total_income + total_expenses
+        deductions_total = deductible_expenses + mileage_dollars
+
+        # ------------------------------------------------------------------
+        # Context
+        # ------------------------------------------------------------------
         context.update(
             {
+                "transactions": transactions_qs,
                 "has_transactions": has_transactions,
+                "total_income": total_income,
+                "total_expenses": total_expenses,
+                "deductible_expenses": deductible_expenses,
                 "net_income_effective": net_income_effective,
                 "mileage_entries": mileage_qs,
                 "mileage_rate": mileage_rate,
                 "mileage_dollars": mileage_dollars,
                 "total_mileage_miles": total_mileage_miles,
                 "taxable_income": taxable_income,
+                "transactions_total": transactions_total,
+                "deductions_total": deductions_total,
             }
         )
 
         return context
 
 
+
 class InvoiceV2MarkPaidView(LoginRequiredMixin, View):
     """
-    POST-only view to mark an invoice as Paid and create an income Transaction
-    based on the first invoice item’s SubCategory.
+    POST-only view to mark an InvoiceV2 as Paid and create/update the
+    matching Income Transaction.
+
+    - Uses InvoiceV2.mark_as_paid(user=...)
+    - Prevents double-posting
+    - Runs inside a DB transaction so invoice + transaction stay in sync
     """
 
     def post(self, request, pk, *args, **kwargs):
@@ -975,25 +1036,41 @@ class InvoiceV2MarkPaidView(LoginRequiredMixin, View):
             pk=pk,
         )
 
-        # Safety: don’t double-mark as paid
+        # Already paid? Don’t do anything again.
         if invoice.is_paid:
             messages.info(request, "This invoice is already marked as paid.")
             return redirect("money:invoice_v2_detail", pk=invoice.pk)
 
         try:
-            invoice.mark_as_paid(user=request.user)
-        except Exception as exc:
+            with transaction.atomic():
+                invoice.mark_as_paid(user=request.user)
+        except ValueError as exc:
+            # These are our "business logic" errors (e.g. no income subcategory on line items)
             messages.error(
                 request,
                 f"Unable to mark invoice as paid: {exc}",
             )
+        except Exception as exc:
+            # Anything unexpected
+            messages.error(
+                request,
+                "An unexpected error occurred while marking this invoice as paid. "
+                "No changes were saved."
+            )
+            # Optional: log it
+            logger.exception(
+                "Error in InvoiceV2MarkPaidView for invoice %s: %s",
+                invoice.pk,
+                exc,
+            )
         else:
             messages.success(
                 request,
-                "Invoice marked as paid and income transaction created.",
+                "Invoice marked as paid and income transaction created/updated.",
             )
 
         return redirect("money:invoice_v2_detail", pk=invoice.pk)
+
 
 
 
