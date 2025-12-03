@@ -24,7 +24,10 @@ from .forms import *
 
 @login_required
 def profile(request):
-    profile, created = PilotProfile.objects.get_or_create(user=request.user)
+    profile, created = PilotProfile.objects.get_or_create(user=request.user,
+                                                          defaults={"license_number":"",
+                                                                    "license_date": "",
+                                                                    "license_imate":""},)
 
     if request.method == 'POST':
         if 'update_user' in request.POST:
