@@ -12,7 +12,7 @@ CLIENT = "skyguy"
 DEBUG = True
 
 ALLOWED_HOSTS = [
-    "skyguy.example.com",
+    ".herokuapp.com",
 
 ]
 
