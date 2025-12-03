@@ -11,11 +11,7 @@ from .base import *  # noqa
 CLIENT = "airborne"
 
 # Production-ish overrides live here:
-DEBUG = False
+DEBUG = True
 
-ALLOWED_HOSTS = [
-    "12bytes.airborne-images.net",
-    "airborne-images.net",
-    "www.airborne-images.net",
-    "serene-parrot-plxxk4ab6u3sadwd5h494x3u.herokudns.com"
-]
+if DEBUG:
+    ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
