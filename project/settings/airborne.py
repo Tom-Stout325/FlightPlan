@@ -3,15 +3,14 @@
 
 import os
 
-# Ensure CURRENT_CLIENT is set before base imports _client.py
 os.environ.setdefault("CLIENT", "airborne")
 
 from .base import *  # noqa
 
 CLIENT = "airborne"
 
-# Production-ish overrides live here:
-DEBUG = True
+DEBUG = False  # or True while you're still debugging
 
-if DEBUG:
-    ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
+
+print(">>> USING ALLOWED_HOSTS:", ALLOWED_HOSTS)
