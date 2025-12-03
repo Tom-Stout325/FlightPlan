@@ -1,9 +1,7 @@
 from django.urls import path
 
-# Dashboard
 from .views.dashboard import Dashboard
 
-# Transactions & Recurring
 from .views.transactions import (
     Transactions,
     TransactionCreateView,
@@ -22,11 +20,7 @@ from .views.transactions import (
     receipt_detail,
 )
 
-# Invoices
 from .views.invoices import (
-    InvoiceListView,
-    InvoiceDeleteView,
-    InvoiceDetailView,
     InvoiceCreateView,
     InvoiceUpdateView,
     invoice_review,
@@ -36,7 +30,6 @@ from .views.invoices import (
     export_invoices_pdf,
     send_invoice_email,
     invoice_summary,
-    
     InvoiceV2ListView,
     InvoiceV2DetailView,
     InvoiceV2UpdateView,
@@ -47,7 +40,6 @@ from .views.invoices import (
     invoice_v2_send_email,
 )
 
-# Categories, Subcategories, Clients
 from .views.clients import (
     ClientListView,
     ClientCreateView,
@@ -55,7 +47,6 @@ from .views.clients import (
     ClientDeleteView,
 )
 
-# Reports (non-tax)
 from .views.reports import (
     reports_page,
     nhra_summary,
@@ -63,11 +54,8 @@ from .views.reports import (
     race_expense_report_pdf,
     travel_expense_analysis,
     travel_expense_analysis_pdf,
-    
-
 )
 
-# Taxes (Schedule C, 4797, etc.)
 from .views.taxes import (
     schedule_c_summary,
     schedule_c_summary_pdf,
@@ -84,10 +72,6 @@ from .views.taxes import (
     SubCategoryCreateView,
     SubCategoryUpdateView,
     SubCategoryDeleteView,
-)
-
-# Mileage
-from .views.taxes import (
     MileageCreateView,
     MileageUpdateView,
     MileageDeleteView,
@@ -96,7 +80,6 @@ from .views.taxes import (
     export_mileage_csv,
 )
 
-# Events
 from .views.events import (
     EventListView,
     EventCreateView,
@@ -104,6 +87,10 @@ from .views.events import (
     EventDetailView,
     EventDeleteView,
 )
+
+from .views.invoices_unified import InvoiceUnifiedListView
+from .views.invoices_legacy import LegacyInvoiceDetailView, LegacyFileInvoiceDetailView
+
 
 app_name = "money"
 
@@ -121,10 +108,7 @@ urlpatterns = [
     path("transaction/delete/<int:pk>/", TransactionDeleteView.as_view(), name="delete_transaction"),
     path("transactions/export/", export_transactions_csv, name="export_transactions_csv"),
 
-    # Invoices
-    path("invoices/", InvoiceListView.as_view(), name="invoice_list"),
-    path("invoices/<int:pk>/delete/", InvoiceDeleteView.as_view(), name="invoice_delete"),
-    path("invoice/<int:pk>/", InvoiceDetailView.as_view(), name="invoice_detail"),
+    # Legacy Invoice tools that you still use (review, edit, email, exports)
     path("invoice/<int:pk>/review/", invoice_review, name="invoice_review"),
     path("invoice/<int:pk>/review/pdf/", invoice_review_pdf, name="invoice_review_pdf"),
     path("invoice/new", InvoiceCreateView.as_view(), name="create_invoice"),
@@ -133,9 +117,9 @@ urlpatterns = [
     path("unpaid-invoices/", unpaid_invoices, name="unpaid_invoices"),
     path("invoices/export/csv/", export_invoices_csv, name="export_invoices_csv"),
     path("invoices/export/pdf/", export_invoices_pdf, name="export_invoices_pdf"),
-    
-    # New Invoices
-    path("invoices/v2/", InvoiceV2ListView.as_view(), name="invoice_v2_list"),
+
+    # Unified + V2 Invoices
+    path("invoices/", InvoiceUnifiedListView.as_view(), name="invoice_v2_list"),
     path("invoices/v2/new/", InvoiceV2CreateView.as_view(), name="invoice_v2_create"),
     path("invoices/v2/<int:pk>/", InvoiceV2DetailView.as_view(), name="invoice_v2_detail"),
     path("invoices/v2/<int:pk>/edit/", InvoiceV2UpdateView.as_view(), name="invoice_v2_edit"),
@@ -143,9 +127,10 @@ urlpatterns = [
     path("invoices/v2/<int:pk>/issue/", InvoiceV2IssueView.as_view(), name="invoice_v2_issue"),
     path("invoices/v2/<int:pk>/pdf/", invoice_v2_pdf_view, name="invoice_v2_pdf"),
     path("invoices/v2/<int:pk>/send-email/", invoice_v2_send_email, name="invoice_v2_send_email"),
-    
-    path("transaction/<int:pk>/", TransactionDetailView.as_view(), name="transaction_view"),
-    # money/urls.py (or wherever)
+
+    # Legacy invoice detail views (DB + file-only)
+    path("invoices/legacy/<int:pk>/", LegacyInvoiceDetailView.as_view(), name="legacy_invoice_detail"),
+    path("invoices/legacy/file/<path:filename>/", LegacyFileInvoiceDetailView.as_view(), name="legacy_file_invoice_detail"),
 
     # Categories & Subcategories
     path("category-report/", CategoryListView.as_view(), name="category_page"),
@@ -165,7 +150,7 @@ urlpatterns = [
     # Reports
     path("reports/", reports_page, name="reports"),
     path("financial-statement/", financial_statement, name="financial_statement"),
-    path("money/financial-statement/pdf/<int:year>/", financial_statement_pdf, name="financial_statement_pdf",),
+    path("money/financial-statement/pdf/<int:year>/", financial_statement_pdf, name="financial_statement_pdf"),
     path("category-summary/", category_summary, name="category_summary"),
     path("money/category-summary/pdf/", category_summary_pdf, name="category_summary_pdf"),
     path("nhra-summary/", nhra_summary, name="nhra_summary"),

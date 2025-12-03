@@ -11,7 +11,7 @@
     <div>
       <h1 class="h3 mb-1">Invoices (v2)</h1>
       <p class="text-muted mb-0">
-        Browse and filter your new invoice set.
+        Browse and filter your invoices (including legacy).
       </p>
     </div>
     <div>
@@ -70,7 +70,7 @@
             Apply
           </button>
           <a href="{% url 'money:invoice_v2_list' %}"
-            class="btn btn-outline-secondary btn-sm px-4">
+             class="btn btn-outline-secondary btn-sm px-4">
             Reset
           </a>
         </div>
@@ -93,60 +93,77 @@
           </tr>
         </thead>
         <tbody>
-          {% for invoice in invoices %}
+          {% for row in invoices %}
             <tr>
               <!-- Invoice number -->
               <td>
-                <a href="{% url 'money:invoice_v2_detail' invoice.pk %}"
+                <a href="{{ row.detail_url }}"
                    class="text-decoration-none">
-                  {{ invoice.invoice_number|default:"(draft)" }}
+                  {{ row.invoice_number|default:"(draft)" }}
                 </a>
+                {% if row.is_v2 %}
+                  <span class="badge bg-success ms-1">V2</span>
+                {% elif row.is_legacy_model %}
+                  <span class="badge bg-secondary ms-1">Legacy</span>
+                {% elif row.is_legacy_file %}
+                  <span class="badge bg-dark ms-1">Legacy PDF</span>
+                {% endif %}
               </td>
 
-              <!-- Client / location -->
+              <!-- Client -->
               <td>
-                {{ invoice.client.business }}
-                {% if invoice.location %}
+                {{ row.client_name|default:"—" }}
+                {% if row.location %}
                   <div class="small text-muted">
-                    {{ invoice.location }}
+                    {{ row.location }}
                   </div>
                 {% endif %}
               </td>
 
               <!-- Event -->
               <td class="d-none d-sm-table-cell">
-                {% if invoice.event %}
-                  {{ invoice.event.title }}
-                {% elif invoice.event_name %}
-                  {{ invoice.event_name }}
+                {% if row.event_name %}
+                  {{ row.event_name }}
                 {% else %}
                   <span class="text-muted small">—</span>
                 {% endif %}
               </td>
 
-              <!-- Dates -->
+              <!-- Date -->
               <td>
-                {{ invoice.date|date:"M j, Y" }}
-                {% if invoice.due %}
+                {% if row.issue_date %}
+                  {{ row.issue_date|date:"M j, Y" }}
+                {% else %}
+                  <span class="text-muted small">—</span>
+                {% endif %}
+                {% if row.due_date %}
                   <div class="small text-muted">
-                    Due {{ invoice.due|date:"M j" }}
+                    Due {{ row.due_date|date:"M j" }}
                   </div>
                 {% endif %}
               </td>
 
               <!-- Amount -->
               <td class="text-end">
-                ${{ invoice.amount|floatformat:2 }}
+                {% if row.total_amount %}
+                  ${{ row.total_amount|floatformat:2 }}
+                {% else %}
+                  —
+                {% endif %}
               </td>
 
               <!-- Status badge -->
               <td class="text-center">
-                {% if invoice.status == "Paid" %}
+                {% if row.status == "Paid" %}
                   <span class="badge bg-success">Paid</span>
-                {% elif invoice.status == "Partial" %}
+                {% elif row.status == "Partial" %}
                   <span class="badge bg-warning text-dark">Partial</span>
-                {% else %}
+                {% elif row.status == "Unpaid" or row.status == "Open" %}
                   <span class="badge bg-secondary">Unpaid</span>
+                {% elif row.status %}
+                  <span class="badge bg-light text-muted">{{ row.status }}</span>
+                {% else %}
+                  <span class="badge bg-light text-muted">—</span>
                 {% endif %}
               </td>
             </tr>
