@@ -26,7 +26,7 @@ from .forms import *
 def profile(request):
     profile, created = PilotProfile.objects.get_or_create(user=request.user,
                                                           defaults={"license_number":"",
-                                                                    "license_date": "",
+                                                                    "license_date": "2020-01-01",
                                                                     "license_image":""},)
 
     if request.method == 'POST':
