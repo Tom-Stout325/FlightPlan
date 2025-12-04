@@ -31,7 +31,9 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from equipment.models import Equipment
 from weasyprint import HTML
+from money.services.schedule_c import get_schedule_c_totals
 
+from money.models import Transaction
 from ..forms.taxes.taxes import (
     CategoryForm,
     SubCategoryForm,
@@ -39,6 +41,10 @@ from ..forms.taxes.taxes import (
     MileageRateForm,
 )
 from ..models import *
+
+
+
+
 
 
 
@@ -649,3 +655,259 @@ def export_mileage_csv(request):
 
     return response
 
+
+
+
+
+
+
+
+
+
+
+# ---------------------------------------------------------------------------
+# Helper: merge manual data (session + optional POST) into schedule
+# ---------------------------------------------------------------------------
+NUMERIC_MANUAL_FIELDS = [
+    # Part I / II
+    "line_2",
+    "line_6",
+    "line_12",
+    "line_13",
+    "line_14",
+    "line_16a",
+    "line_16b",
+    "line_19",
+    "line_27b",
+    "line_30",
+    # Part III COGS
+    "line_35",
+    "line_36",
+    "line_37",
+    "line_38",
+    "line_39",
+    "line_40",
+    "line_41",
+    "line_42",
+    # Part IV – mileage details
+    "line_44a",
+    "line_44b",
+    "line_44c",
+]
+
+CHECKBOX_FIELDS = [
+    # Part III
+    "line_33_cost",
+    "line_33_lcm",
+    "line_33_other",
+]
+
+RADIO_FIELDS = [
+    # Line 32 choice
+    "line_32",
+    # Part III
+    "line_34_change",
+    # Part IV yes/no questions
+    "line_45",
+    "line_46",
+    "line_47a",
+    "line_47b",
+]
+
+DATE_FIELDS = [
+    "line_43",  # vehicle in service date
+]
+
+
+def _load_schedule_with_manual(request, selected_year, post_data=None):
+    """
+    Build schedule dict from service + session + optional POST data.
+    Returns (schedule, session_key).
+    """
+    user = request.user
+    schedule = get_schedule_c_totals(user, selected_year)
+
+    session_key = f"schedule_c_{user.id}_{selected_year}"
+    manual = request.session.get(session_key, {})
+
+    # If POST data is provided, update manual values and re-save to session
+    if post_data is not None:
+        # Numeric fields as strings in session
+        for name in NUMERIC_MANUAL_FIELDS:
+            raw = (post_data.get(name) or "").strip()
+            manual[name] = raw  # keep as string in session (or "")
+
+        # Checkboxes: True/False
+        for name in CHECKBOX_FIELDS:
+            manual[name] = name in post_data
+
+        # Radios / single-choice
+        for name in RADIO_FIELDS:
+            if name in post_data:
+                manual[name] = post_data.get(name)
+
+        # Dates as ISO strings
+        for name in DATE_FIELDS:
+            manual[name] = (post_data.get(name) or "").strip()
+
+        request.session[session_key] = manual
+        request.session.modified = True
+
+    # Merge manual into schedule
+    # 1) numeric
+    for name in NUMERIC_MANUAL_FIELDS:
+        raw = manual.get(name)
+        if raw is not None and raw != "":
+            try:
+                schedule[name] = Decimal(str(raw))
+            except Exception:
+                schedule[name] = Decimal("0")
+        else:
+            # ensure key exists
+            schedule.setdefault(name, Decimal("0"))
+
+    # 2) checkboxes
+    for name in CHECKBOX_FIELDS:
+        schedule[name] = bool(manual.get(name, False))
+
+    # 3) radios
+    for name in RADIO_FIELDS:
+        schedule[name] = manual.get(name, "") or ""
+
+    # 4) dates
+    for name in DATE_FIELDS:
+        schedule[name] = manual.get(name, "") or ""
+
+    # ------------------------------------------------------------------
+    # Recompute derived lines using merged values
+    # ------------------------------------------------------------------
+
+    # Ensure all numeric keys exist as Decimal(0) if missing
+    def d(key):
+        return schedule.get(key, Decimal("0"))
+
+    # Part I
+    schedule["line_3"] = d("line_1") - d("line_2")
+    # line_4 comes from COGS (line 42) – see Part III below
+    # gross profit
+    schedule["line_5"] = schedule["line_3"] - d("line_4")
+    schedule["line_7"] = schedule["line_5"] + d("line_6")
+
+    # Part III – COGS
+    schedule["line_40"] = d("line_35") + d("line_36") + d("line_37") + d("line_38") + d("line_39")
+    schedule["line_42"] = schedule["line_40"] - d("line_41")
+    schedule["line_4"] = schedule["line_42"]  # feed back to Part I
+
+    # Part II – Total expenses
+    schedule["line_24"] = d("line_24a") + d("line_24b")
+
+    expense_components = [
+        d("line_8"),
+        d("line_9"),
+        d("line_10"),
+        d("line_11"),
+        d("line_12"),
+        d("line_13"),
+        d("line_14"),
+        d("line_15"),
+        d("line_16a"),
+        d("line_16b"),
+        d("line_17"),
+        d("line_18"),
+        d("line_19"),
+        d("line_20a"),
+        d("line_20b"),
+        d("line_21"),
+        d("line_22"),
+        d("line_23"),
+        d("line_24"),
+        d("line_25"),
+        d("line_26"),
+        d("line_27a"),
+        d("line_27b"),
+    ]
+    schedule["line_28"] = sum(expense_components)
+
+    # Lines 29–31
+    schedule["line_29"] = schedule["line_7"] - schedule["line_28"]
+    schedule["line_31"] = schedule["line_29"] - d("line_30")
+
+    return schedule, session_key
+
+
+# ---------------------------------------------------------------------------
+# Views
+# ---------------------------------------------------------------------------
+
+@login_required
+def schedule_c_worksheet(request):
+    # --- Year handling (supports both GET & POST) ---
+    try:
+        if request.method == "POST":
+            year_param = request.POST.get("year") or ""
+        else:
+            year_param = request.GET.get("year") or ""
+
+        current_year = timezone.now().year
+        selected_year = int(year_param) if year_param.strip().isdigit() else current_year
+    except ValueError:
+        selected_year = timezone.now().year
+
+    if request.method == "POST":
+        schedule, _ = _load_schedule_with_manual(request, selected_year, post_data=request.POST)
+    else:
+        schedule, _ = _load_schedule_with_manual(request, selected_year, post_data=None)
+
+    # Available years for dropdown
+    year_qs = Transaction.objects.filter(user=request.user).dates(
+        "date", "year", order="DESC"
+    )
+    available_years = [d.year for d in year_qs] or [selected_year]
+
+    context = {
+        "selected_year": selected_year,
+        "available_years": available_years,
+        "schedule": schedule,
+    }
+    return render(request, "money/taxes/schedule_c_worksheet.html", context)
+
+
+@login_required
+def schedule_c_pdf_view(request, year: int):
+    """
+    Render a Schedule C PDF for the given year using WeasyPrint.
+    Uses the same get_schedule_c_totals service AND the manual values
+    persisted in the session by schedule_c_worksheet.
+    """
+    selected_year = int(year)
+
+    # Build schedule with manual values from session (no POST data here)
+    schedule, _ = _load_schedule_with_manual(request, selected_year, post_data=None)
+
+    context = {
+        "selected_year": selected_year,
+        "schedule": schedule,
+    }
+
+    # Render HTML string
+    html_string = render_to_string(
+        "money/taxes/schedule_c_pdf.html",
+        context=context,
+        request=request,
+    )
+
+    # Create PDF
+    html = HTML(string=html_string, base_url=request.build_absolute_uri("/"))
+    pdf_bytes = html.write_pdf()
+
+    # Inline preview vs. download
+    preview = request.GET.get("preview")
+    filename = f"schedule_c_{selected_year}.pdf"
+
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    if preview:
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+    else:
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+    return response

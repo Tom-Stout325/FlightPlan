@@ -9,7 +9,7 @@ from .base import *  # noqa
 
 CLIENT = "airborne"
 
-DEBUG = False  # or True while you're still debugging
+DEBUG = True  # or True while you're still debugging
 
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
 

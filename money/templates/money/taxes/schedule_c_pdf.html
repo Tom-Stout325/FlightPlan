@@ -1,0 +1,612 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Schedule C – {{ selected_year }}</title>
+
+<style>
+  * {
+    box-sizing: border-box;
+  }
+
+  @page {
+    size: letter;
+    margin: 15mm 15mm 18mm 15mm;
+  }
+
+  body {
+    font-family: "Helvetica", Arial, sans-serif;
+    font-size: 10.5px;
+    color: #000;
+    margin: 0;
+  }
+
+  .title-main {
+    text-align: center;
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 2px;
+  }
+
+  .subtitle {
+    text-align: center;
+    font-size: 11px;
+    margin-bottom: 6px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .part-header {
+    font-weight: bold;
+    font-size: 11px;
+    background: #d9d9d9;
+    border: 1px solid #000;
+    padding: 3px 5px;
+    margin-top: 6px;
+    margin-bottom: 0;
+    text-transform: uppercase;
+    width: 100%;
+  }
+
+  th, td {
+    border: 1px solid #000;
+    padding: 3px 4px;
+    vertical-align: top;
+  }
+
+  th {
+    background: #eeeeee;
+    font-weight: bold;
+  }
+
+  /* Generic columns used on single-column tables (Part I, III, etc.) */
+  .line-col {
+    width: 8%;
+    text-align: center;
+    font-weight: bold;
+  }
+
+  .desc-col {
+    width: 62%;
+  }
+
+  .amt-col {
+    width: 30%;
+    text-align: right;
+  }
+
+  /* TWO-COLUMN PART II ONLY */
+  .expenses-table .line-col {
+    width: 6%;        /* 6% + 32% + 12% = 50% per side */
+  }
+
+  .expenses-table .desc-col-2 {
+    width: 32%;
+  }
+
+  .expenses-table .amt-col-2 {
+    width: 12%;
+    text-align: right;
+  }
+
+  .no-border td {
+    border: none;
+  }
+
+  .right {
+    text-align: right;
+  }
+
+  .page-break {
+    page-break-before: always;
+  }
+
+  .small-text {
+    font-size: 9px;
+  }
+
+  /* Line 32 block */
+  .line32-wrapper {
+    border: 1px solid #000;
+    border-top: none;
+    padding: 6px 8px;
+    font-size: 10px;
+  }
+
+  /* Simple checkbox style for PDF (WeasyPrint) */
+  .box {
+    display: inline-block;
+    width: 10px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<!-- ========================================================= -->
+<!-- PAGE 1 -->
+<!-- ========================================================= -->
+
+<div class="title-main">Schedule C — Profit or Loss From Business</div>
+<div class="subtitle">Tax Year {{ selected_year }}</div>
+
+<!-- PART I — INCOME -->
+<div class="part-header">Part I — Income</div>
+
+<table>
+  <tr>
+    <th class="line-col">Line</th>
+    <th class="desc-col">Description</th>
+    <th class="amt-col">Amount</th>
+  </tr>
+  <tr>
+    <td class="line-col">1</td>
+    <td class="desc-col">Gross receipts or sales</td>
+    <td class="amt-col">{{ schedule.line_1|floatformat:2|intcomma }}</td>
+  </tr>
+  <tr>
+    <td class="line-col">2</td>
+    <td class="desc-col">Returns and allowances</td>
+    <td class="amt-col">{{ schedule.line_2|floatformat:2|intcomma }}</td>
+  </tr>
+  <tr>
+    <td class="line-col">3</td>
+    <td class="desc-col">Subtract line 2 from line 1</td>
+    <td class="amt-col">{{ schedule.line_3|floatformat:2|intcomma }}</td>
+  </tr>
+  <tr>
+    <td class="line-col">4</td>
+    <td class="desc-col">Cost of goods sold (from line 42)</td>
+    <td class="amt-col">{{ schedule.line_4|floatformat:2|intcomma }}</td>
+  </tr>
+  <tr>
+    <td class="line-col">5</td>
+    <td class="desc-col">Gross profit (subtract line 4 from line 3)</td>
+    <td class="amt-col">{{ schedule.line_5|floatformat:2|intcomma }}</td>
+  </tr>
+  <tr>
+    <td class="line-col">6</td>
+    <td class="desc-col">Other income</td>
+    <td class="amt-col">{{ schedule.line_6|floatformat:2|intcomma }}</td>
+  </tr>
+  <tr>
+    <td class="line-col">7</td>
+    <td class="desc-col">Gross income (add lines 5 and 6)</td>
+    <td class="amt-col">{{ schedule.line_7|floatformat:2|intcomma }}</td>
+  </tr>
+</table>
+
+<!-- PART II — EXPENSES (two-column layout like IRS form) -->
+<div class="part-header" style="margin-top: 10px;">Part II — Expenses</div>
+
+<table class="expenses-table">
+  <tr>
+    <th class="line-col">Ln</th>
+    <th class="desc-col-2">Description</th>
+    <th class="amt-col-2">Amount</th>
+    <th class="line-col">Ln</th>
+    <th class="desc-col-2">Description</th>
+    <th class="amt-col-2">Amount</th>
+  </tr>
+
+  <!-- Row 1: 8 / 18 -->
+  <tr>
+    <td class="line-col">8</td>
+    <td class="desc-col-2">Advertising</td>
+    <td class="amt-col-2">{{ schedule.line_8|floatformat:2|intcomma }}</td>
+    <td class="line-col">18</td>
+    <td class="desc-col-2">Office expense</td>
+    <td class="amt-col-2">{{ schedule.line_18|floatformat:2|intcomma }}</td>
+  </tr>
+
+  <!-- Row 2: 9 / 19 -->
+  <tr>
+    <td class="line-col">9</td>
+    <td class="desc-col-2">Car and truck expenses</td>
+    <td class="amt-col-2">{{ schedule.line_9|floatformat:2|intcomma }}</td>
+    <td class="line-col">19</td>
+    <td class="desc-col-2">Pension and profit-sharing plans</td>
+    <td class="amt-col-2">{{ schedule.line_19|floatformat:2|intcomma }}</td>
+  </tr>
+
+  <!-- Row 3: 10 / 20a -->
+  <tr>
+    <td class="line-col">10</td>
+    <td class="desc-col-2">Commissions and fees</td>
+    <td class="amt-col-2">{{ schedule.line_10|floatformat:2|intcomma }}</td>
+    <td class="line-col">20a</td>
+    <td class="desc-col-2">Rent/lease – vehicles, machinery, equipment</td>
+    <td class="amt-col-2">{{ schedule.line_20a|floatformat:2|intcomma }}</td>
+  </tr>
+
+  <!-- Row 4: 11 / 20b -->
+  <tr>
+    <td class="line-col">11</td>
+    <td class="desc-col-2">Contract labor</td>
+    <td class="amt-col-2">{{ schedule.line_11|floatformat:2|intcomma }}</td>
+    <td class="line-col">20b</td>
+    <td class="desc-col-2">Rent/lease – other business property</td>
+    <td class="amt-col-2">{{ schedule.line_20b|floatformat:2|intcomma }}</td>
+  </tr>
+
+  <!-- Row 5: 12 / 21 -->
+  <tr>
+    <td class="line-col">12</td>
+    <td class="desc-col-2">Depletion</td>
+    <td class="amt-col-2">{{ schedule.line_12|floatformat:2|intcomma }}</td>
+    <td class="line-col">21</td>
+    <td class="desc-col-2">Repairs and maintenance</td>
+    <td class="amt-col-2">{{ schedule.line_21|floatformat:2|intcomma }}</td>
+  </tr>
+
+  <!-- Row 6: 13 / 22 -->
+  <tr>
+    <td class="line-col">13</td>
+    <td class="desc-col-2">Depreciation and §179 expense</td>
+    <td class="amt-col-2">{{ schedule.line_13|floatformat:2|intcomma }}</td>
+    <td class="line-col">22</td>
+    <td class="desc-col-2">Supplies (not included in Part III)</td>
+    <td class="amt-col-2">{{ schedule.line_22|floatformat:2|intcomma }}</td>
+  </tr>
+
+  <!-- Row 7: 14 / 23 -->
+  <tr>
+    <td class="line-col">14</td>
+    <td class="desc-col-2">Employee benefit programs</td>
+    <td class="amt-col-2">{{ schedule.line_14|floatformat:2|intcomma }}</td>
+    <td class="line-col">23</td>
+    <td class="desc-col-2">Taxes and licenses</td>
+    <td class="amt-col-2">{{ schedule.line_23|floatformat:2|intcomma }}</td>
+  </tr>
+
+  <!-- Row 8: 15 / 24a -->
+  <tr>
+    <td class="line-col">15</td>
+    <td class="desc-col-2">Insurance (other than health)</td>
+    <td class="amt-col-2">{{ schedule.line_15|floatformat:2|intcomma }}</td>
+    <td class="line-col">24a</td>
+    <td class="desc-col-2">Travel</td>
+    <td class="amt-col-2">{{ schedule.line_24a|floatformat:2|intcomma }}</td>
+  </tr>
+
+  <!-- Row 9: 16a / 24b -->
+  <tr>
+    <td class="line-col">16a</td>
+    <td class="desc-col-2">Mortgage interest (paid to banks, etc.)</td>
+    <td class="amt-col-2">{{ schedule.line_16a|floatformat:2|intcomma }}</td>
+    <td class="line-col">24b</td>
+    <td class="desc-col-2">Deductible meals (50%)</td>
+    <td class="amt-col-2">{{ schedule.line_24b|floatformat:2|intcomma }}</td>
+  </tr>
+
+  <!-- Row 10: 16b / 25 -->
+  <tr>
+    <td class="line-col">16b</td>
+    <td class="desc-col-2">Other interest</td>
+    <td class="amt-col-2">{{ schedule.line_16b|floatformat:2|intcomma }}</td>
+    <td class="line-col">25</td>
+    <td class="desc-col-2">Utilities</td>
+    <td class="amt-col-2">{{ schedule.line_25|floatformat:2|intcomma }}</td>
+  </tr>
+
+  <!-- Row 11: 17 / 26 -->
+  <tr>
+    <td class="line-col">17</td>
+    <td class="desc-col-2">Legal and professional services</td>
+    <td class="amt-col-2">{{ schedule.line_17|floatformat:2|intcomma }}</td>
+    <td class="line-col">26</td>
+    <td class="desc-col-2">Wages (less employment credits)</td>
+    <td class="amt-col-2">{{ schedule.line_26|floatformat:2|intcomma }}</td>
+  </tr>
+
+  <!-- Row 12: (blank left) / 27a -->
+  <tr>
+    <td class="line-col">&nbsp;</td>
+    <td class="desc-col-2">&nbsp;</td>
+    <td class="amt-col-2">&nbsp;</td>
+    <td class="line-col">27a</td>
+    <td class="desc-col-2">Other expenses (from Part V)</td>
+    <td class="amt-col-2">{{ schedule.line_27a|floatformat:2|intcomma }}</td>
+  </tr>
+
+  <!-- Row 13: (blank left) / 27b -->
+  <tr>
+    <td class="line-col">&nbsp;</td>
+    <td class="desc-col-2">&nbsp;</td>
+    <td class="amt-col-2">&nbsp;</td>
+    <td class="line-col">27b</td>
+    <td class="desc-col-2">Reserved</td>
+    <td class="amt-col-2">{{ schedule.line_27b|floatformat:2|intcomma }}</td>
+  </tr>
+</table>
+
+<!-- Lines 28–31 -->
+<table style="margin-top: 6px;">
+  <tr>
+    <th class="line-col">Ln</th>
+    <th class="desc-col">Description</th>
+    <th class="amt-col">Amount</th>
+  </tr>
+  <tr>
+    <td class="line-col">28</td>
+    <td class="desc-col"><b>Total expenses</b> (add lines 8–27a)</td>
+    <td class="amt-col"><b>{{ schedule.line_28|floatformat:2|intcomma }}</b></td>
+  </tr>
+  <tr>
+    <td class="line-col">29</td>
+    <td class="desc-col">Tentative profit (loss) (line 7 minus line 28)</td>
+    <td class="amt-col">{{ schedule.line_29|floatformat:2|intcomma }}</td>
+  </tr>
+  <tr>
+    <td class="line-col">30</td>
+    <td class="desc-col">Business use of home</td>
+    <td class="amt-col">{{ schedule.line_30|floatformat:2|intcomma }}</td>
+  </tr>
+  <tr>
+    <td class="line-col">31</td>
+    <td class="desc-col"><b>Net profit (loss)</b> (line 29 minus line 30)</td>
+    <td class="amt-col"><b>{{ schedule.line_31|floatformat:2|intcomma }}</b></td>
+  </tr>
+</table>
+
+<!-- LINE 32 — Investment at risk (visual only, manual check on paper) -->
+<div class="line32-wrapper">
+  <span><b>32</b> If you have a loss, check the box that describes your investment in
+  this activity. See instructions.</span>
+  <br><br>
+  • If you checked <b>32a</b>, enter the loss on both <b>Schedule 1 (Form 1040), line 3</b>,
+    and on <b>Schedule SE, line 2</b>. (If you checked the box on line 1, see the line 31
+    instructions.) Estates and trusts, enter on <b>Form 1041, line 3</b>.
+  <br>
+  • If you checked <b>32b</b>, you <b>must attach Form 6198</b>. Your loss may be limited.
+  <br><br>
+  <span><b>32a</b> ☐ All investment is at risk.</span><br>
+  <span><b>32b</b> ☐ Some investment is not at risk.</span>
+</div>
+
+<!-- ========================================================= -->
+<!-- PAGE 2 -->
+<!-- ========================================================= -->
+
+<div class="page-break"></div>
+
+<!-- PAGE 2 HEADER -->
+<div class="small-text" style="text-align: right;">Schedule C (Form 1040) {{ selected_year }}</div>
+
+<!-- PART III — COST OF GOODS SOLD -->
+<div class="part-header">Part III — Cost of Goods Sold (see instructions)</div>
+
+<table>
+  <tr>
+    <th class="line-col">Ln</th>
+    <th class="desc-col">Description</th>
+    <th class="amt-col">Amount</th>
+  </tr>
+
+  <!-- 33 -->
+  <tr>
+    <td class="line-col">33</td>
+    <td class="desc-col">
+      Method(s) used to value closing inventory:
+      &nbsp; a 
+      <span class="box">
+        {% if schedule.line_33_cost %}☑{% else %}☐{% endif %}
+      </span>
+      Cost
+      &nbsp;&nbsp; b
+      <span class="box">
+        {% if schedule.line_33_lcm %}☑{% else %}☐{% endif %}
+      </span>
+      Lower of cost or market
+      &nbsp;&nbsp; c
+      <span class="box">
+        {% if schedule.line_33_other %}☑{% else %}☐{% endif %}
+      </span>
+      Other
+    </td>
+    <td class="amt-col">&nbsp;</td>
+  </tr>
+
+  <!-- 34 -->
+  <tr>
+    <td class="line-col">34</td>
+    <td class="desc-col">
+      Was there any change in determining quantities, costs, or valuations between
+      opening and closing inventory? If “Yes”, attach explanation
+      &nbsp;
+      <span>Yes</span>
+      <span class="box">
+        {% if schedule.line_34_change == "yes" %}☑{% else %}☐{% endif %}
+      </span>
+      &nbsp;
+      <span>No</span>
+      <span class="box">
+        {% if schedule.line_34_change == "no" %}☑{% else %}☐{% endif %}
+      </span>
+    </td>
+    <td class="amt-col">&nbsp;</td>
+  </tr>
+
+  <!-- 35–42 numeric -->
+  <tr>
+    <td class="line-col">35</td>
+    <td class="desc-col">Inventory at beginning of year</td>
+    <td class="amt-col">{{ schedule.line_35|default_if_none:""|floatformat:2|intcomma }}</td>
+  </tr>
+  <tr>
+    <td class="line-col">36</td>
+    <td class="desc-col">Purchases less cost of items withdrawn for personal use</td>
+    <td class="amt-col">{{ schedule.line_36|default_if_none:""|floatformat:2|intcomma }}</td>
+  </tr>
+  <tr>
+    <td class="line-col">37</td>
+    <td class="desc-col">Cost of labor (do not include any amounts paid to yourself)</td>
+    <td class="amt-col">{{ schedule.line_37|default_if_none:""|floatformat:2|intcomma }}</td>
+  </tr>
+  <tr>
+    <td class="line-col">38</td>
+    <td class="desc-col">Materials and supplies</td>
+    <td class="amt-col">{{ schedule.line_38|default_if_none:""|floatformat:2|intcomma }}</td>
+  </tr>
+  <tr>
+    <td class="line-col">39</td>
+    <td class="desc-col">Other costs</td>
+    <td class="amt-col">{{ schedule.line_39|default_if_none:""|floatformat:2|intcomma }}</td>
+  </tr>
+  <tr>
+    <td class="line-col">40</td>
+    <td class="desc-col">Add lines 35 through 39</td>
+    <td class="amt-col">{{ schedule.line_40|default_if_none:""|floatformat:2|intcomma }}</td>
+  </tr>
+  <tr>
+    <td class="line-col">41</td>
+    <td class="desc-col">Inventory at end of year</td>
+    <td class="amt-col">{{ schedule.line_41|default_if_none:""|floatformat:2|intcomma }}</td>
+  </tr>
+  <tr>
+    <td class="line-col">42</td>
+    <td class="desc-col">Cost of goods sold. Subtract line 41 from line 40.</td>
+    <td class="amt-col">{{ schedule.line_42|default_if_none:schedule.line_4|floatformat:2|intcomma }}</td>
+  </tr>
+</table>
+
+<!-- PART IV — INFORMATION ON YOUR VEHICLE -->
+<div class="part-header">Part IV — Information on Your Vehicle</div>
+
+<table>
+  <!-- 43 -->
+  <tr>
+    <td class="line-col">43</td>
+    <td class="desc-col">
+      When did you place your vehicle in service for business purposes? (month/day/year)
+      &nbsp; {{ schedule.line_43 }}
+    </td>
+    <td class="amt-col">&nbsp;</td>
+  </tr>
+
+  <!-- 44 -->
+  <tr>
+    <td class="line-col">44</td>
+    <td class="desc-col">
+      Of the total number of miles you drove your vehicle during {{ selected_year }},
+      enter the number of miles you used your vehicle for:
+      &nbsp;&nbsp; a Business {{ schedule.line_44a }}
+      &nbsp;&nbsp; b Commuting {{ schedule.line_44b }}
+      &nbsp;&nbsp; c Other {{ schedule.line_44c }}
+    </td>
+    <td class="amt-col">&nbsp;</td>
+  </tr>
+
+  <!-- 45 -->
+  <tr>
+    <td class="line-col">45</td>
+    <td class="desc-col">
+      Was your vehicle available for personal use during off-duty hours?
+      &nbsp; Yes
+      <span class="box">
+        {% if schedule.line_45 == "yes" %}☑{% else %}☐{% endif %}
+      </span>
+      &nbsp; No
+      <span class="box">
+        {% if schedule.line_45 == "no" %}☑{% else %}☐{% endif %}
+      </span>
+    </td>
+    <td class="amt-col">&nbsp;</td>
+  </tr>
+
+  <!-- 46 -->
+  <tr>
+    <td class="line-col">46</td>
+    <td class="desc-col">
+      Do you (or your spouse) have another vehicle available for personal use?
+      &nbsp; Yes
+      <span class="box">
+        {% if schedule.line_46 == "yes" %}☑{% else %}☐{% endif %}
+      </span>
+      &nbsp; No
+      <span class="box">
+        {% if schedule.line_46 == "no" %}☑{% else %}☐{% endif %}
+      </span>
+    </td>
+    <td class="amt-col">&nbsp;</td>
+  </tr>
+
+  <!-- 47a -->
+  <tr>
+    <td class="line-col">47a</td>
+    <td class="desc-col">
+      Do you have evidence to support your deduction?
+      &nbsp; Yes
+      <span class="box">
+        {% if schedule.line_47a == "yes" %}☑{% else %}☐{% endif %}
+      </span>
+      &nbsp; No
+      <span class="box">
+        {% if schedule.line_47a == "no" %}☑{% else %}☐{% endif %}
+      </span>
+    </td>
+    <td class="amt-col">&nbsp;</td>
+  </tr>
+
+  <!-- 47b -->
+  <tr>
+    <td class="line-col">47b</td>
+    <td class="desc-col">
+      If “Yes”, is the evidence written?
+      &nbsp; Yes
+      <span class="box">
+        {% if schedule.line_47b == "yes" %}☑{% else %}☐{% endif %}
+      </span>
+      &nbsp; No
+      <span class="box">
+        {% if schedule.line_47b == "no" %}☑{% else %}☐{% endif %}
+      </span>
+    </td>
+    <td class="amt-col">&nbsp;</td>
+  </tr>
+</table>
+
+<!-- PART V — OTHER EXPENSES -->
+<div class="part-header">Part V — Other Expenses</div>
+
+<table>
+  <tr>
+    <th class="desc-col">Description</th>
+    <th class="amt-col">Amount</th>
+  </tr>
+
+  {% if schedule.part_v_rows %}
+    {% for row in schedule.part_v_rows %}
+      <tr>
+        <td class="desc-col">{{ row.name }}</td>
+        <td class="amt-col">{{ row.total|floatformat:2|intcomma }}</td>
+      </tr>
+    {% endfor %}
+  {% else %}
+    {% for i in "1234567890" %}
+      <tr>
+        <td class="desc-col">&nbsp;</td>
+        <td class="amt-col">&nbsp;</td>
+      </tr>
+    {% endfor %}
+  {% endif %}
+
+  <tr>
+    <td class="desc-col">
+      <b>48 &nbsp; Total other expenses. Enter here and on line 27a.</b>
+    </td>
+    <td class="amt-col"><b>{{ schedule.line_48_total|floatformat:2|intcomma }}</b></td>
+  </tr>
+</table>
+
+<div class="small-text" style="text-align: right; margin-top: 4px;">
+  Schedule C (Form 1040) {{ selected_year }}
+</div>
+
+</body>
+</html>

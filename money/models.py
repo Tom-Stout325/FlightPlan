@@ -368,8 +368,6 @@ class MileageRate(models.Model):
 
 
 
-# money/models.py (where Miles lives)
-
 class Miles(models.Model):
     MILEAGE_TYPE_CHOICES = [
         ("Taxable", "Taxable"),

@@ -78,6 +78,8 @@ from .views.taxes import (
     mileage_log,
     update_mileage_rate,
     export_mileage_csv,
+    schedule_c_worksheet,
+    schedule_c_pdf_view,
 )
 
 from .views.events import (
@@ -165,6 +167,10 @@ urlpatterns = [
     path("receipts/", receipts_list, name="receipts_list"),
     path("receipts/<int:pk>/", receipt_detail, name="receipt_detail"),
     path("reports/invoices/", invoice_summary, name="invoice_summary"),
+    
+    path("taxes/schedule-c/", schedule_c_worksheet, name="schedule_c_worksheet",),
+    path("taxes/schedule-c/", schedule_c_worksheet, name="schedule_c_worksheet",),
+    path("taxes/schedule-c/pdf/<int:year>/", schedule_c_pdf_view, name="schedule_c_pdf",),
 
     # Mileage
     path("mileage-log/", mileage_log, name="mileage_log"),
