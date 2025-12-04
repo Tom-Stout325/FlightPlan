@@ -110,10 +110,12 @@ push-github:
 	git push origin main
 
 # Deploy to Airborne Images (flightplan-airborne)
+# make deploy-airborne
 deploy-airborne: push-github
 	git push airborne main
 
 # Deploy to SkyGuy (flightplan-skyguy)
+# make deploy-skyguy
 deploy-skyguy: push-github
 	git push skyguy main
 
