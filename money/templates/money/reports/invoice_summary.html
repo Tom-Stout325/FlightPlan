@@ -39,7 +39,7 @@
             <td>
                 {% with inv=r.invoice %}
                 {% if inv.pk %}
-                    <a href="{% url 'invoice_review' inv.pk %}">
+                    <a href="{% url 'money:invoice_review' inv.pk %}">
                     {{ inv.invoice_number|default:"—" }}
                     </a>
                 {% else %}
