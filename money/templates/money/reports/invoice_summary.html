@@ -32,36 +32,68 @@
             <th class="text-end" style="width: 15%;">Taxable Income</th>
             </tr>
         </thead>
-        <tbody>
-            {% for r in rows %}
+      <tbody>
+        {% for r in rows %}
             <tr>
-                <td>
-                {% if r.pk %}
-                    <a href="{% url 'invoice_review' r.pk %}">{{ r.invoice_number|default:'—' }}</a>
+            <!-- Invoice # -->
+            <td>
+                {% with inv=r.invoice %}
+                {% if inv.pk %}
+                    <a href="{% url 'invoice_review' inv.pk %}">
+                    {{ inv.invoice_number|default:"—" }}
+                    </a>
                 {% else %}
-                    {{ r.invoice_number|default:'—' }}
+                    {{ inv.invoice_number|default:"—" }}
                 {% endif %}
-                </td>
-                <td>{{ r.event }}</td>
-                <td class="text-end">${{ r.invoice_amount|floatformat:2|intcomma }}</td>
-                <td class="text-end">${{ r.total_expenses|floatformat:2|intcomma }}</td>
-                <td class="text-end">
+                {% endwith %}
+            </td>
+
+            <!-- Event -->
+            <td>
+                {% if r.invoice.event %}
+                {{ r.invoice.event }}
+                {% else %}
+                —
+                {% endif %}
+            </td>
+
+            <!-- Invoice Amount (from the Invoice object) -->
+            <td class="text-end">
+                ${{ r.invoice.amount|default_if_none:"0"|floatformat:2|intcomma }}
+            </td>
+
+            <!-- Total Expenses (from the row dict) -->
+            <td class="text-end">
+                ${{ r.total_expenses|floatformat:2|intcomma }}
+            </td>
+
+            <!-- Net Income -->
+            <td class="text-end">
                 {% if r.net_income is not None %}
-                    ${{ r.net_income|floatformat:2|intcomma }}
-                {% else %}—{% endif %}
-                </td>
-                <td class="text-end">
+                ${{ r.net_income|floatformat:2|intcomma }}
+                {% else %}
+                —
+                {% endif %}
+            </td>
+
+            <!-- Taxable Income -->
+            <td class="text-end">
                 {% if r.taxable_income is not None %}
-                    ${{ r.taxable_income|floatformat:2|intcomma }}
-                {% else %}—{% endif %}
-                </td>
+                ${{ r.taxable_income|floatformat:2|intcomma }}
+                {% else %}
+                —
+                {% endif %}
+            </td>
             </tr>
-            {% empty %}
+        {% empty %}
             <tr>
-                <td colspan="6" class="text-center text-muted py-4">No invoices for {{ selected_year }}.</td>
+            <td colspan="6" class="text-center text-muted py-4">
+                No invoices for {{ selected_year }}.
+            </td>
             </tr>
-            {% endfor %}
+        {% endfor %}
         </tbody>
+
 
         <tfoot class="table-light fw-semibold">
             <tr>
