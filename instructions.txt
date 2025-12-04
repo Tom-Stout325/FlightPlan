@@ -69,11 +69,11 @@ heroku run -a 12bytes-airborne-images -- python manage.py migrate money --noinpu
 
 
 Heroku logs:
-heroku logs --tail -a heroku-12bytes
+heroku logs --tail -a flightplan-airborne
 
 
 View Databases in production:
-heroku pg:psql -a heroku-12bytes
+heroku pg:psql -a flightplan-airborne
 \dt *invoice*;    Or
 \dt *flightlog*;
 

@@ -99,6 +99,26 @@ createsuperuser-demo:
 		$(MANAGE) createsuperuser
 
 
+# ----------------------------------------
+# Git + Heroku Deployment for FlightPlan
+# ----------------------------------------
+
+# Push local changes to GitHub
+push-github:
+	git add .
+	git commit -m "update"
+	git push origin main
+
+# Deploy to Airborne Images (flightplan-airborne)
+deploy-airborne: push-github
+	git push airborne main
+
+# Deploy to SkyGuy (flightplan-skyguy)
+deploy-skyguy: push-github
+	git push skyguy main
+
+
+
 
 #-------------------------------------------------------------------------------------------
 #								C O M M A N D S 
