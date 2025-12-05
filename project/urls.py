@@ -19,6 +19,7 @@ urlpatterns = [
     path("", include(("equipment.urls", "equipment"), namespace="equipment")),
     path("", include(("pilot.urls", "pilot"), namespace="pilot")),
 
+    path("airspace/", include("airspace.urls")),
 
     path("money/", include(("money.urls", "money"), namespace="money")),
 

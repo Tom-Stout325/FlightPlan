@@ -1,0 +1,177 @@
+{% extends "index.html" %}
+
+{% block title %}
+  {% if planning_mode == "edit" %}Edit Waiver Planning{% else %}Waiver Planning{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5" style="max-width: 900px;">
+
+  <div class="mb-4">
+    <h1 class="h4 mb-1">
+      {% if planning_mode == "edit" %}Edit Waiver Planning{% else %}Waiver Planning{% endif %}
+    </h1>
+    <p class="text-muted mb-0">
+      Step 1 – Capture aircraft, pilot, and safety details that will be used in the CONOPS.
+    </p>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <!-- Aircraft section -->
+        <h2 class="h6 text-uppercase text-muted mb-3">Aircraft</h2>
+        <div class="row g-3 mb-4">
+          <div class="col-12 col-md-6">
+            <label class="form-label fw-semibold" for="{{ form.aircraft.id_for_label }}">
+              Drone model (from Equipment)
+            </label>
+            {{ form.aircraft }}
+            <div class="form-text">
+              Only equipment marked as "Drone" is shown here.
+            </div>
+            {{ form.aircraft.errors }}
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label fw-semibold" for="{{ form.aircraft_manual.id_for_label }}">
+              Other / additional drones
+            </label>
+            {{ form.aircraft_manual }}
+            {{ form.aircraft_manual.errors }}
+          </div>
+        </div>
+
+        <!-- Pilot section -->
+        <h2 class="h6 text-uppercase text-muted mb-3">Pilot</h2>
+        <div class="row g-3 mb-3">
+          <div class="col-12 col-md-6">
+            <label class="form-label fw-semibold" for="{{ form.pilot_profile.id_for_label }}">
+              Pilot (from Pilot Profile)
+            </label>
+            {{ form.pilot_profile }}
+            <div class="form-text">
+              Select yourself or a saved pilot profile, or use manual entry below.
+            </div>
+            {{ form.pilot_profile.errors }}
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label fw-semibold" for="{{ form.pilot_name_manual.id_for_label }}">
+              Manual pilot name
+            </label>
+            {{ form.pilot_name_manual }}
+            {{ form.pilot_name_manual.errors }}
+          </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+          <div class="col-12 col-md-6">
+            <label class="form-label fw-semibold" for="{{ form.pilot_cert_manual.id_for_label }}">
+              Manual certificate number
+            </label>
+            {{ form.pilot_cert_manual }}
+            {{ form.pilot_cert_manual.errors }}
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label fw-semibold" for="{{ form.pilot_flight_hours.id_for_label }}">
+              Approximate UAS flight hours
+            </label>
+            {{ form.pilot_flight_hours }}
+            {{ form.pilot_flight_hours.errors }}
+          </div>
+        </div>
+
+        <!-- Launch location -->
+        <h2 class="h6 text-uppercase text-muted mb-3">Launch Location</h2>
+        <div class="mb-4">
+          <label class="form-label fw-semibold" for="{{ form.launch_location.id_for_label }}">
+            Typical launch / staging location
+          </label>
+          {{ form.launch_location }}
+          {{ form.launch_location.errors }}
+        </div>
+
+        <!-- Safety features -->
+        <h2 class="h6 text-uppercase text-muted mb-3">Safety Features</h2>
+        <div class="mb-4">
+          <label class="form-label fw-semibold" for="{{ form.safety_features_notes.id_for_label }}">
+            Safety features & mitigations
+          </label>
+          {{ form.safety_features_notes }}
+          <div class="form-text">
+            Include redundancies, geofencing, return-to-home behavior, parachute systems, etc.
+          </div>
+          {{ form.safety_features_notes.errors }}
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center">
+          <a href="{% url 'airspace:waiver_list' %}" class="btn btn-outline-secondary btn-sm">
+            ← Back to Waivers
+          </a>
+          <button type="submit" class="btn btn-primary">
+            {% if planning_mode == "edit" %}Save Planning{% else %}Save & Continue to Waiver Form{% endif %}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% if pilot_profile_data %}
+  {{ pilot_profile_data|json_script:"pilot-profile-data" }}
+{% endif %}
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const pilotSelect = document.getElementById("id_pilot_profile");
+    const certInput = document.getElementById("id_pilot_cert_manual");
+    const hoursInput = document.getElementById("id_pilot_flight_hours");
+
+    if (!pilotSelect) return;
+
+    let profileMap = {};
+    const dataElement = document.getElementById("pilot-profile-data");
+    if (dataElement) {
+      try {
+        const data = JSON.parse(dataElement.textContent);
+        data.forEach(function (p) {
+          profileMap[String(p.id)] = p;
+        });
+      } catch (e) {
+        console.warn("Could not parse pilot profile data", e);
+      }
+    }
+
+    function updatePilotFields() {
+      const selectedId = pilotSelect.value;
+      const profile = profileMap[selectedId];
+      if (!profile) return;
+
+      // Auto-fill certificate number (only if empty)
+      if (certInput && !certInput.value && profile.license_number) {
+        certInput.value = profile.license_number;
+      }
+
+      // Auto-fill flight hours (only if empty and we have a value)
+      if (
+        hoursInput &&
+        !hoursInput.value &&
+        profile.flight_hours !== null &&
+        profile.flight_hours !== undefined
+      ) {
+        if (profile.flight_hours > 0) {
+          hoursInput.value = profile.flight_hours;
+        }
+      }
+    }
+
+    pilotSelect.addEventListener("change", updatePilotFields);
+
+    // Run once on load, in case a pilot is already selected
+    updatePilotFields();
+  });
+</script>
+
+
+{% endblock %}

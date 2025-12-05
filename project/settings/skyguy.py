@@ -16,3 +16,11 @@ ALLOWED_HOSTS = [
 
 ]
 
+
+ENABLED_REPORTS = [
+    "financial_statement",
+    "form_4797",
+    "category_summary",
+    "schedule_c",
+    "invoice_summary",
+]

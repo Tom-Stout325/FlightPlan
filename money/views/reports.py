@@ -13,13 +13,124 @@ from django.shortcuts import redirect, render
 from django.template.loader import get_template, render_to_string
 from django.utils import timezone
 from django.utils.timezone import now
+from django.conf import settings
+from django.urls import reverse
 
-from weasyprint import HTML
+from weasyprint import HTML, CSS
 
 from ..forms import *
 from ..models import *
 
 
+
+from django.conf import settings
+from django.urls import reverse
+
+REPORT_CARDS = [
+    {
+        "key": "financial_statement",
+        "title": "Financial Statement",
+        "subtitle": "View income, expenses, and net profit by sub-category.",
+        "url_name": "money:financial_statement",
+        "icon": "fa-solid fa-chart-line",
+        "bg_color": "#f0f8ff",
+        "text_class": "text-primary",
+    },
+    {
+        "key": "category_summary",
+        "title": "Category Summary",
+        "subtitle": "Summary of income and expenses by category and sub-category.",
+        "url_name": "money:category_summary",
+        "icon": "fa-solid fa-folder-tree",
+        "bg_color": "#eaf6ea",
+        "text_class": "text-success",
+    },
+    {
+        "key": "invoice_summary",
+        "title": "Invoice Summary",
+        "subtitle": "Filter by year; see invoice totals, expenses, net and taxable income.",
+        "url_name": "money:invoice_summary",
+        "icon": "fa-solid fa-file-invoice-dollar",
+        "bg_color": "#fff8e6",
+        "text_class": "text-warning",
+    },
+    {
+        "key": "form_4797",
+        "title": "Form 4797",
+        "subtitle": "Report gains from the sale of business property and equipment.",
+        "url_name": "money:form_4797",
+        "icon": "fa-solid fa-boxes-packing",
+        "bg_color": "#ffffff",
+        "text_class": "text-danger",
+    },
+    {
+        "key": "recurring_transactions",
+        "title": "Recurring Transactions",
+        "subtitle": "Review Monthly Recurring Transactions",
+        "url_name": "money:recurring_transaction_list",
+        "icon": "fa-solid fa-tags",
+        "bg_color": "#fff5f5",
+        "text_class": "text-info",
+    },
+    {
+        "key": "nhra_summary",
+        "title": "NHRA Summary",
+        "subtitle": "Compare NHRA income and expenses across years.",
+        "url_name": "money:nhra_summary_report",
+        "icon": "fa-solid fa-tags",
+        "bg_color": "#fff5f5",
+        "text_class": "text-danger",
+    },
+    {
+        "key": "events",
+        "title": "Events",
+        "subtitle": "Analyze events saved on the system.",
+        "url_name": "money:event_list",
+        "icon": "fa-solid fa-plane-departure",
+        "bg_color": "#eaf3fb",
+        "text_class": "text-primary",
+    },
+    {
+        "key": "receipts",
+        "title": "Receipts",
+        "subtitle": "Analyze receipts saved on the system.",
+        "url_name": "money:receipts_list",
+        "icon": "fa-solid fa-plane-departure",
+        "bg_color": "#eaf3fb",
+        "text_class": "text-primary",
+    },
+        {
+        "key": "travel_expenses",
+        "title": "Travel Expenses",
+        "subtitle": "Analyze receipts travel expenses for events.",
+        "url_name": "money:travel_expense_analysis",
+        "icon": "fa-solid fa-plane-departure",
+        "bg_color": "#eaf3fb",
+        "text_class": "text-primary",
+    },
+]
+
+
+
+@login_required
+def reports_page(request):
+    enabled_keys = getattr(settings, "ENABLED_REPORTS", None)
+
+    cards = []
+    for card in REPORT_CARDS:
+        # If ENABLED_REPORTS is defined, only include those keys
+        if enabled_keys is not None and card["key"] not in enabled_keys:
+            continue
+
+        c = card.copy()
+        c["url"] = reverse(card["url_name"])
+        cards.append(c)
+
+    context = {
+        "current_page": "reports",
+        "report_cards": cards,
+    }
+    return render(request, "money/reports/reports.html", context)
 
 
 
@@ -66,7 +177,7 @@ def nhra_summary(request):
 
 
 @login_required
-def race_expense_report(request):
+def nhra_summary_report(request):
     current_year = now().year
     years = [current_year, current_year - 1, current_year - 2]
 
@@ -131,7 +242,7 @@ def race_expense_report(request):
         'current_page': 'reports',
     }
 
-    return render(request, 'money/reports/race_expense_report.html', context)
+    return render(request, 'money/reports/nhra_summary_report.html', context)
 
 
 
@@ -233,7 +344,7 @@ def travel_expense_analysis_pdf(request):
 
 
 @login_required
-def race_expense_report_pdf(request):
+def nhra_summary_report_pdf(request):
     current_year = now().year
     years = [current_year, current_year - 1, current_year - 2]
     travel_subcategories = [
@@ -271,24 +382,19 @@ def race_expense_report_pdf(request):
         'current_page': 'reports'
     }
     try:
-        template = get_template('money/reports/race_expense_report.html')
+        template = get_template('money/reports/nhra_summary_report.html')
         html_string = template.render(context)
         html_string = "<style>@page { size: 8.5in 11in; margin: 1in; }</style>" + html_string
         with tempfile.NamedTemporaryFile(delete=True) as output:
             HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf(output.name)
             output.seek(0)
             response = HttpResponse(content_type='application/pdf')
-            response['Content-Disposition'] = 'attachment; filename="race_expense_report.pdf"'
+            response['Content-Disposition'] = 'attachment; filename="nhra_summary_report.pdf"'
             response.write(output.read())
         return response
     except Exception as e:
         logger.error(f"Error generating PDF for user {request.user.id}: {e}")
         messages.error(request, "Error generating PDF.")
-        return redirect('money:race_expense_report')
+        return redirect('money:nhra_summary_report')
 
 
-
-@login_required
-def reports_page(request):
-    context = {'current_page': 'reports'}
-    return render(request, 'money/reports/reports.html', context)

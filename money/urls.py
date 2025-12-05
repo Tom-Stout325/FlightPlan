@@ -50,8 +50,8 @@ from .views.clients import (
 from .views.reports import (
     reports_page,
     nhra_summary,
-    race_expense_report,
-    race_expense_report_pdf,
+    nhra_summary_report,
+    nhra_summary_report_pdf,
     travel_expense_analysis,
     travel_expense_analysis_pdf,
 )
@@ -156,8 +156,8 @@ urlpatterns = [
     path("category-summary/", category_summary, name="category_summary"),
     path("money/category-summary/pdf/", category_summary_pdf, name="category_summary_pdf"),
     path("nhra-summary/", nhra_summary, name="nhra_summary"),
-    path("race-expense-report/", race_expense_report, name="race_expense_report"),
-    path("race-expense-report/pdf/", race_expense_report_pdf, name="race_expense_report_pdf"),
+    path("race-expense-report/", nhra_summary_report, name="nhra_summary_report"),
+    path("race-expense-report/pdf/", nhra_summary_report_pdf, name="nhra_summary_report_pdf"),
     path("reports/travel-analysis/", travel_expense_analysis, name="travel_expense_analysis"),
     path("reports/travel-analysis/pdf/", travel_expense_analysis_pdf, name="travel_expense_analysis_pdf"),
     path("schedule-c/", schedule_c_summary, name="schedule_c_summary"),

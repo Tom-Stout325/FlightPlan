@@ -14,3 +14,18 @@ DEBUG = True
 ALLOWED_HOSTS = ["*"]
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+
+
+ENABLED_REPORTS = [
+    "financial_statement",
+    "form_4797",
+    "category_summary",
+    "nhra_summary",
+    "nhra_summary_report",
+    "travel_expense_analysis",
+    "schedule_c",
+    "receipts",
+    "invoice_summary",
+    "travel_expenses",
+]

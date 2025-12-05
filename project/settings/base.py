@@ -4,6 +4,8 @@ import os
 from django.contrib.messages import constants as messages
 
 
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
 
 # Set base directory first
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -62,6 +64,7 @@ INSTALLED_APPS = [
     'pilot',
     'help',
     'money',
+    'airspace',
 ]
 
 MIDDLEWARE = [

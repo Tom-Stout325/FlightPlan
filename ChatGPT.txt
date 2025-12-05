@@ -1,0 +1,41 @@
+My GitHub Repo is https://github.com/Tom-Stout325/FlightPlan.git 
+Heroku app for airborne is flighplan-airborne 
+app for skyguy is flightplan-skyguy
+
+Makefile commands:
+# Push local changes to GitHub
+push-github:
+	git add .
+	git commit -m "update"
+	git push origin main
+
+# Deploy to Airborne Images (flightplan-airborne)
+# make deploy-airborne
+deploy-airborne: push-github
+	git push airborne main
+
+# Deploy to SkyGuy (flightplan-skyguy)
+# make deploy-skyguy
+deploy-skyguy: push-github
+	git push skyguy main
+
+
+
+
+
+Make the form a multi part sectional form.  
+
+1.  Operation Overview
+		Timeframe dropdown needs to allow for multiple selections
+
+2.  Location & Airspace Details
+	Later:  user enters the address and chatGPT looks up the coordinates and auto-fills:
+	 Latitude and Longitude
+	 Nearest Airport ICAO
+	 Class of Airspace
+
+3.  Operational Description and existing waivers
+	
+
+
+Find a way to populate safety features

@@ -117,6 +117,55 @@
           </ul>
         </li>
 
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="airspaceDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            Airspace Portal
+          </a>
+          <ul class="dropdown-menu" aria-labelledby="airspaceDropdown">
+              <li>
+              <a class="dropdown-item" href="{% url 'airspace:portal_home' %}">
+                💰 AirSpace Portal
+              </a>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+
+            <!-- Waiver Helper -->
+            <li>
+              <a class="dropdown-item d-flex align-items-center" href="{% url 'airspace:waiver' %}">
+                <i class="fa-solid fa-book-open me-2 text-primary"></i>
+                Waiver Helper
+              </a>
+            </li>
+
+            <!-- Waiver Form -->
+            <li>
+              <a class="dropdown-item d-flex align-items-center" href="{% url 'airspace:waiver_form' %}">
+                <i class="fa-solid fa-file-pen me-2 text-primary"></i>
+                Waiver Form
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item d-flex align-items-center" href="{% url 'airspace:conops_list' %}">
+                <i class="fa-solid fa-file-pen me-2 text-primary"></i>
+                CONOPS List
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item d-flex align-items-center" href="{% url 'airspace:waiver_list' %}">
+                <i class="fa-solid fa-file-pen me-2 text-primary"></i>
+                Waiver List waiver_planning_new
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item d-flex align-items-center" href="{% url 'airspace:waiver_list' %}">
+                <i class="fa-solid fa-file-pen me-2 text-primary"></i>
+                Waiver Planning
+              </a>
+            </li>
+          </ul>
+        </li>
+
+
         {# Optional: keep Pilot Portal as its own nav item #}
         <li class="nav-item">
           <a class="nav-link" href="{% url 'pilot:profile' %}">Pilot Portal</a>
