@@ -8,20 +8,11 @@ from django.core.exceptions import ValidationError
 
 
 class Equipment(models.Model):
-    EQUIPMENT_TYPE_CHOICES = [
-        ('Drone', 'Drone'),
-        ('Controller', 'Controller'),
-        ('Battery', 'Battery'),
-        ('Charger', 'Charger'),
-        ('Accessory', 'Accessory'),
-        ('Other', 'Other'),
-    ]
-
     ALLOWED_FILE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'pdf']
 
     id                     = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name                   = models.CharField(max_length=200)
-    equipment_type         = models.CharField(max_length=50, choices=EQUIPMENT_TYPE_CHOICES)
+    equipment_type         = models.CharField(max_length=50, choices=(("Drone", "Drone"),("Battery", "Battery"),("Controller", "Controller"),("Other", "Other"),),default="Drone",)
     brand                  = models.CharField(max_length=100, blank=True)
     model                  = models.CharField(max_length=200, blank=True)
     serial_number          = models.CharField(max_length=200, blank=True)
@@ -35,6 +26,14 @@ class Equipment(models.Model):
     deducted_full_cost     = models.BooleanField(default=True)
     active                 = models.BooleanField(default="True")
     notes                  = models.TextField(blank=True)
+    drone_safety_profile = models.ForeignKey(
+        "equipment.DroneSafetyProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="equipment_items",
+        help_text="If set, this links this piece of equipment to a known safety profile.",
+    )
 
 
     def is_drone(self):
