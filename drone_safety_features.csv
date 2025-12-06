@@ -1,0 +1,182 @@
+make,model,year,category,safety_feature,description
+DJI,Mavic 4 Pro,2024,Camera Drone,Omnidirectional Obstacle Sensing,Detects obstacles in all directions using wide-angle and tele cameras.
+DJI,Mavic 4 Pro,2024,Camera Drone,Advanced Return-To-Home,Automatically returns to home point with route optimization.
+DJI,Mavic 4 Pro,2024,Camera Drone,APAS 6.0,Actively avoids obstacles during flight in any direction.
+DJI,Mavic 4 Pro,2024,Camera Drone,Low-Battery Auto Landing,Initiates auto-landing when battery reaches critical levels.
+DJI,Mavic 4 Pro,2024,Camera Drone,GNSS + Vision Positioning,Uses GPS/Galileo/BeiDou and downward vision for accurate hovering.
+DJI,Mavic 4 Pro,2024,Camera Drone,Wind Resistance Level 7,Enhanced flight stability in strong winds.
+,,,,,
+DJI,Air 3,2023,Camera Drone,Omnidirectional Obstacle Sensing,Wide-angle binocular sensors provide full coverage.
+DJI,Air 3,2023,Camera Drone,Advanced RTH,Optimizes return path to avoid obstacles.
+DJI,Air 3,2023,Camera Drone,APAS 5.0,Automatically avoids obstacles during flight.
+DJI,Air 3,2023,Camera Drone,ADS-B In (AirSense),Receives aircraft ADS-B signals for increased awareness.
+DJI,Air 3,2023,Camera Drone,Low-Battery Auto Landing,Initiates landing when power becomes critically low.
+,,,,,
+DJI,Air 3S,2024,Camera Drone,Omnidirectional Obstacle Sensing,Full-direction sensing for obstacle avoidance.
+DJI,Air 3S,2024,Camera Drone,Advanced RTH,Safe automated return with obstacle bypass.
+DJI,Air 3S,2024,Camera Drone,APAS,Detects and avoids obstacles in real time.
+DJI,Air 3S,2024,Camera Drone,ADS-B In,Detects nearby aircraft equipped with ADS-B transmitters.
+DJI,Air 3S,2024,Camera Drone,Low-Battery Auto Landing,Automatic descent on critical battery levels.
+,,,,,
+DJI,Avata 2,2024,FPV / Cinewhoop,Integrated Propeller Guard,Provides impact protection in close-proximity flights.
+DJI,Avata 2,2024,FPV / Cinewhoop,Turtle Mode,Allows aircraft to flip upright after a crash.
+DJI,Avata 2,2024,FPV / Cinewhoop,Downward Vision Positioning,Improves stability when flying near the ground.
+DJI,Avata 2,2024,FPV / Cinewhoop,Low-Battery Auto Landing,Auto-landing at critical battery levels.
+DJI,Avata 2,2024,FPV / Cinewhoop,Signal Loss RTH,Initiates return if connection is lost.
+,,,,,
+DJI,Avata,2022,FPV / Cinewhoop,Propeller Guard Frame,Protects props and reduces crash severity.
+DJI,Avata,2022,FPV / Cinewhoop,Turtle Mode,Aircraft can flip itself upright after a collision.
+DJI,Avata,2022,FPV / Cinewhoop,Downward Vision Sensing,Assists hovering and low-altitude stability.
+DJI,Avata,2022,FPV / Cinewhoop,Low-Battery Protection,Initiates auto-landing during critically low power.
+DJI,Avata,2022,FPV / Cinewhoop,Emergency Brake,Allows abrupt stop during high-speed FPV flight.
+,,,,,
+DJI,Mini 4 Pro,2023,Mini Drone,Omnidirectional Obstacle Sensing,Full-angle protection in a sub-250g platform.
+DJI,Mini 4 Pro,2023,Mini Drone,Advanced RTH,Precise and optimized return-to-home.
+DJI,Mini 4 Pro,2023,Mini Drone,APAS,Automatically avoids obstacles during normal flight.
+DJI,Mini 4 Pro,2023,Mini Drone,Low-Battery Auto Landing,Autonomous landing when necessary.
+DJI,Mini 4 Pro,2023,Mini Drone,GNSS + Downward Vision,High-precision positioning.
+,,,,,
+DJI,Mini 3 Pro,2022,Mini Drone,Tri-Directional Obstacle Sensing,Forward + backward + downward sensors.
+DJI,Mini 3 Pro,2022,Mini Drone,Advanced RTH,Returns home with intelligent pathing.
+DJI,Mini 3 Pro,2022,Mini Drone,Low-Battery Auto Landing,Automatically lands when critically low.
+DJI,Mini 3 Pro,2022,Mini Drone,Downward Vision Positioning,Improves stability and landing accuracy.
+,,,,,
+DJI,Mini 3,2022,Mini Drone,Downward Vision System,Stabilizes low-altitude flight.
+DJI,Mini 3,2022,Mini Drone,RTH,Returns home on signal loss or command.
+DJI,Mini 3,2022,Mini Drone,Low-Battery Protection,Auto landing when battery is critically low.
+,,,,,
+DJI,Air 2S,2021,Camera Drone,Upward + Forward + Downward Sensors,Provides tri-directional sensing.
+DJI,Air 2S,2021,Camera Drone,APAS 4.0,Activates automatic obstacle avoidance.
+DJI,Air 2S,2021,Camera Drone,ADS-B In (AirSense),Receives signals from nearby aircraft.
+DJI,Air 2S,2021,Camera Drone,Advanced RTH,Intelligent path planning to home point.
+DJI,Air 2S,2021,Camera Drone,Low-Battery Auto Landing,Safe descent on critical battery.
+,,,,,
+DJI,Mavic 3,2021,Camera Drone,Omnidirectional Obstacle Sensing,Full 360-degree obstacle detection.
+DJI,Mavic 3,2021,Camera Drone,APAS 5.0,Active avoidance and bypass.
+DJI,Mavic 3,2021,Camera Drone,Advanced RTH,Route-planned home return.
+DJI,Mavic 3,2021,Camera Drone,Low-Battery Auto Landing,Automatic critical landing protection.
+,,,,,
+DJI,Mavic 3 Pro,2023,Camera Drone,Omnidirectional Obstacle Sensing,Universal sensing around aircraft.
+DJI,Mavic 3 Pro,2023,Camera Drone,APAS 5.0,Comprehensive obstacle avoidance.
+DJI,Mavic 3 Pro,2023,Camera Drone,Advanced RTH,Smart retrace if disconnected.
+DJI,Mavic 3 Pro,2023,Camera Drone,Low-Battery Auto Landing,Descent during critical battery state.
+,,,,,
+DJI,Inspire 3,2023,Cinema Drone,Omnidirectional Obstacle Sensing,Full 360 sensors including upward and lateral.
+DJI,Inspire 3,2023,Cinema Drone,Dual-Battery Redundancy,Continues flying if one battery fails.
+DJI,Inspire 3,2023,Cinema Drone,High-Precision RTK,Enhanced geolocation accuracy.
+DJI,Inspire 3,2023,Cinema Drone,Advanced RTH,Smart path return to home.
+DJI,Inspire 3,2023,Cinema Drone,Obstacle Bypass,Intelligent reroute during RTH.
+,,,,,
+DJI,FPV,2021,FPV Drone,Emergency Brake & Hover,Stops drone instantly even at high speed.
+DJI,FPV,2021,FPV Drone,Turtle Mode,Self-righting after flip or crash.
+DJI,FPV,2021,FPV Drone,Downward Vision Positioning,Allows stable hover when not in manual.
+DJI,FPV,2021,FPV Drone,RTH,Automatic return on signal loss.
+,,,,,
+Autel,Evo Lite+,2022,Camera Drone,Obstacle Avoidance (3-Directional),"Front rear, and downward sensors assist with detection"
+Autel,Evo Lite+,2022,Camera Drone,Dynamic Track 2.1,Automatically follows subjects with obstacle awareness.
+Autel,Evo Lite+,2022,Camera Drone,Advanced RTH,Returns home with optimized pathing.
+Autel,Evo Lite+,2022,Camera Drone,Low-Battery Auto Landing,Initiates landing when battery becomes critically low.
+Autel,Evo Lite+,2022,Camera Drone,Vision Positioning System,Downward sensors improve hovering accuracy.
+,,,,,
+Autel,Evo Lite,2022,Camera Drone,Obstacle Avoidance (3-Directional),"Provides frontal, rear and downward sensing."
+Autel,Evo Lite,2022,Camera Drone,Dynamic Track 2.1,Tracks subject with predictive algorithms.
+Autel,Evo Lite,2022,Camera Drone,RTH,Returns home on command or signal loss.
+Autel,Evo Lite,2022,Camera Drone,Low-Battery Auto Landing,Initiates automatic descent during low battery.
+Autel,Evo Lite,2022,Camera Drone,Downward Vision System,Assists in stable takeoff/landing.
+,,,,,
+Autel,Evo Nano+,2022,Mini Drone,Obstacle Avoidance (3-Way),"Forward, backward and downward detection."
+Autel,Evo Nano+,2022,Mini Drone,RTH,Safe return on low battery or signal loss.
+Autel,Evo Nano+,2022,Mini Drone,Low-Battery Protection,Auto landing when battery is critically low.
+Autel,Evo Nano+,2022,Mini Drone,Precision Hover,Downward vision ensures stable hovering.
+,,,,,
+Autel,Evo Nano,2022,Mini Drone,Obstacle Avoidance (3-Way),Basic obstacle sensing for small aircraft.
+Autel,Evo Nano,2022,Mini Drone,RTH,Automated return-to-home.
+Autel,Evo Nano,2022,Mini Drone,Low-Battery Auto Landing,Automatically lands at critical battery.
+Autel,Evo Nano,2022,Mini Drone,Downward Vision,Improves landing precision.
+,,,,,
+Autel,Evo II Pro V3,2022,Camera Drone,Omnidirectional Obstacle Sensing,Full 360-degree sensing via multiple cameras.
+Autel,Evo II Pro V3,2022,Camera Drone,ADS-B Receiver,Provides awareness of nearby manned aircraft.
+Autel,Evo II Pro V3,2022,Camera Drone,RTH with Obstacle Avoidance,Safe path back to home.
+Autel,Evo II Pro V3,2022,Camera Drone,Low-Battery Auto Landing,Descends automatically on critical power.
+Autel,Evo II Pro V3,2022,Camera Drone,Vision Positioning System,Downward sensors for indoor/low-altitude hover.
+,,,,,
+Autel,Evo II Dual 640T V3,2022,Thermal Drone,Omnidirectional Obstacle Sensing,360-degree obstacle detection.
+Autel,Evo II Dual 640T V3,2022,Thermal Drone,ADS-B Receiver,Provides airspace awareness around aircraft.
+Autel,Evo II Dual 640T V3,2022,Thermal Drone,RTH,Safe return-to-home on command or disconnect.
+Autel,Evo II Dual 640T V3,2022,Thermal Drone,Low-Battery Auto Landing,Initiates emergency landing.
+Autel,Evo II Dual 640T V3,2022,Thermal Drone,Downward Vision Positioning,Allows accurate hovering without GPS.
+,,,,,
+Autel,Evo II Enterprise V3,2022,Enterprise Drone,Omnidirectional Obstacle Sensing,Full obstacle detection for enterprise ops.
+Autel,Evo II Enterprise V3,2022,Enterprise Drone,ADS-B Receiver,Situational awareness of nearby aircraft.
+Autel,Evo II Enterprise V3,2022,Enterprise Drone,RTH with Obstacle Avoidance,Safe directional return.
+Autel,Evo II Enterprise V3,2022,Enterprise Drone,Low-Battery Auto Landing,Automatically lands at critical battery.
+Autel,Evo II Enterprise V3,2022,Enterprise Drone,Vision Positioning System,Assists with precision hovering.
+,,,,,
+Autel,Dragonfish Lite,2021,VTOL Enterprise,Multiple Redundant Sensors,Uses multiple IMUs/barometers for stability.
+Autel,Dragonfish Lite,2021,VTOL Enterprise,Obstacle Avoidance,Forward radar-assisted detection.
+Autel,Dragonfish Lite,2021,VTOL Enterprise,RTH,Automatic return on signal loss.
+Autel,Dragonfish Lite,2021,VTOL Enterprise,Autonomous Emergency Landing,Engages during critical failures.
+Autel,Dragonfish Lite,2021,VTOL Enterprise,GPS + RTK Positioning,High precision navigation.
+,,,,,
+Autel,Dragonfish Standard,2021,VTOL Enterprise,Redundant Flight Control,Multiple redundancies for safe operations.
+Autel,Dragonfish Standard,2021,VTOL Enterprise,Obstacle Avoidance,Radar-based sensing.
+Autel,Dragonfish Standard,2021,VTOL Enterprise,RTH,Return-to-home on disconnect or command.
+Autel,Dragonfish Standard,2021,VTOL Enterprise,Emergency Landing Protocols,Automated fault-response sequence.
+Autel,Dragonfish Standard,2021,VTOL Enterprise,RTK Ready,Supports real-time kinematic positioning.
+,,,,,
+DJI,Matrice 350 RTK,2023,Enterprise Drone,6-Directional Obstacle Sensing,Sensors on all sides enable comprehensive obstacle detection.
+DJI,Matrice 350 RTK,2023,Enterprise Drone,Triple-Channel GNSS,High precision positioning even in challenging environments.
+DJI,Matrice 350 RTK,2023,Enterprise Drone,ADS-B Receiver (AirSense),Detects signals from nearby aircraft.
+DJI,Matrice 350 RTK,2023,Enterprise Drone,Advanced RTH,Optimizes return path with obstacle avoidance.
+DJI,Matrice 350 RTK,2023,Enterprise Drone,Redundant Flight Systems,Multiple IMUs/barometers support fail-safe flight.
+DJI,Matrice 350 RTK,2023,Enterprise Drone,Low-Battery Auto Landing,Initiates emergency descent at critical power.
+,,,,,
+DJI,Matrice 300 RTK,2020,Enterprise Drone,6-Directional Obstacle Sensing,Complete obstacle protection with visual & IR sensors.
+DJI,Matrice 300 RTK,2020,Enterprise Drone,AES-R Radar Optional,Enhances detection in low-visibility conditions.
+DJI,Matrice 300 RTK,2020,Enterprise Drone,ADS-B Receiver (AirSense),Alerts pilot to nearby aircraft.
+DJI,Matrice 300 RTK,2020,Enterprise Drone,Advanced RTH,Obstacle-aware return routing.
+DJI,Matrice 300 RTK,2020,Enterprise Drone,Triple Redundant IMUs,Ensures stable flight through redundancy.
+DJI,Matrice 300 RTK,2020,Enterprise Drone,Low-Battery Auto Landing,Auto-landing during critical battery.
+,,,,,
+DJI,Matrice 30,2022,Enterprise Drone,4-Directional Obstacle Sensing,Detects obstacles above/below and front/back.
+DJI,Matrice 30,2022,Enterprise Drone,ADS-B Receiver,Provides manned aircraft awareness.
+DJI,Matrice 30,2022,Enterprise Drone,Advanced RTH,Safe automated return.
+DJI,Matrice 30,2022,Enterprise Drone,Redundant Control Systems,Dual IMUs & batteries increase safety.
+DJI,Matrice 30,2022,Enterprise Drone,Low-Battery Auto Landing,Automatic emergency landing.
+,,,,,
+DJI,Matrice 30T,2022,Enterprise Drone,4-Directional Obstacle Sensing,360-degree detection around the aircraft.
+DJI,Matrice 30T,2022,Enterprise Drone,Thermal Overheat Protection,Prevents excessive thermal load on sensors.
+DJI,Matrice 30T,2022,Enterprise Drone,ADS-B Receiver,Situational awareness for aircraft detection.
+DJI,Matrice 30T,2022,Enterprise Drone,Advanced RTH,Obstacle-aware automated return.
+DJI,Matrice 30T,2022,Enterprise Drone,Redundant Sensors,Dual IMUs for flight safety.
+DJI,Matrice 30T,2022,Enterprise Drone,Low-Battery Auto Landing,Initiates descent when critically low.
+,,,,,
+DJI,Mavic 3 Enterprise,2022,Enterprise Drone,Omnidirectional Obstacle Sensing,Full 360-degree detection for commercial missions.
+DJI,Mavic 3 Enterprise,2022,Enterprise Drone,ADS-B Receiver,Detects nearby aviation traffic.
+DJI,Mavic 3 Enterprise,2022,Enterprise Drone,Advanced RTH,Smart retrace to avoid obstacles.
+DJI,Mavic 3 Enterprise,2022,Enterprise Drone,Low-Battery Auto Landing,Initiates auto landing at critical levels.
+DJI,Mavic 3 Enterprise,2022,Enterprise Drone,APAS,Intelligent obstacle avoidance.
+,,,,,
+DJI,Mavic 3 Thermal,2022,Enterprise Drone,Omnidirectional Obstacle Sensing,Complete obstacle coverage.
+DJI,Mavic 3 Thermal,2022,Enterprise Drone,Advanced RTH,Returns home safely.
+DJI,Mavic 3 Thermal,2022,Enterprise Drone,Low-Battery Auto Landing,Critical battery protection.
+DJI,Mavic 3 Thermal,2022,Enterprise Drone,GNSS + Downward Vision,Precision landing and hovering.
+DJI,Mavic 3 Thermal,2022,Enterprise Drone,Thermal System Protection,Prevents overheating.
+,,,,,
+DJI,Mavic 3 Multispectral,2022,Enterprise Drone,Omnidirectional Obstacle Sensing,Full coverage for agricultural/mapping missions.
+DJI,Mavic 3 Multispectral,2022,Enterprise Drone,RTK Ready,Supports centimeter-level accuracy.
+DJI,Mavic 3 Multispectral,2022,Enterprise Drone,Advanced RTH,Avoids obstacles during automated return.
+DJI,Mavic 3 Multispectral,2022,Enterprise Drone,Low-Battery Auto Landing,Initiates descent.
+DJI,Mavic 3 Multispectral,2022,Enterprise Drone,Spectral Sensor Overheat Protection,Prevents damage to imaging sensors.
+,,,,,
+DJI,Phantom 4 RTK,2020,Enterprise Drone,Obstacle Avoidance (Front/Rear),Basic front and rear detection.
+DJI,Phantom 4 RTK,2020,Enterprise Drone,Downward Vision System,Ensures stable landing/hover.
+DJI,Phantom 4 RTK,2020,Enterprise Drone,RTK Positioning,High-precision mapping accuracy.
+DJI,Phantom 4 RTK,2020,Enterprise Drone,RTH,Automatic return home.
+DJI,Phantom 4 RTK,2020,Enterprise Drone,Low-Battery Auto Landing,Auto descent on critical battery.
+,,,,,
+DJI,Phantom 4 Multispectral,2020,Enterprise Drone,Obstacle Avoidance (Forward/Rear),Detects obstacles for safer flight.
+DJI,Phantom 4 Multispectral,2020,Enterprise Drone,Downward Vision Positioning,Improves landing accuracy.
+DJI,Phantom 4 Multispectral,2020,Enterprise Drone,RTH,Returns automatically on signal loss.
+DJI,Phantom 4 Multispectral,2020,Enterprise Drone,Low-Battery Auto Landing,Initiates emergency landing.
+DJI,Phantom 4 Multispectral,2020,Enterprise Drone,RTK Ready,Supports RTK module for mapping precision.

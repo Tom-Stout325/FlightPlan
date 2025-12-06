@@ -251,6 +251,7 @@ class AirspaceWaiverForm(forms.ModelForm):
 
 
 
+
 class WaiverPlanningForm(forms.ModelForm):
     """
     Step 1 – planning form that collects non-FAA waiver info
@@ -369,20 +370,11 @@ class WaiverPlanningForm(forms.ModelForm):
         # Drone labels: "Brand Model — FAA X, SN Y"
         def aircraft_label(obj):
             parts = []
-            if obj.brand:
-                parts.append(obj.brand)
-            if obj.model:
-                parts.append(obj.model)
+            if obj.name:
+                parts.append(obj.name)
+        
             main = " ".join(parts) if parts else obj.name
 
-            extra = []
-            if obj.faa_number:
-                extra.append(f"FAA {obj.faa_number}")
-            if obj.serial_number:
-                extra.append(f"SN {obj.serial_number}")
-
-            if extra:
-                return f"{main} — {', '.join(extra)}"
             return main
 
         self.fields["aircraft"].label_from_instance = aircraft_label

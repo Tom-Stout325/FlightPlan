@@ -55,3 +55,72 @@ class Equipment(models.Model):
         ordering = ['equipment_type', 'name']
         verbose_name_plural = "Equipment"
         db_table = "flightplan_equipment"
+
+
+
+
+class DroneSafetyProfile(models.Model):
+    BRAND_CHOICES = [
+        ("DJI", "DJI"),
+        ("Autel", "Autel"),
+        ("Skydio", "Skydio"),
+        ("Other", "Other"),
+    ]
+
+    brand = models.CharField(
+        max_length=50,
+        choices=BRAND_CHOICES,
+        help_text="Manufacturer name, e.g. DJI, Autel.",
+    )
+
+    model_name = models.CharField(
+        max_length=100,
+        help_text="Short model name, e.g. 'Mavic 4 Pro', 'EVO II Pro'.",
+    )
+
+    full_display_name = models.CharField(
+        max_length=150,
+        unique=True,
+        help_text="Friendly full name, e.g. 'DJI Mavic 4 Pro'.",
+    )
+
+    year_released = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text="Approximate year the drone was released (optional).",
+    )
+
+    is_enterprise = models.BooleanField(
+        default=False,
+        help_text="Check if this is an Enterprise / commercial series aircraft.",
+    )
+
+    safety_features = models.TextField(
+        help_text=(
+            "Plain text or bullet list of safety features. "
+            "This will be used to pre-fill waiver safety sections."
+        ),
+    )
+
+    aka_names = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text=(
+            "Optional comma-separated alternate names, e.g. "
+            "'M4P, Mavic 4 Pro, Mavic 4'. Used when matching user input."
+        ),
+    )
+
+    active = models.BooleanField(
+        default=True,
+        help_text="Uncheck to hide this profile from suggestions without deleting it.",
+    )
+
+    class Meta:
+        ordering = ["brand", "model_name"]
+        unique_together = ("brand", "model_name")
+        verbose_name = "Drone safety profile"
+        verbose_name_plural = "Drone safety profiles"
+
+    def __str__(self) -> str:
+        return self.full_display_name or f"{self.brand} {self.model_name}"

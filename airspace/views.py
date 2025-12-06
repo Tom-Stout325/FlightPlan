@@ -230,7 +230,7 @@ def waiver_planning_new(request):
     else:
         form = WaiverPlanningForm(user=request.user)
 
-    # Build lightweight data for JS auto-fill
+ 
     # Build lightweight data for JS auto-fill
     pilot_qs = form.fields["pilot_profile"].queryset
     pilot_profile_data = []
