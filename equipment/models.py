@@ -96,7 +96,6 @@ class DroneSafetyProfile(models.Model):
         help_text="Approximate release year (optional).",
     )
 
-
     is_enterprise = models.BooleanField(
         default=False,
         help_text="True if this is an enterprise / commercial platform.",

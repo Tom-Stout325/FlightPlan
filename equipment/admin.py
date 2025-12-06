@@ -12,43 +12,16 @@ class EquipmentAdmin(admin.ModelAdmin):
 
 
 
-
-
 @admin.register(DroneSafetyProfile)
 class DroneSafetyProfileAdmin(admin.ModelAdmin):
     list_display = (
         "full_display_name",
         "brand",
-        "released_year",
+        "year_released",
+        "is_enterprise",
         "active",
     )
-    list_filter = ("brand", "active", "released_year")
-    search_fields = (
-        "full_display_name",
-        "model_name",
-        "aka_names",
-        "safety_features",
-    )
-    ordering = ("brand", "model_name")
-    list_editable = ("active",)  
-
-    fieldsets = (
-        ("Basic Info", {
-            "fields": ("brand", "model_name", "full_display_name", "active"),
-        }),
-        ("Timeline", {
-            "fields": ("released_year", "discontinued_year"),
-        }),
-        ("Names / Aliases", {
-            "fields": ("aka_names",),
-        }),
-        ("Safety & Notes", {
-            "fields": ("safety_features", "notes"),
-        }),
-        ("Metadata", {
-            "fields": ("created_at", "updated_at"),
-            "classes": ("collapse",),
-        }),
-    )
-
-    readonly_fields = ("created_at", "updated_at")
+    list_filter = ("brand", "active", "is_enterprise")
+    search_fields = ("full_display_name", "model_name", "aka_names", "safety_features")
+    # IMPORTANT: don't reference fields that don't exist anymore
+    readonly_fields = ()  # or just remove this attribute entirely
