@@ -147,6 +147,8 @@ class AirspaceWaiver(models.Model):
 
 
 
+
+
 class WaiverPlanning(models.Model):
     """
     Holds planning details that are not part of the FAA waiver form itself but
