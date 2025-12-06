@@ -7,6 +7,10 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import get_template, render_to_string
 from django.templatetags.static import static 
 from django.db.models import Count, Sum
+import json
+from django.http import JsonResponse, HttpRequest
+from django.views.decorators.http import require_GET
+from .utils import find_best_drone_profile
 
 try:
     from weasyprint import HTML, CSS
@@ -201,3 +205,31 @@ def export_equipment_csv(request):
 
     return response
 
+
+
+
+@login_required
+@require_GET
+def drone_profile_suggest_view(request: HttpRequest) -> JsonResponse:
+    """
+    GET /equipment/api/drone-suggest/?brand=DJI&name=Mavic+4+Pro
+
+    Returns a simple JSON suggestion, or {"found": false} if nothing.
+    """
+    brand = request.GET.get("brand") or ""
+    name = request.GET.get("name") or ""
+
+    profile = find_best_drone_profile(brand, name)
+
+    if not profile:
+        return JsonResponse({"found": False})
+
+    return JsonResponse(
+        {
+            "found": True,
+            "id": profile.id,
+            "full_display_name": profile.full_display_name,
+            "brand": profile.brand,
+            "safety_features": profile.safety_features,
+        }
+    )

@@ -101,6 +101,102 @@
   </form>
 </div>
 
+<form method="post" novalidate>
+  {% csrf_token %}
+
+  <!-- your usual form rendering -->
+  <!-- Example: -->
+  <div class="mb-3">
+    <label for="id_equipment_type" class="form-label">Equipment Type</label>
+    {{ form.equipment_type }}
+  </div>
+
+  <div class="mb-3">
+    <label for="id_name" class="form-label">Equipment Name</label>
+    {{ form.name }}
+    <div id="drone-name-helper" class="form-text text-muted small"></div>
+  </div>
+
+  <!-- Hidden FK field (if not rendered via form already) -->
+  <input type="hidden" id="id_drone_safety_profile" name="drone_safety_profile">
+
+  <button type="submit" class="btn btn-primary w-100">Save Equipment</button>
+</form>
+
+<script>
+  (function () {
+    const equipmentTypeField = document.getElementById("id_equipment_type");
+    const nameField = document.getElementById("id_name");
+    const safetyProfileField = document.getElementById("id_drone_safety_profile");
+    const helper = document.getElementById("drone-name-helper");
+
+    if (!equipmentTypeField || !nameField || !safetyProfileField) {
+      return;
+    }
+
+    async function checkDroneName() {
+      const type = equipmentTypeField.value;
+      if (type !== "Drone") {
+        helper.textContent = "";
+        safetyProfileField.value = "";
+        return;
+      }
+
+      const name = nameField.value.trim();
+      if (!name) {
+        return;
+      }
+
+
+      const brandField = document.getElementById("id_brand");
+      const brand = brandField ? brandField.value : "";
+
+      const params = new URLSearchParams({
+        name: name,
+        brand: brand,
+      });
+
+      try {
+        const response = await fetch("{% url 'equipment:drone_profile_suggest' %}?" + params.toString(), {
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+          },
+        });
+
+        if (!response.ok) {
+          console.error("Drone suggest API error", response.status);
+          return;
+        }
+
+        const data = await response.json();
+        if (!data.found) {
+          helper.textContent = "Your drone is not in our database. You’ll need to enter safety features manually in the waiver form.";
+          safetyProfileField.value = "";
+          return;
+        }
+
+        const msg = `Is this the correct drone: "${data.full_display_name}"?`;
+        const ok = window.confirm(msg);
+
+        if (ok) {
+          // Lock in our canonical name + FK
+          nameField.value = data.full_display_name;
+          safetyProfileField.value = data.id;
+          helper.textContent = "Matched known drone profile. Safety features will be available in waiver planning.";
+        } else {
+          helper.textContent = "Your drone is not in our database. You’ll need to enter safety features manually in the waiver form.";
+          safetyProfileField.value = "";
+        }
+      } catch (err) {
+        console.error("Error calling drone suggest API", err);
+      }
+    }
+
+    // Run this when the name field loses focus
+    nameField.addEventListener("blur", checkDroneName);
+  })();
+</script>
+
 <script>
   document.querySelectorAll('.drop-zone').forEach(zone => {
     const input = zone.querySelector('input');

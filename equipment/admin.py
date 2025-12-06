@@ -1,6 +1,7 @@
 from django.contrib import admin
 from .models import *
 from .forms import EquipmentForm
+from .models import DroneSafetyProfile
 
 
 
@@ -11,14 +12,15 @@ class EquipmentAdmin(admin.ModelAdmin):
 
 
 
+
+
 @admin.register(DroneSafetyProfile)
 class DroneSafetyProfileAdmin(admin.ModelAdmin):
     list_display = (
         "full_display_name",
         "brand",
-        "is_enterprise",
-        "year_released",
+        "released_year",
         "active",
     )
-    list_filter = ("brand", "is_enterprise", "active")
-    search_fields = ("full_display_name", "model_name", "aka_names")
+    list_filter = ("brand", "active")
+    search_fields = ("full_display_name", "model_name", "aka_names", "safety_features")

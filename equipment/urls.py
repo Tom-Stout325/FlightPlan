@@ -16,6 +16,7 @@ urlpatterns = [
     path("equipment/<uuid:pk>/delete/", views.equipment_delete, name="equipment_delete"),
     path("equipment/<uuid:pk>/pdf/", views.equipment_pdf_single, name="equipment_pdf_single"),
     path("equipment/export/csv/", views.export_equipment_csv, name="export_equipment_csv"),
+    path("api/drone-suggest/", views.drone_profile_suggest_view, name="drone_profile_suggest",),
 ]
 
 
