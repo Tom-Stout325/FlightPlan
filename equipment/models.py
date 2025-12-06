@@ -1,5 +1,4 @@
 from django.db import models
-from django.utils.text import slugify
 from django.core.validators import FileExtensionValidator
 import uuid
 from django.core.exceptions import ValidationError
@@ -24,7 +23,7 @@ class Equipment(models.Model):
     date_sold              = models.DateField(null=True, blank=True)
     sale_price             = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     deducted_full_cost     = models.BooleanField(default=True)
-    active                 = models.BooleanField(default="True")
+    active = models.BooleanField(default=True)
     notes                  = models.TextField(blank=True)
     drone_safety_profile = models.ForeignKey(
         "equipment.DroneSafetyProfile",
@@ -41,11 +40,16 @@ class Equipment(models.Model):
 
     def clean(self):
         super().clean()
+
+        # Non-drones cannot have FAA data
         if not self.is_drone():
             if self.faa_number:
                 raise ValidationError({'faa_number': 'FAA number is only applicable to drones.'})
             if self.faa_certificate:
                 raise ValidationError({'faa_certificate': 'FAA certificate is only applicable to drones.'})
+            if self.drone_safety_profile:
+                raise ValidationError({'drone_safety_profile': 'Safety profiles are only applicable to drones.'})
+
 
     def __str__(self):
         return f"{self.name} ({self.equipment_type})"

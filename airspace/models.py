@@ -146,11 +146,11 @@ class AirspaceWaiver(models.Model):
         verbose_name_plural = "Airspace Waivers"
 
 
+
 class WaiverPlanning(models.Model):
     """
-    Holds planning details that are not part of the FAA waiver form itself
-    but are critical for CONOPS: aircraft, pilot, hours, launch location,
-    and safety features.
+    Holds planning details that are not part of the FAA waiver form itself but
+    are critical for CONOPS: aircraft, pilot, hours, launch location, and safety features.
     """
 
     waiver = models.OneToOneField(
@@ -169,7 +169,7 @@ class WaiverPlanning(models.Model):
 
     # Aircraft
     aircraft = models.ForeignKey(
-        Equipment,
+        "equipment.Equipment",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -218,13 +218,18 @@ class WaiverPlanning(models.Model):
     )
     safety_features_notes = models.TextField(
         blank=True,
-        help_text="Key safety features, redundancies, or geofencing used for this operation.",
+        help_text=(
+            "Key safety features, redundancies, or geofencing used for this operation. "
+            "If a drone with a safety profile is selected, this will be auto-filled."
+        ),
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # Convenience helpers for CONOPS
+    # -------------------------
+    # Convenience helpers
+    # -------------------------
     def pilot_display_name(self) -> str:
         if self.pilot_name_manual:
             return self.pilot_name_manual
@@ -246,6 +251,26 @@ class WaiverPlanning(models.Model):
         if self.aircraft_manual:
             return self.aircraft_manual
         return ""
+
+    # -------------------------
+    # Safety profile autopopulate
+    # -------------------------
+    def apply_aircraft_safety_profile(self):
+        """
+        If an aircraft with a DroneSafetyProfile is selected and safety_features_notes
+        is currently empty/whitespace, copy the profile's safety_features in.
+
+        We *don't* overwrite existing notes so you can safely customize them.
+        """
+        if self.aircraft and not (self.safety_features_notes or "").strip():
+            profile = getattr(self.aircraft, "drone_safety_profile", None)
+            if profile and profile.safety_features:
+                self.safety_features_notes = profile.safety_features
+
+    def save(self, *args, **kwargs):
+        # Before saving, make sure we apply safety features if appropriate.
+        self.apply_aircraft_safety_profile()
+        super().save(*args, **kwargs)
 
     class Meta:
         ordering = ["-created_at"]
