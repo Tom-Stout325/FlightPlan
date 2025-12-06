@@ -90,12 +90,12 @@ class DroneSafetyProfile(models.Model):
         help_text="Canonical display name, e.g. 'DJI Mavic Air 2'.",
     )
 
-    # 🔧 IMPORTANT: name & type must match the DB created by 0003
-    year_released = models.PositiveIntegerField(
+    year_released = models.PositiveSmallIntegerField(
         null=True,
         blank=True,
         help_text="Approximate release year (optional).",
     )
+
 
     is_enterprise = models.BooleanField(
         default=False,
