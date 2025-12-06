@@ -7,10 +7,8 @@
       "model_name": "Mavic Air 2",
       "full_display_name": "DJI Mavic Air 2",
       "aka_names": "Mavic Air 2",
-      "released_year": 2020,
-      "discontinued_year": null,
+      "year_released": 2020,
       "safety_features": "• Advanced Return-to-Home (RTH)\n• Forward, backward, and downward obstacle sensing\n• GNSS positioning (GPS/GLONASS)\n• Intelligent flight battery with low-battery failsafe\n• Geofencing and no-fly zone warnings\n• APAS obstacle avoidance (Advanced Pilot Assistance System)",
-      "notes": "",
       "active": true
     }
   },
@@ -22,10 +20,8 @@
       "model_name": "Air 2S",
       "full_display_name": "DJI Air 2S",
       "aka_names": "Air 2S\nMavic Air 2S",
-      "released_year": 2021,
-      "discontinued_year": null,
+      "year_released": 2021,
       "safety_features": "• Four-direction obstacle sensing\n• Advanced Return-to-Home (RTH)\n• GNSS positioning (GPS/GLONASS/Galileo)\n• ADS-B In (AirSense) for nearby crewed aircraft awareness\n• Geofencing and no-fly zone warnings\n• APAS 4.0 obstacle avoidance\n• Intelligent flight battery with low-battery failsafe",
-      "notes": "",
       "active": true
     }
   },
@@ -37,10 +33,8 @@
       "model_name": "Mini 2",
       "full_display_name": "DJI Mini 2",
       "aka_names": "Mini 2",
-      "released_year": 2020,
-      "discontinued_year": null,
+      "year_released": 2020,
       "safety_features": "• Return-to-Home (RTH)\n• GNSS positioning (GPS/GLONASS)\n• Downward vision and GPS for precise hovering\n• Low-battery and signal-loss failsafe\n• Built-in altitude and distance limits\n• Geofencing and no-fly zone warnings",
-      "notes": "",
       "active": true
     }
   },
@@ -52,10 +46,8 @@
       "model_name": "Mini 3 Pro",
       "full_display_name": "DJI Mini 3 Pro",
       "aka_names": "Mini 3 Pro",
-      "released_year": 2022,
-      "discontinued_year": null,
+      "year_released": 2022,
       "safety_features": "• Tri-directional obstacle sensing (forward, backward, downward)\n• Advanced Return-to-Home (RTH)\n• GNSS positioning (multi-GNSS)\n• APAS 4.0 obstacle avoidance\n• Intelligent flight battery with low-battery failsafe\n• Geofencing and no-fly zone warnings\n• Built-in altitude and distance limits",
-      "notes": "",
       "active": true
     }
   },
@@ -67,10 +59,8 @@
       "model_name": "Mini 4 Pro",
       "full_display_name": "DJI Mini 4 Pro",
       "aka_names": "Mini 4 Pro",
-      "released_year": 2023,
-      "discontinued_year": null,
+      "year_released": 2023,
       "safety_features": "• Omnidirectional obstacle sensing\n• Advanced Return-to-Home (RTH)\n• GNSS positioning (multi-GNSS)\n• APAS obstacle avoidance\n• Intelligent flight battery with low-battery failsafe\n• Geofencing and no-fly zone warnings\n• Built-in altitude and distance limits\n• Advanced braking and hover on signal loss",
-      "notes": "",
       "active": true
     }
   },
@@ -82,10 +72,8 @@
       "model_name": "Mavic 3",
       "full_display_name": "DJI Mavic 3",
       "aka_names": "Mavic 3",
-      "released_year": 2021,
-      "discontinued_year": null,
+      "year_released": 2021,
       "safety_features": "• Omnidirectional obstacle sensing\n• Advanced Return-to-Home (RTH) with optimized route planning\n• GNSS positioning (GPS/GLONASS/Galileo)\n• APAS 5.0 obstacle avoidance\n• ADS-B In (AirSense) for crewed aircraft awareness\n• Intelligent flight battery with low-battery failsafe\n• Geofencing and no-fly zone warnings\n• Advanced flight logs and error reporting",
-      "notes": "",
       "active": true
     }
   },
@@ -97,10 +85,8 @@
       "model_name": "Mavic 3 Classic",
       "full_display_name": "DJI Mavic 3 Classic",
       "aka_names": "Mavic 3 Classic",
-      "released_year": 2022,
-      "discontinued_year": null,
+      "year_released": 2022,
       "safety_features": "• Omnidirectional obstacle sensing\n• Advanced Return-to-Home (RTH)\n• GNSS positioning (multi-GNSS)\n• APAS 5.0 obstacle avoidance\n• ADS-B In (AirSense)\n• Intelligent flight battery with low-battery failsafe\n• Geofencing and no-fly zone warnings",
-      "notes": "",
       "active": true
     }
   },
@@ -112,10 +98,8 @@
       "model_name": "Mavic 3 Pro",
       "full_display_name": "DJI Mavic 3 Pro",
       "aka_names": "Mavic 3 Pro",
-      "released_year": 2023,
-      "discontinued_year": null,
+      "year_released": 2023,
       "safety_features": "• Omnidirectional obstacle sensing\n• Advanced Return-to-Home (RTH)\n• GNSS positioning (multi-GNSS)\n• APAS obstacle avoidance\n• ADS-B In (AirSense)\n• Intelligent flight battery with low-battery failsafe\n• Geofencing and no-fly zone warnings\n• Multi-camera system with safety status overlays in the app",
-      "notes": "",
       "active": true
     }
   },
@@ -127,10 +111,8 @@
       "model_name": "Avata",
       "full_display_name": "DJI Avata",
       "aka_names": "Avata",
-      "released_year": 2022,
-      "discontinued_year": null,
+      "year_released": 2022,
       "safety_features": "• Ducted propeller guards for contact protection\n• Downward vision system and TOF sensor for stable hovering\n• Return-to-Home (RTH)\n• Emergency Brake and Hover function\n• Turtle mode (flip after minor tip-overs)\n• GNSS positioning (in Normal mode)\n• Low-battery and signal-loss failsafe\n• Geofencing and no-fly zone warnings",
-      "notes": "FPV-focused cinewhoop style aircraft.",
       "active": true
     }
   },
@@ -142,14 +124,11 @@
       "model_name": "Avata 2",
       "full_display_name": "DJI Avata 2",
       "aka_names": "Avata 2",
-      "released_year": null,
-      "discontinued_year": null,
+      "year_released": null,
       "safety_features": "• Integrated propeller guards\n• Emergency Brake and Hover\n• Return-to-Home (RTH)\n• Downward vision and stabilization sensors\n• GNSS-assisted positioning (where applicable)\n• Low-battery and signal-loss failsafe\n• Geofencing and no-fly zone warnings",
-      "notes": "Successor FPV cinewhoop in the Avata line.",
       "active": true
     }
   },
-
   {
     "model": "equipment.dronesafetyprofile",
     "pk": 11,
@@ -158,10 +137,8 @@
       "model_name": "Mavic 3 Enterprise",
       "full_display_name": "DJI Mavic 3 Enterprise",
       "aka_names": "M3E\nMavic 3E",
-      "released_year": 2022,
-      "discontinued_year": null,
+      "year_released": 2022,
       "safety_features": "• Omnidirectional obstacle sensing with enterprise tuning\n• Advanced Return-to-Home (RTH) with optimized route planning\n• GNSS positioning with RTK option\n• APAS obstacle avoidance\n• ADS-B In (AirSense)\n• Geofencing and customizable unlocks via DJI FlySafe\n• Intelligent flight battery with temperature and health monitoring\n• Redundant IMU and sensor health monitoring\n• Enterprise flight logging and password-protected data options",
-      "notes": "",
       "active": true
     }
   },
@@ -173,10 +150,8 @@
       "model_name": "Mavic 3 Thermal",
       "full_display_name": "DJI Mavic 3 Thermal",
       "aka_names": "M3T\nMavic 3T",
-      "released_year": 2022,
-      "discontinued_year": null,
+      "year_released": 2022,
       "safety_features": "• Omnidirectional obstacle sensing\n• Advanced Return-to-Home (RTH)\n• GNSS positioning with RTK option\n• APAS obstacle avoidance\n• ADS-B In (AirSense)\n• Geofencing and unlockable restricted zones for authorized ops\n• Intelligent flight battery with health monitoring\n• Enterprise data encryption and secure link options",
-      "notes": "Thermal imaging payload for inspection and public safety.",
       "active": true
     }
   },
@@ -188,10 +163,8 @@
       "model_name": "Mavic 3 Multispectral",
       "full_display_name": "DJI Mavic 3 Multispectral",
       "aka_names": "M3M\nMavic 3M",
-      "released_year": 2022,
-      "discontinued_year": null,
+      "year_released": 2022,
       "safety_features": "• Omnidirectional obstacle sensing\n• Advanced Return-to-Home (RTH)\n• GNSS positioning with RTK support\n• APAS obstacle avoidance\n• ADS-B In (AirSense)\n• Geofencing and no-fly zone warnings\n• Intelligent battery with health monitoring\n• Enterprise-grade flight logging and data security",
-      "notes": "Multispectral imaging platform for agriculture and surveying.",
       "active": true
     }
   },
@@ -203,10 +176,8 @@
       "model_name": "Matrice 300 RTK",
       "full_display_name": "DJI Matrice 300 RTK",
       "aka_names": "M300 RTK",
-      "released_year": 2020,
-      "discontinued_year": null,
+      "year_released": 2020,
       "safety_features": "• Six-direction sensing and positioning\n• Redundant flight control and sensor systems\n• GNSS with RTK for high-precision positioning\n• Advanced Return-to-Home (RTH) with route optimization\n• AirSense (ADS-B In) for crewed aircraft awareness\n• IP-rated weather resistance\n• Onboard health management system (UAV Health Management System)\n• Multiple battery redundancy with hot-swap capability\n• Geofencing and customizable unlocks for authorized ops",
-      "notes": "",
       "active": true
     }
   },
@@ -218,10 +189,8 @@
       "model_name": "Matrice 350 RTK",
       "full_display_name": "DJI Matrice 350 RTK",
       "aka_names": "M350 RTK",
-      "released_year": 2023,
-      "discontinued_year": null,
+      "year_released": 2023,
       "safety_features": "• Six-direction sensing and positioning\n• Redundant IMUs, barometers, and flight controllers\n• GNSS with RTK and advanced positioning\n• Advanced Return-to-Home (RTH)\n• ADS-B In (AirSense)\n• Enhanced IP-rated weather resistance\n• UAV Health Management System (UHMS)\n• Dual-battery system with redundancy and hot-swap\n• Geofencing and enterprise unlock workflows",
-      "notes": "",
       "active": true
     }
   },
@@ -233,10 +202,8 @@
       "model_name": "Matrice 30",
       "full_display_name": "DJI Matrice 30",
       "aka_names": "M30",
-      "released_year": 2022,
-      "discontinued_year": null,
+      "year_released": 2022,
       "safety_features": "• Four-direction obstacle sensing\n• GNSS positioning with RTK option\n• Advanced Return-to-Home (RTH)\n• ADS-B In (AirSense)\n• IP-rated weather resistance\n• Dual-battery redundancy\n• Geofencing and customizable unlocks\n• Onboard health management and maintenance logs",
-      "notes": "",
       "active": true
     }
   },
@@ -248,15 +215,11 @@
       "model_name": "Matrice 30T",
       "full_display_name": "DJI Matrice 30T",
       "aka_names": "M30T",
-      "released_year": 2022,
-      "discontinued_year": null,
+      "year_released": 2022,
       "safety_features": "• Four-direction obstacle sensing\n• GNSS positioning with RTK option\n• Advanced Return-to-Home (RTH)\n• ADS-B In (AirSense)\n• IP-rated weather resistance\n• Dual-battery redundancy\n• Geofencing and customizable unlocks\n• Onboard health management and maintenance logs",
-      "notes": "Thermal-equipped variant of the M30 for public safety and inspection.",
       "active": true
     }
   },
-
-
   {
     "model": "equipment.dronesafetyprofile",
     "pk": 18,
@@ -265,10 +228,8 @@
       "model_name": "EVO II Pro",
       "full_display_name": "Autel EVO II Pro",
       "aka_names": "EVO II Pro\nEVO 2 Pro",
-      "released_year": 2020,
-      "discontinued_year": null,
+      "year_released": 2020,
       "safety_features": "• Omnidirectional obstacle avoidance sensors\n• Return-to-Home (RTH)\n• GNSS positioning (GPS/GLONASS)\n• Low-battery and signal-loss failsafe\n• Adjustable geofencing and distance limits\n• Intelligent flight battery monitoring",
-      "notes": "",
       "active": true
     }
   },
@@ -280,10 +241,8 @@
       "model_name": "EVO II Pro V3",
       "full_display_name": "Autel EVO II Pro V3",
       "aka_names": "EVO II Pro V3\nEVO 2 Pro V3",
-      "released_year": null,
-      "discontinued_year": null,
+      "year_released": null,
       "safety_features": "• Omnidirectional obstacle avoidance\n• Return-to-Home (RTH)\n• GNSS positioning with multi-constellation support\n• Low-battery and signal-loss failsafe\n• Adjustable geofencing and distance limits\n• Improved image transmission link with failover behavior",
-      "notes": "",
       "active": true
     }
   },
@@ -295,10 +254,8 @@
       "model_name": "EVO Lite+",
       "full_display_name": "Autel EVO Lite+",
       "aka_names": "EVO Lite+",
-      "released_year": 2021,
-      "discontinued_year": null,
+      "year_released": 2021,
       "safety_features": "• Three-way obstacle sensing (forward, backward, downward)\n• Return-to-Home (RTH)\n• GNSS positioning\n• Low-battery and signal-loss failsafe\n• Adjustable geofencing and distance limits\n• Intelligent flight battery monitoring",
-      "notes": "",
       "active": true
     }
   },
@@ -310,10 +267,8 @@
       "model_name": "EVO Nano+",
       "full_display_name": "Autel EVO Nano+",
       "aka_names": "EVO Nano+",
-      "released_year": 2021,
-      "discontinued_year": null,
+      "year_released": 2021,
       "safety_features": "• Three-way obstacle sensing (forward, backward, downward)\n• Return-to-Home (RTH)\n• GNSS positioning\n• Low-battery and signal-loss failsafe\n• Beginner-friendly geofencing and altitude limits\n• Vision sensors for stable hovering",
-      "notes": "",
       "active": true
     }
   },
@@ -325,10 +280,8 @@
       "model_name": "EVO Max 4T",
       "full_display_name": "Autel EVO Max 4T",
       "aka_names": "EVO Max 4T",
-      "released_year": null,
-      "discontinued_year": null,
+      "year_released": null,
       "safety_features": "• Multi-directional obstacle avoidance\n• Redundant sensing and navigation modules\n• GNSS with RTK option\n• Return-to-Home (RTH)\n• Low-battery and signal-loss failsafe\n• Geofencing and custom limit settings\n• Enterprise-grade flight logging and encryption options",
-      "notes": "Enterprise-grade Autel platform used for inspection and public safety.",
       "active": true
     }
   }

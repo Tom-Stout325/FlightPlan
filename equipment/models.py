@@ -81,54 +81,45 @@ class DroneSafetyProfile(models.Model):
 
     model_name = models.CharField(
         max_length=100,
-        help_text="Short model name, e.g. 'Mavic 4 Pro', 'Evo II Pro'.",
+        help_text="Short model name, e.g. 'Mavic Air 2', 'Evo II Pro'.",
     )
 
     full_display_name = models.CharField(
         max_length=150,
-        help_text="Canonical display name, e.g. 'DJI Mavic 4 Pro'.",
+        unique=True,
+        help_text="Canonical display name, e.g. 'DJI Mavic Air 2'.",
     )
 
-    aka_names = models.TextField(
-        blank=True,
-        help_text=(
-            "Optional alternate names, nicknames, or variations. "
-            "One per line, e.g. 'M4P', 'Mavic 4 Pro Cine'."
-        ),
-    )
-
-    released_year = models.PositiveSmallIntegerField(
+    # 🔧 IMPORTANT: name & type must match the DB created by 0003
+    year_released = models.PositiveIntegerField(
         null=True,
         blank=True,
         help_text="Approximate release year (optional).",
     )
 
-    discontinued_year = models.PositiveSmallIntegerField(
-        null=True,
-        blank=True,
-        help_text="Year discontinued (if applicable).",
+    is_enterprise = models.BooleanField(
+        default=False,
+        help_text="True if this is an enterprise / commercial platform.",
     )
 
     safety_features = models.TextField(
         help_text=(
             "Bulleted or paragraph list of key safety features. "
             "Example: return-to-home, obstacle avoidance, ADS-B In, "
-            "care refresh, geo-fencing, parachute system, etc."
+            "geo-fencing, parachute system, etc."
         ),
     )
 
-    notes = models.TextField(
+    aka_names = models.CharField(
+        max_length=255,
         blank=True,
-        help_text="Optional extra notes (firmware, variants, certs, etc.).",
+        help_text="Optional alternate names, one line of text.",
     )
 
     active = models.BooleanField(
         default=True,
         help_text="Uncheck if this profile should no longer be suggested.",
     )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["brand", "model_name"]
