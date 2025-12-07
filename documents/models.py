@@ -94,7 +94,6 @@ class GeneralDocument(models.Model):
         ('Compliance', 'Compliance'),
         ('Legal', 'Legal'),
         ('Other', 'Other'),
-        ('FAA Airspace Waivers', 'FAA Airspace Waivers'),
     ]
 
     title       = models.CharField(max_length=255)

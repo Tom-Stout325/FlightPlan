@@ -22,13 +22,12 @@ python manage.py dbshell
 
 SELECT COUNT(*) FROM equipment_dronesafetyprofile;
 SELECT COUNT(*) FROM flightplan_equipment;
-\q
 
 
 
 Run Migrations on Heroku:
-heroku run -a 12bytes-airborne-images -- python manage.py migrate money --noinput
 
+heroku run -a flightplan-airborne -- python manage.py migrate
 
 Heroku logs:
 heroku logs --tail -a flightplan-airborne
