@@ -1,0 +1,4 @@
+id,name,equipment_type,brand,model,serial_number,faa_number,faa_certificate,purchase_date,purchase_cost,receipt,date_sold,sale_price,deducted_full_cost,active,notes,drone_safety_profile_id
+282b5822-9985-47c6-99d7-54b41385c584,asdf,Charger,asf,sfa,asf,"","",2025-10-29,60.00,receipts/Screenshot_2025-11-18_at_8.44.32PM.png,,,t,t,asdfsd,
+6ca72142-eb2f-4226-9b0f-afd4318f67eb,DJI Air 3s,Drone,DJI,Air 3s,4737478t9,jfas448gahpouirg,"",2025-06-02,1699.00,"",,,t,t,"",
+d7a9d440-ebf5-431f-89d6-84613f3a7a67,DJI Mavic 4 Pro,Drone,DJI,Mavic 4 Pro,as;ldkfja8sd7asdgp[,;alksdj8e746468rg,"",2024-12-11,5299.00,"",,,t,t,"",

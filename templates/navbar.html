@@ -90,6 +90,12 @@
               </a>
             </li>
             <li>
+              <a class="dropdown-item d-flex align-items-center" href="{% url 'equipment:drone_safety_profile_list' %}">
+                <i class="fa-solid fa-database me-2 text-primary"></i>
+                Drone Safety Database
+              </a>
+            </li>
+            <li>
               <a class="dropdown-item" href="{% url 'flightlogs:flightlog_list' %}">
                 📂 Flight Logs
               </a>
@@ -124,7 +130,8 @@
           <ul class="dropdown-menu" aria-labelledby="airspaceDropdown">
               <li>
               <a class="dropdown-item" href="{% url 'airspace:portal_home' %}">
-                💰 AirSpace Portal
+                <i class="fa-solid fa-helicopter-symbol me-2 text-primary"></i>
+                AirSpace Portal
               </a>
             </li>
             <li><hr class="dropdown-divider"></li>
@@ -139,27 +146,27 @@
 
             <!-- Waiver Form -->
             <li>
-              <a class="dropdown-item d-flex align-items-center" href="{% url 'airspace:waiver_form' %}">
-                <i class="fa-solid fa-file-pen me-2 text-primary"></i>
-                Waiver Form
+              <a class="dropdown-item d-flex align-items-center" href="{% url 'airspace:waiver_list' %}">
+                <i class="fa-regular fa-rectangle-list me-2 text-primary"></i>
+                Waiver Planning List
               </a>
             </li>
             <li>
               <a class="dropdown-item d-flex align-items-center" href="{% url 'airspace:conops_list' %}">
-                <i class="fa-solid fa-file-pen me-2 text-primary"></i>
+                <i class="fa-solid fa-list me-2 text-primary"></i>
                 CONOPS List
               </a>
             </li>
             <li>
-              <a class="dropdown-item d-flex align-items-center" href="{% url 'airspace:waiver_list' %}">
-                <i class="fa-solid fa-file-pen me-2 text-primary"></i>
-                Waiver List waiver_planning_new
+              <a class="dropdown-item d-flex align-items-center" target="_blank" href="{% url 'airspace:waiver_planning_new' %}">
+                <i class="fa-solid fa-table-list me-2 text-primary"></i>
+                Waiver Planning Form
               </a>
             </li>
             <li>
-              <a class="dropdown-item d-flex align-items-center" href="{% url 'airspace:waiver_list' %}">
+              <a class="dropdown-item d-flex align-items-center" href="{% url 'airspace:waiver_form' %}">
                 <i class="fa-solid fa-file-pen me-2 text-primary"></i>
-                Waiver Planning
+                Waiver Form
               </a>
             </li>
           </ul>

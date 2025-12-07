@@ -111,6 +111,7 @@ def profile(request):
     return render(request, 'pilot/profile.html', context)
 
 
+
 @login_required
 def edit_profile(request):
     profile = get_object_or_404(PilotProfile, user=request.user)

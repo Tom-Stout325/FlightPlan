@@ -176,8 +176,7 @@ Nearest Airport (ICAO): {waiver.nearest_airport or "[Missing]"}
 Latitude (decimal): {waiver.lat_decimal}  
 Longitude (decimal): {waiver.lon_decimal}  
 
-Description of Proposed Operations:  
-{waiver.description or "[Missing]"}
+
 
 ---------------------------------------------------------------------
 ### Crew & Equipment Details from Planning (Optional)

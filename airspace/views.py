@@ -213,6 +213,8 @@ class WaiverListView(LoginRequiredMixin, ListView):
         )
 
 
+
+
 @login_required
 def waiver_planning_new(request):
     if request.method == "POST":
@@ -230,8 +232,7 @@ def waiver_planning_new(request):
     else:
         form = WaiverPlanningForm(user=request.user)
 
- 
-    # Build lightweight data for JS auto-fill
+    # Build lightweight data for JS auto-fill (pilots)
     pilot_qs = form.fields["pilot_profile"].queryset
     pilot_profile_data = []
     for p in pilot_qs:
@@ -247,12 +248,27 @@ def waiver_planning_new(request):
             }
         )
 
+    # Build lightweight data for JS auto-fill (aircraft -> safety features)
+    aircraft_qs = form.fields["aircraft"].queryset.select_related("drone_safety_profile")
+    drone_safety_data = []
+    for eq in aircraft_qs:
+        profile = getattr(eq, "drone_safety_profile", None)
+        if profile and profile.safety_features:
+            drone_safety_data.append(
+                {
+                    "id": str(eq.pk),
+                    "safety_features": profile.safety_features,
+                }
+            )
+
     context = {
         "form": form,
         "planning_mode": "new",
         "pilot_profile_data": pilot_profile_data,
+        "drone_safety_data": drone_safety_data,
     }
     return render(request, "airspace/waiver_planning.html", context)
+
 
 
 
@@ -290,10 +306,24 @@ def waiver_planning_edit(request, pk):
             }
         )
 
+    # Aircraft -> safety features data
+    aircraft_qs = form.fields["aircraft"].queryset.select_related("drone_safety_profile")
+    drone_safety_data = []
+    for eq in aircraft_qs:
+        profile = getattr(eq, "drone_safety_profile", None)
+        if profile and profile.safety_features:
+            drone_safety_data.append(
+                {
+                    "id": str(eq.pk),
+                    "safety_features": profile.safety_features,
+                }
+            )
+
     context = {
         "form": form,
         "planning_mode": "edit",
         "waiver": waiver,
         "pilot_profile_data": pilot_profile_data,
+        "drone_safety_data": drone_safety_data,
     }
     return render(request, "airspace/waiver_planning.html", context)

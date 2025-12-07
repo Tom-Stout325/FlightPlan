@@ -86,13 +86,15 @@ class SOPDocument(models.Model):
 class GeneralDocument(models.Model):
     CATEGORY_CHOICES = [
         ('Insurance', 'Insurance'),
-        ('FAA', 'FAA Waivers'),
+        ('FAA Airspace Waivers', 'FAA Airspace Waivers'),
+        ("FAA Operational Waivers", "FAA Operational Waivers"),
         ('Registrations', 'Drone Registrations'),
         ('event', 'Event Instructions'),
         ('Policies', 'Policies'),
         ('Compliance', 'Compliance'),
         ('Legal', 'Legal'),
         ('Other', 'Other'),
+        ('FAA Airspace Waivers', 'FAA Airspace Waivers'),
     ]
 
     title       = models.CharField(max_length=255)

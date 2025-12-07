@@ -23,5 +23,3 @@ class DroneSafetyProfileAdmin(admin.ModelAdmin):
     )
     list_filter = ("brand", "active", "is_enterprise")
     search_fields = ("full_display_name", "model_name", "aka_names", "safety_features")
-    # IMPORTANT: don't reference fields that don't exist anymore
-    readonly_fields = ()  # or just remove this attribute entirely

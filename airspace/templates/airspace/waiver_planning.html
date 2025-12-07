@@ -121,57 +121,96 @@
 {% if pilot_profile_data %}
   {{ pilot_profile_data|json_script:"pilot-profile-data" }}
 {% endif %}
+{% if drone_safety_data %}
+  {{ drone_safety_data|json_script:"drone-safety-data" }}
+{% endif %}
 
 <script>
   document.addEventListener("DOMContentLoaded", function () {
+    // -------------------------
+    // Pilot profile auto-fill
+    // -------------------------
     const pilotSelect = document.getElementById("id_pilot_profile");
     const certInput = document.getElementById("id_pilot_cert_manual");
     const hoursInput = document.getElementById("id_pilot_flight_hours");
 
-    if (!pilotSelect) return;
-
-    let profileMap = {};
-    const dataElement = document.getElementById("pilot-profile-data");
-    if (dataElement) {
-      try {
-        const data = JSON.parse(dataElement.textContent);
-        data.forEach(function (p) {
-          profileMap[String(p.id)] = p;
-        });
-      } catch (e) {
-        console.warn("Could not parse pilot profile data", e);
-      }
-    }
-
-    function updatePilotFields() {
-      const selectedId = pilotSelect.value;
-      const profile = profileMap[selectedId];
-      if (!profile) return;
-
-      // Auto-fill certificate number (only if empty)
-      if (certInput && !certInput.value && profile.license_number) {
-        certInput.value = profile.license_number;
-      }
-
-      // Auto-fill flight hours (only if empty and we have a value)
-      if (
-        hoursInput &&
-        !hoursInput.value &&
-        profile.flight_hours !== null &&
-        profile.flight_hours !== undefined
-      ) {
-        if (profile.flight_hours > 0) {
-          hoursInput.value = profile.flight_hours;
+    if (pilotSelect) {
+      let profileMap = {};
+      const dataElement = document.getElementById("pilot-profile-data");
+      if (dataElement) {
+        try {
+          const data = JSON.parse(dataElement.textContent);
+          data.forEach(function (item) {
+            profileMap[String(item.id)] = item;
+          });
+        } catch (e) {
+          console.error("Could not parse pilot profile data", e);
         }
       }
+
+      function updatePilotFields() {
+        const selectedId = pilotSelect.value;
+        const profile = profileMap[selectedId];
+        if (!profile) {
+          return;
+        }
+        if (certInput && !certInput.value) {
+          certInput.value = profile.license_number || "";
+        }
+        if (hoursInput && !hoursInput.value) {
+          hoursInput.value = profile.flight_hours || "";
+        }
+      }
+
+      pilotSelect.addEventListener("change", updatePilotFields);
+      // Run once on load, in case a pilot is already selected
+      updatePilotFields();
     }
 
-    pilotSelect.addEventListener("change", updatePilotFields);
+    // -------------------------
+    // Drone safety auto-fill
+    // -------------------------
+    const aircraftSelect = document.getElementById("id_aircraft");
+    const safetyTextarea = document.getElementById("id_safety_features_notes");
 
-    // Run once on load, in case a pilot is already selected
-    updatePilotFields();
+    if (aircraftSelect && safetyTextarea) {
+      let safetyMap = {};
+      const safetyDataElement = document.getElementById("drone-safety-data");
+      if (safetyDataElement) {
+        try {
+          const safetyData = JSON.parse(safetyDataElement.textContent);
+          safetyData.forEach(function (item) {
+            safetyMap[String(item.id)] = item.safety_features;
+          });
+        } catch (e) {
+          console.error("Could not parse drone safety data", e);
+        }
+      }
+
+      function updateSafetyFeatures() {
+        const selectedId = aircraftSelect.value;
+        const textIsEmpty = !safetyTextarea.value.trim();
+
+        // Only fill if something is selected and the user hasn't typed anything
+        if (!selectedId || !textIsEmpty) {
+          return;
+        }
+
+        const safetyText = safetyMap[selectedId];
+        if (safetyText) {
+          safetyTextarea.value = safetyText;
+        }
+      }
+
+      aircraftSelect.addEventListener("change", updateSafetyFeatures);
+      // Run once on load, in case an aircraft is already selected
+      updateSafetyFeatures();
+    }
   });
 </script>
 
-
 {% endblock %}
+
+
+
+

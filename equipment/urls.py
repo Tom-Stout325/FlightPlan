@@ -17,7 +17,18 @@ urlpatterns = [
     path("equipment/<uuid:pk>/pdf/", views.equipment_pdf_single, name="equipment_pdf_single"),
     path("equipment/export/csv/", views.export_equipment_csv, name="export_equipment_csv"),
     path("api/drone-suggest/", views.drone_profile_suggest_view, name="drone_profile_suggest",),
+    
+
+    path("equipment/", views.equipment_list, name="equipment_list"),
+    path("drone-profiles/", views.drone_safety_profile_list, name="drone_safety_profile_list",),
+    path("drone-profiles/create/", views.drone_safety_profile_create, name="drone_safety_profile_create",),
+    path("drone-profiles/<int:pk>/edit/", views.drone_safety_profile_edit, name="drone_safety_profile_edit",),
+    path("drone-profiles/<int:pk>/delete/", views.drone_safety_profile_delete, name="drone_safety_profile_delete",),
+
+    path("api/drone-suggest/", views.drone_profile_suggest_view, name="drone_profile_suggest",),
 ]
+
+
 
 
 if settings.DEBUG:

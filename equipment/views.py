@@ -18,9 +18,16 @@ try:
 except Exception:
     WEASYPRINT_AVAILABLE = False
 
-from .models import *
+
 from flightlogs.models import FlightLog
-from .forms import *
+from .models import Equipment, DroneSafetyProfile
+from .forms import EquipmentForm, DroneSafetyProfileForm
+
+
+
+
+
+
 
 
 @login_required
@@ -232,4 +239,112 @@ def drone_profile_suggest_view(request: HttpRequest) -> JsonResponse:
             "brand": profile.brand,
             "safety_features": profile.safety_features,
         }
+    )
+    
+    
+    
+# -------------------------------
+# Drone Safety Profile CRUD
+# -------------------------------
+
+@login_required
+def drone_safety_profile_list(request):
+    sort = request.GET.get("sort", "brand")
+    direction = request.GET.get("dir", "asc")
+
+    # Map friendly sort keys → model fields
+    sort_map = {
+        "brand": "brand",
+        "model": "model_name",
+        "display": "full_display_name",
+        "year": "year_released",
+        "active": "active",
+    }
+
+    sort_key = sort_map.get(sort, "brand")
+
+    if direction == "desc":
+        order_by = f"-{sort_key}"
+    else:
+        order_by = sort_key
+        direction = "asc"  # normalize anything else
+
+    profiles = DroneSafetyProfile.objects.all().order_by(order_by)
+
+    context = {
+        "profiles": profiles,
+        "sort": sort,
+        "dir": direction,
+    }
+    return render(
+        request,
+        "equipment/drone_safety_profile_list.html",
+        context,
+    )
+
+
+
+@login_required
+def drone_safety_profile_create(request):
+    if request.method == "POST":
+        form = DroneSafetyProfileForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Drone safety profile created.")
+            return redirect("equipment:drone_safety_profile_list")
+        messages.error(request, "There was a problem saving the profile.")
+    else:
+        form = DroneSafetyProfileForm()
+
+    return render(
+        request,
+        "equipment/drone_safety_profile_form.html",
+        {
+            "form": form,
+            "title": "Add Drone Safety Profile",
+        },
+    )
+
+
+@login_required
+def drone_safety_profile_edit(request, pk):
+    profile = get_object_or_404(DroneSafetyProfile, pk=pk)
+
+    if request.method == "POST":
+        form = DroneSafetyProfileForm(request.POST, instance=profile)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Drone safety profile updated.")
+            return redirect("equipment:drone_safety_profile_list")
+        messages.error(request, "There was a problem updating the profile.")
+    else:
+        form = DroneSafetyProfileForm(instance=profile)
+
+    return render(
+        request,
+        "equipment/drone_safety_profile_form.html",
+        {
+            "form": form,
+            "title": f"Edit {profile.full_display_name}",
+            "profile": profile,
+        },
+    )
+
+
+@login_required
+def drone_safety_profile_delete(request, pk):
+    profile = get_object_or_404(DroneSafetyProfile, pk=pk)
+
+    if request.method == "POST":
+        name = profile.full_display_name or f"{profile.brand} {profile.model_name}"
+        profile.delete()
+        messages.success(request, f"Deleted drone safety profile: {name}.")
+        return redirect("equipment:drone_safety_profile_list")
+
+    return render(
+        request,
+        "equipment/drone_safety_profile_confirm_delete.html",
+        {
+            "profile": profile,
+        },
     )
