@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.conf import settings
 from openai import OpenAI
-
+from typing import List
 from .models import AirspaceWaiver
 
 
@@ -163,7 +163,7 @@ Operation Title: {waiver.operation_title or "[Missing Information]"}
 
 Dates of Operation: {waiver.start_date} to {waiver.end_date}  
 Timeframe: {timeframe or "[Missing]"}  
-Frequency: {frequency or "[Missing]"}  
+# Frequency: {frequency or "[Missing]"}  
 Local Time Zone: {waiver.local_timezone or "[Missing]"}  
 
 Airspace Class: {waiver.get_airspace_class_display() if hasattr(waiver, "get_airspace_class_display") else waiver.airspace_class}  
@@ -220,3 +220,183 @@ def generate_conops_text(waiver: AirspaceWaiver, *, model: str = "gpt-5-mini") -
     )
 
     return response.output_text
+
+
+
+
+
+
+
+
+
+def generate_short_description(waiver) -> str:
+    """
+    Build an FAA-friendly short description of the proposed operation
+    using structured fields from the AirspaceWaiver instance.
+
+    Intended to populate waiver.short_description (Step 3) as an editable default.
+    """
+
+    def list_to_english(items: List[str]) -> str:
+        """Turn ['A', 'B', 'C'] into 'A, B, and C'."""
+        items = [i for i in items if i]
+        if not items:
+            return ""
+        if len(items) == 1:
+            return items[0]
+        if len(items) == 2:
+            return f"{items[0]} and {items[1]}"
+        return f"{', '.join(items[:-1])}, and {items[-1]}"
+
+    # --- What are you doing? (activities) ---
+    activity_labels = []
+    if hasattr(waiver, "operation_activity_labels"):
+        activity_labels = waiver.operation_activity_labels()
+
+    if activity_labels:
+        activity_phrase = list_to_english([a.lower() for a in activity_labels])
+    else:
+        activity_phrase = "small unmanned aircraft system (sUAS) operations"
+
+    extra_details = getattr(waiver, "operation_activities_other", "") or ""
+    extra_details = extra_details.strip()
+    if extra_details:
+        # e.g. "event filming and aerial photography (live broadcast coverage of NHRA national events ...)"
+        activity_phrase = f"{activity_phrase} ({extra_details})"
+
+    # --- When (dates, frequency, timeframe) ---
+    start_date = getattr(waiver, "start_date", None)
+    end_date = getattr(waiver, "end_date", None)
+
+    if start_date and end_date:
+        if start_date == end_date:
+            date_phrase = f"on {start_date:%b} {start_date.day}, {start_date.year}"
+        else:
+            date_phrase = (
+                f"from {start_date:%b} {start_date.day}, {start_date.year} "
+                f"through {end_date:%b} {end_date.day}, {end_date.year}"
+            )
+    elif start_date:
+        date_phrase = f"starting on {start_date:%b} {start_date.day}, {start_date.year}"
+    else:
+        date_phrase = "on the specified dates"
+
+    # Frequency (Daily, Weekly, etc.)
+    try:
+        frequency_display = waiver.get_frequency_display()
+    except Exception:
+        frequency_display = ""
+
+    freq_phrase = (
+        f"on a {frequency_display.lower()} basis" if frequency_display else "as scheduled"
+    )
+
+    # Timeframe (Sunrise–Noon, etc.) – handles CSV from the checkbox field
+    tf_map = {}
+    if hasattr(waiver, "TIMEFRAME_CHOICES"):
+        tf_map = dict(waiver.TIMEFRAME_CHOICES)
+
+    timeframe_raw = getattr(waiver, "timeframe", "") or ""
+    timeframe_codes = [
+        c.strip() for c in timeframe_raw.split(",") if c.strip()
+    ]
+    timeframe_labels = [tf_map.get(code, code) for code in timeframe_codes]
+
+    if timeframe_labels:
+        timeframe_phrase = f"during {list_to_english(timeframe_labels)}"
+    else:
+        timeframe_phrase = "during the specified time windows"
+
+    # --- Where (location, radius, airspace) ---
+    proposed_location = (getattr(waiver, "proposed_location", "") or "").strip()
+
+    radius_nm = getattr(waiver, "radius_nm", None)
+    radius_phrase = ""
+    if radius_nm:
+        radius_phrase = f"within approximately {radius_nm} NM"
+
+    nearest_airport = (getattr(waiver, "nearest_airport", "") or "").strip()
+
+    try:
+        airspace_display = waiver.get_airspace_class_display()
+    except Exception:
+        airspace_display = ""
+
+    location_bits = []
+
+    if proposed_location:
+        location_bits.append(f"in the vicinity of {proposed_location}")
+
+    if radius_phrase and nearest_airport:
+        location_bits.append(f"{radius_phrase} of {nearest_airport}")
+    elif nearest_airport:
+        location_bits.append(f"in the vicinity of {nearest_airport}")
+    elif radius_phrase:
+        location_bits.append(radius_phrase)
+
+    if airspace_display:
+        location_bits.append(f"in {airspace_display} airspace")
+
+    if location_bits:
+        location_phrase = ", ".join(location_bits)
+    else:
+        location_phrase = "in the proposed operating area"
+
+    # --- How high / aircraft ---
+    max_agl = getattr(waiver, "max_agl", None)
+    altitude_phrase = (
+        f"at or below {max_agl} feet AGL" if max_agl else "at the requested altitudes"
+    )
+
+    # Aircraft name
+    aircraft_name = ""
+    aircraft = getattr(waiver, "aircraft", None)
+    if aircraft is not None:
+        # adjust attribute as needed; using full_display_name from your Equipment model
+        aircraft_name = getattr(aircraft, "full_display_name", "").strip()
+
+    if not aircraft_name:
+        aircraft_name = (getattr(waiver, "aircraft_custom", "") or "").strip()
+
+    if aircraft_name:
+        aircraft_phrase = f"using a {aircraft_name}"
+    else:
+        aircraft_phrase = "using a small UAS (sUAS)"
+
+    # --- Build the core sentence ---
+    # Example result:
+    # "Part 107 operation to conduct event filming and aerial photography (live broadcast coverage...)
+    #  using a DJI Avata 2, in the vicinity of zMAX Dragway, within approximately 0.50 NM of KJQF in Class D airspace,
+    #  from Mar 20, 2026 through Mar 22, 2026, during Sunrise to Noon and 4 PM to Sunset,
+    #  at or below 150 feet AGL on a daily basis."
+    parts = [
+        "Part 107 operation to conduct",
+        activity_phrase,
+        aircraft_phrase,
+        location_phrase + ",",
+        date_phrase + ",",
+        timeframe_phrase + ",",
+        altitude_phrase,
+        f"{freq_phrase}.",
+    ]
+
+    # Clean up spaces and punctuation
+    sentence = " ".join(p for p in parts if p).replace(" ,", ",")
+
+    # --- Optional: mention existing 107.39 waiver if present on the model ---
+    uses_oop = getattr(waiver, "uses_107_39_waiver", False)
+    oop_number = (getattr(waiver, "oop_waiver_number", "") or "").strip()
+
+    if uses_oop:
+        if oop_number:
+            sentence += (
+                f" Operations will be conducted in accordance with existing 14 CFR §107.39 "
+                f"Operations Over People waiver #{oop_number} and its associated mitigations."
+            )
+        else:
+            sentence += (
+                " Operations will be conducted in accordance with an existing 14 CFR §107.39 "
+                "Operations Over People waiver and its associated mitigations."
+            )
+
+    return sentence

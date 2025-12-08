@@ -1,10 +1,13 @@
-from decimal import Decimal  # optional, you can remove if not used elsewhere
+from decimal import Decimal 
 
 from django.conf import settings
 from django.db import models
 
 from .utils import dms_to_decimal
 from equipment.models import Equipment
+from documents.models import GeneralDocument 
+
+
 
 
 class AirspaceWaiver(models.Model):
@@ -36,6 +39,16 @@ class AirspaceWaiver(models.Model):
         ("final", "Final"),
     ]
 
+
+    OPERATION_ACTIVITY_CHOICES = [
+        ("event_filming", "Event filming / broadcast"),
+        ("aerial_photography", "Professional aerial photography"),
+        ("mapping_survey", "Mapping / survey"),
+        ("infrastructure_inspection", "Infrastructure inspection"),
+        ("public_safety_support", "Public safety / incident support"),
+        ("training", "Training / proficiency flights"),
+        ("real_estate_photography", "Real Estate photograpny"),
+    ]
     # ----- Ownership -----
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -47,7 +60,18 @@ class AirspaceWaiver(models.Model):
     operation_title = models.CharField(max_length=200)
     start_date = models.DateField()
     end_date = models.DateField()
-    timeframe = models.CharField(max_length=20, choices=TIMEFRAME_CHOICES)
+
+    # Store multiple timeframes as a comma-separated list of codes
+    # e.g. "noon_4pm,4pm_sunset"
+    timeframe = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Comma-separated timeframe codes selected for this operation.",
+    )
+
+    operation_activities = models.CharField(max_length=200, blank=True, help_text="Comma-separated activity codes describing what you are doing.",)
+    operation_activities_other = models.CharField(max_length=255, blank=True, help_text="Optional free-text description of the operation.",)
+    
     frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES)
     # we enforce timezone choices in the form; model just stores the string
     local_timezone = models.CharField(max_length=64)
@@ -132,6 +156,15 @@ class AirspaceWaiver(models.Model):
             self.lon_direction,
         )
 
+    def timeframe_codes(self):
+        """
+        Return the stored timeframe CSV as a list of codes.
+        e.g. 'noon_4pm,4pm_sunset' -> ['noon_4pm', '4pm_sunset']
+        """
+        if not self.timeframe:
+            return []
+        return [c.strip() for c in self.timeframe.split(",") if c.strip()]
+
     def save(self, *args, **kwargs):
         # Always keep decimals in sync before saving
         self.update_decimal_coords()
@@ -211,6 +244,31 @@ class WaiverPlanning(models.Model):
         blank=True,
         help_text="Approximate total UAS flight hours for this pilot.",
     )
+    operates_under_10739 = models.BooleanField(
+        default=False,
+        help_text=(
+            "Check if this operation will be conducted under an approved "
+            "14 CFR §107.39 Operations Over People waiver."
+        ),
+    )
+
+    oop_waiver_document = models.ForeignKey(
+        GeneralDocument,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="oop_waiver_planning_entries",
+        help_text="Select your approved 107.39 waiver from General Documents.",
+        # If you have a category enum on GeneralDocument, you can tighten this:
+        # limit_choices_to={"category": GeneralDocument.Category.FAA_OPERATIONS_WAIVER},
+    )
+
+    oop_waiver_number = models.CharField(
+        "Approved 107.39 Waiver Number",
+        max_length=100,
+        blank=True,
+        help_text="Example: 107W-2024-01234",
+    )
 
     # Launch location & safety features
     launch_location = models.CharField(
@@ -272,7 +330,18 @@ class WaiverPlanning(models.Model):
     def save(self, *args, **kwargs):
         # Before saving, make sure we apply safety features if appropriate.
         self.apply_aircraft_safety_profile()
+         # Auto-fill 107.39 waiver number from attached document if available
+        if (
+            self.operates_under_10739
+            and self.oop_waiver_document
+            and not self.oop_waiver_number
+        ):
+            number = getattr(self.oop_waiver_document, "waiver_number", None)
+            if number:
+                self.oop_waiver_number = number
+
         super().save(*args, **kwargs)
+
 
     class Meta:
         ordering = ["-created_at"]

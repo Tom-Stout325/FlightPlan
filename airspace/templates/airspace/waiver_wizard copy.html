@@ -1,0 +1,652 @@
+{% extends "index.html" %}
+{% load static %}
+
+{% block title %}Airspace Waiver Draft{% endblock %}
+
+{% block style %}
+<style>
+  /* Timeframe checkboxes */
+  .timeframe-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+  }
+  .timeframe-item {
+    font-size: .9rem;
+  }
+  .timeframe-item input {
+    margin-right: .35rem;
+  }
+
+ 
+  .form-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;          
+    margin-bottom: 0;
+  }
+  .form-check-input {
+    flex-shrink: 0;
+    margin-top: 0.15em;     /* tiny nudge so checkbox is perfectly centered with first line */
+    width: 1.3em;
+    height: 1.3em;
+  }
+  .form-check-label {
+    line-height: 1.5;
+    cursor: pointer;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container my-4 my-md-5">
+
+  <!-- Heading -->
+  <h2 class="text-center text-primary mb-2">Airspace Waiver Draft</h2>
+  <p class="text-center text-muted mb-4">
+    Step {{ current_step_number }} of {{ total_steps }} – {{ current_step_key|capfirst }}
+  </p>
+
+  <!-- Progress bar -->
+  <div class="progress mb-4" style="height: .75rem;">
+    <div class="progress-bar" style="width: {{ progress_percent }}%;"></div>
+  </div>
+
+
+
+
+  <!-- Step navigation pills -->
+  <ul class="nav nav-pills nav-fill mb-4 small">
+    {% for key, title in step_titles.items %}
+      {% with idx=forloop.counter %}
+        <li class="nav-item">
+          <span
+            class="nav-link
+              {% if wizard.steps.current == key %}
+                active
+              {% elif idx < current_step_number %}
+                bg-success text-white
+              {% else %}
+                disabled
+              {% endif %}"
+            style="cursor: default;"
+          >
+            <strong>Step {{ idx }}</strong>
+            <span class="d-none d-md-inline"> – {{ title }}</span>
+          </span>
+        </li>
+      {% endwith %}
+    {% endfor %}
+  </ul>
+
+
+
+
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+
+      <!-- Optional planning snapshot -->
+      {% if planning_snapshot %}
+        <div class="alert alert-info small mb-4">
+          <div class="fw-semibold mb-1">Planning snapshot</div>
+          <ul class="ps-3 mb-0">
+            {% if planning_snapshot.aircraft %}
+              <li><strong>Aircraft:</strong> {{ planning_snapshot.aircraft }}</li>
+            {% endif %}
+            {% if planning_snapshot.pilot %}
+              <li>
+                <strong>Pilot:</strong> {{ planning_snapshot.pilot }}
+                {% if planning_snapshot.pilot_cert %}(Cert: {{ planning_snapshot.pilot_cert }}){% endif %}
+                {% if planning_snapshot.flight_hours %} – {{ planning_snapshot.flight_hours }} hours{% endif %}
+              </li>
+            {% endif %}
+            {% if planning_snapshot.oop_flag %}
+              <li>
+                <strong>Operations Over People:</strong> Yes
+                {% if planning_snapshot.oop_number %}({{ planning_snapshot.oop_number }}){% endif %}
+              </li>
+            {% endif %}
+          </ul>
+        </div>
+      {% endif %}
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {{ wizard.management_form }}
+
+        {% for hidden in form.hidden_fields %}
+          {{ hidden }}
+        {% endfor %}
+
+        {{ form.non_field_errors }}
+
+        {% if form.errors %}
+          <div class="alert alert-danger small">
+            Please correct the errors below.
+          </div>
+        {% endif %}
+
+        {# ===================================================== #}
+        {# STEP 1 – OVERVIEW                                    #}
+        {# ===================================================== #}
+
+        {% if current_step_key == "overview" %}
+          <div class="row g-3">
+
+            <!-- Operation title -->
+            <div class="col-12">
+              <label class="form-label fw-semibold" for="{{ form.operation_title.id_for_label }}">
+                {{ form.operation_title.label }}
+                {% if form.operation_title.field.required %}<span class="text-danger">*</span>{% endif %}
+              </label>
+              {{ form.operation_title }}
+              {% if form.operation_title.help_text %}
+                <div class="form-text">{{ form.operation_title.help_text }}</div>
+              {% endif %}
+              {% if form.operation_title.errors %}
+                <div class="text-danger small">{{ form.operation_title.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+            <!-- Dates & timeframe -->
+            <div class="col-12 col-md-4">
+              <label class="form-label fw-semibold" for="{{ form.start_date.id_for_label }}">
+                {{ form.start_date.label }}
+                {% if form.start_date.field.required %}<span class="text-danger">*</span>{% endif %}
+              </label>
+              {{ form.start_date }}
+              {% if form.start_date.errors %}
+                <div class="text-danger small">{{ form.start_date.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label fw-semibold" for="{{ form.end_date.id_for_label }}">
+                {{ form.end_date.label }}
+                {% if form.end_date.field.required %}<span class="text-danger">*</span>{% endif %}
+              </label>
+              {{ form.end_date }}
+              {% if form.end_date.errors %}
+                <div class="text-danger small">{{ form.end_date.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label class="form-label fw-semibold">
+                {{ form.timeframe.label }}
+                {% if form.timeframe.field.required %}<span class="text-danger">*</span>{% endif %}
+              </label>
+              <div class="timeframe-group">
+                {% for opt in form.timeframe %}
+                  <label class="timeframe-item">
+                    {{ opt.tag }} {{ opt.choice_label }}
+                  </label>
+                {% endfor %}
+              </div>
+              {% if form.timeframe.help_text %}
+                <div class="form-text">{{ form.timeframe.help_text }}</div>
+              {% endif %}
+              {% if form.timeframe.errors %}
+                <div class="text-danger small">{{ form.timeframe.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+            <hr>
+
+            <!-- Frequency & timezone -->
+            <div class="col-12 col-md-6">
+              <label class="form-label fw-semibold" for="{{ form.frequency.id_for_label }}">
+                {{ form.frequency.label }}
+                {% if form.frequency.field.required %}<span class="text-danger">*</span>{% endif %}
+              </label>
+              {{ form.frequency }}
+              {% if form.frequency.errors %}
+                <div class="text-danger small">{{ form.frequency.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label fw-semibold" for="{{ form.local_timezone.id_for_label }}">
+                {{ form.local_timezone.label }}
+                {% if form.local_timezone.field.required %}<span class="text-danger">*</span>{% endif %}
+              </label>
+              {{ form.local_timezone }}
+              {% if form.local_timezone.errors %}
+                <div class="text-danger small">{{ form.local_timezone.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+            <!-- Aircraft -->
+            <div class="col-12 col-md-6">
+              <label class="form-label fw-semibold" for="{{ form.aircraft.id_for_label }}">
+                {{ form.aircraft.label }}
+              </label>
+              {{ form.aircraft }}
+              {% if form.aircraft.help_text %}
+                <div class="form-text">{{ form.aircraft.help_text }}</div>
+              {% endif %}
+              {% if form.aircraft.errors %}
+                <div class="text-danger small">{{ form.aircraft.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label fw-semibold" for="{{ form.aircraft_custom.id_for_label }}">
+                {{ form.aircraft_custom.label }}
+              </label>
+              {{ form.aircraft_custom }}
+              {% if form.aircraft_custom.help_text %}
+                <div class="form-text">{{ form.aircraft_custom.help_text }}</div>
+              {% endif %}
+              {% if form.aircraft_custom.errors %}
+                <div class="text-danger small">{{ form.aircraft_custom.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+            <hr>
+
+            <!-- Proposed location -->
+            <div class="col-12">
+              <label class="form-label fw-semibold" for="{{ form.proposed_location.id_for_label }}">
+                {{ form.proposed_location.label }}
+                {% if form.proposed_location.field.required %}<span class="text-danger">*</span>{% endif %}
+              </label>
+              {{ form.proposed_location }}
+              {% if form.proposed_location.help_text %}
+                <div class="form-text">{{ form.proposed_location.help_text }}</div>
+              {% endif %}
+              {% if form.proposed_location.errors %}
+                <div class="text-danger small">{{ form.proposed_location.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+            <!-- Max AGL -->
+            <div class="col-12 col-md-6">
+              <label class="form-label fw-semibold" for="{{ form.max_agl.id_for_label }}">
+                {{ form.max_agl.label }}
+                {% if form.max_agl.field.required %}<span class="text-danger">*</span>{% endif %}
+              </label>
+              {{ form.max_agl }}
+              {% if form.max_agl.help_text %}
+                <div class="form-text">{{ form.max_agl.help_text }}</div>
+              {% endif %}
+              {% if form.max_agl.errors %}
+                <div class="text-danger small">{{ form.max_agl.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+
+
+
+
+
+
+<div class="activities-section">
+  <h6 class="mb-3 fw-semibold text-muted">Operational Activities</h6>
+
+  {% with activities=[
+      {'value': 'event_filming', 'label': 'Event filming'},
+      {'value': 'pro_photography', 'label': 'Professional aerial photography'},
+      {'value': 'mapping', 'label': 'Mapping / survey'},
+      {'value': 'infrastructure', 'label': 'Infrastructure inspection'},
+      {'value': 'public_safety', 'label': 'Public safety / incident support'},
+      {'value': 'training', 'label': 'Training / proficiency flights'},
+      {'value': 'real_estate', 'label': 'Real estate photography'}
+    ] %}
+
+    <div class="row row-cols-1 row-cols-md-2 g-3">
+      {% for act in activities %}
+        <div class="col">
+          <label class="d-flex align-items-center user-select-none cursor-pointer">
+            <input type="checkbox"
+                   name="{{ form.operation_activities.html_name }}"
+                   value="{{ act.value }}"
+                   class="me-3 flex-shrink-0"
+                   {% if act.value in form.operation_activities.value %}checked{% endif %}>
+            <span>{{ act.label }}</span>
+          </label>
+        </div>
+      {% endfor %}
+    </div>
+  {% endwith %}
+</div>
+
+
+{% comment %}             
+            <!-- What are you doing? -->
+            <div class="col-12">
+              <div class="mb-2 fw-semibold fs-4 ">What are you doing?</div>
+              <div class="text-muted small mb-3">Select all that apply.</div>
+
+              <div class="activities-grid">
+
+                <!-- Event filming -->
+                <label class="activity-item">Event filming
+                  <input type="checkbox"
+                         name="{{ form.operation_activities.html_name }}"
+                         value="event_filming"
+                         {% if 'event_filming' in form.operation_activities.value %}checked{% endif %}>
+                </label>
+                
+
+                <!-- Pro aerial -->
+                <label class="activity-item">
+                  Professional aerial photography
+                  <input type="checkbox"
+                        name="{{ form.operation_activities.html_name }}"
+                        value="pro_photography"
+                        {% if 'pro_photography' in form.operation_activities.value %}checked{% endif %}>
+                </label>
+
+                <!-- Mapping -->
+                <label class="activity-item">
+                  Mapping / survey
+                  <input type="checkbox"
+                        name="{{ form.operation_activities.html_name }}"
+                        value="mapping"
+                        {% if 'mapping' in form.operation_activities.value %}checked{% endif %}>
+                </label>
+
+                <!-- Infrastructure -->
+                <label class="activity-item">
+                  Infrastructure inspection
+                  <input type="checkbox"
+                        name="{{ form.operation_activities.html_name }}"
+                        value="infrastructure"
+                        {% if 'infrastructure' in form.operation_activities.value %}checked{% endif %}>
+                </label>
+
+                <!-- Public safety -->
+                <label class="activity-item">
+                  Public safety / incident support
+                  <input type="checkbox"
+                        name="{{ form.operation_activities.html_name }}"
+                        value="public_safety"
+                        {% if 'public_safety' in form.operation_activities.value %}checked{% endif %}>
+                </label>
+
+                <!-- Training -->
+                <label class="activity-item">
+                  Training / proficiency flights
+                  <input type="checkbox"
+                        name="{{ form.operation_activities.html_name }}"
+                        value="training"
+                        {% if 'training' in form.operation_activities.value %}checked{% endif %}>
+                </label>
+
+                <!-- Real estate -->
+                <label class="activity-item">
+                  Real Estate photography
+                  <input type="checkbox"
+                        name="{{ form.operation_activities.html_name }}"
+                        value="real_estate"
+                        {% if 'real_estate' in form.operation_activities.value %}checked{% endif %}>
+                </label>
+
+              </div>
+
+ {% endcomment %}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            {% comment %} {% for opt in form.operation_activities.field.choices %}
+              <label class="op-activity-item">
+                <span>{{ opt.1 }}</span>
+                <input type="checkbox"
+                      name="{{ form.operation_activities.html_name }}"
+                      value="{{ opt.0 }}"
+                      {% if opt.0 in form.operation_activities.value %}checked{% endif %}>
+              </label>
+            {% endfor %} {% endcomment %}
+
+
+
+
+
+
+              {% if form.operation_activities.errors %}
+                <div class="text-danger small">
+                  {{ form.operation_activities.errors|striptags }}
+                </div>
+              {% endif %}
+            </div>
+
+            <!-- Additional details -->
+            <div class="col-12">
+              <label class="form-label fw-semibold" for="{{ form.operation_activities_other.id_for_label }}">
+                {{ form.operation_activities_other.label }}
+              </label>
+              {{ form.operation_activities_other }}
+              {% if form.operation_activities_other.help_text %}
+                <div class="form-text">{{ form.operation_activities_other.help_text }}</div>
+              {% endif %}
+              {% if form.operation_activities_other.errors %}
+                <div class="text-danger small">{{ form.operation_activities_other.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+          </div>  {# end overview row #}
+
+        {# ===================================================== #}
+        {# STEP 2 – LOCATION & AIRSPACE                         #}
+        {# ===================================================== #}
+
+        {% elif current_step_key == "location" %}
+          <div class="row g-3">
+
+            <!-- Latitude -->
+            <div class="col-12">
+              <div class="row g-3">
+                <div class="col-6 col-md-3">
+                  <label class="form-label fw-semibold" for="{{ form.lat_degrees.id_for_label }}">
+                    {{ form.lat_degrees.label }}
+                  </label>
+                  {{ form.lat_degrees }}
+                  {% if form.lat_degrees.errors %}
+                    <div class="text-danger small">{{ form.lat_degrees.errors|striptags }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-6 col-md-3">
+                  <label class="form-label fw-semibold" for="{{ form.lat_minutes.id_for_label }}">
+                    {{ form.lat_minutes.label }}
+                  </label>
+                  {{ form.lat_minutes }}
+                  {% if form.lat_minutes.errors %}
+                    <div class="text-danger small">{{ form.lat_minutes.errors|striptags }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-6 col-md-3">
+                  <label class="form-label fw-semibold" for="{{ form.lat_seconds.id_for_label }}">
+                    {{ form.lat_seconds.label }}
+                  </label>
+                  {{ form.lat_seconds }}
+                  {% if form.lat_seconds.errors %}
+                    <div class="text-danger small">{{ form.lat_seconds.errors|striptags }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-6 col-md-3">
+                  <label class="form-label fw-semibold" for="{{ form.lat_direction.id_for_label }}">
+                    {{ form.lat_direction.label }}
+                  </label>
+                  {{ form.lat_direction }}
+                  {% if form.lat_direction.errors %}
+                    <div class="text-danger small">{{ form.lat_direction.errors|striptags }}</div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+            <!-- Longitude -->
+            <div class="col-12">
+              <div class="row g-3">
+                <div class="col-6 col-md-3">
+                  <label class="form-label fw-semibold" for="{{ form.lon_degrees.id_for_label }}">
+                    {{ form.lon_degrees.label }}
+                  </label>
+                  {{ form.lon_degrees }}
+                  {% if form.lon_degrees.errors %}
+                    <div class="text-danger small">{{ form.lon_degrees.errors|striptags }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-6 col-md-3">
+                  <label class="form-label fw-semibold" for="{{ form.lon_minutes.id_for_label }}">
+                    {{ form.lon_minutes.label }}
+                  </label>
+                  {{ form.lon_minutes }}
+                  {% if form.lon_minutes.errors %}
+                    <div class="text-danger small">{{ form.lon_minutes.errors|striptags }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-6 col-md-3">
+                  <label class="form-label fw-semibold" for="{{ form.lon_seconds.id_for_label }}">
+                    {{ form.lon_seconds.label }}
+                  </label>
+                  {{ form.lon_seconds }}
+                  {% if form.lon_seconds.errors %}
+                    <div class="text-danger small">{{ form.lon_seconds.errors|striptags }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-6 col-md-3">
+                  <label class="form-label fw-semibold" for="{{ form.lon_direction.id_for_label }}">
+                    {{ form.lon_direction.label }}
+                  </label>
+                  {{ form.lon_direction }}
+                  {% if form.lon_direction.errors %}
+                    <div class="text-danger small">{{ form.lon_direction.errors|striptags }}</div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+            <!-- Radius -->
+            <div class="col-12 col-md-6">
+              <label class="form-label fw-semibold" for="{{ form.radius_nm.id_for_label }}">
+                {{ form.radius_nm.label }}
+              </label>
+              {{ form.radius_nm }}
+              {% if form.radius_nm.help_text %}
+                <div class="form-text">{{ form.radius_nm.help_text }}</div>
+              {% endif %}
+              {% if form.radius_nm.errors %}
+                <div class="text-danger small">{{ form.radius_nm.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+            <!-- Nearest airport -->
+            <div class="col-12 col-md-6">
+              <label class="form-label fw-semibold" for="{{ form.nearest_airport.id_for_label }}">
+                {{ form.nearest_airport.label }}
+              </label>
+              {{ form.nearest_airport }}
+              {% if form.nearest_airport.help_text %}
+                <div class="form-text">{{ form.nearest_airport.help_text }}</div>
+              {% endif %}
+              {% if form.nearest_airport.errors %}
+                <div class="text-danger small">{{ form.nearest_airport.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+            <!-- Airspace class -->
+            <div class="col-12 col-md-6">
+              <label class="form-label fw-semibold" for="{{ form.airspace_class.id_for_label }}">
+                {{ form.airspace_class.label }}
+              </label>
+              {{ form.airspace_class }}
+              {% if form.airspace_class.help_text %}
+                <div class="form-text">{{ form.airspace_class.help_text }}</div>
+              {% endif %}
+              {% if form.airspace_class.errors %}
+                <div class="text-danger small">{{ form.airspace_class.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+          </div>
+
+        {# ===================================================== #}
+        {# STEP 3 – DESCRIPTION & EXISTING WAIVERS              #}
+        {# ===================================================== #}
+
+        {% else %}
+          <div class="row g-3">
+            {% for field in form.visible_fields %}
+              <div class="col-12">
+                <label class="form-label fw-semibold" for="{{ field.id_for_label }}">
+                  {{ field.label }}
+                  {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                </label>
+                {{ field }}
+                {% if field.help_text %}
+                  <div class="form-text">{{ field.help_text }}</div>
+                {% endif %}
+                {% if field.errors %}
+                  <div class="text-danger small">{{ field.errors|striptags }}</div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <!-- Wizard footer buttons -->
+        <div class="d-flex justify-content-between mt-4">
+          <a href="{% url 'airspace:waiver_list' %}" class="btn btn-outline-secondary">
+            Cancel
+          </a>
+          <div>
+            {% if wizard.steps.prev %}
+              <button
+                type="submit"
+                name="wizard_goto_step"
+                value="{{ wizard.steps.prev }}
+                "
+                class="btn btn-secondary me-2"
+              >
+                Back
+              </button>
+            {% endif %}
+            <button type="submit" class="btn btn-primary">
+              {% if wizard.steps.current == wizard.steps.last %}
+                Save Waiver Draft
+              {% else %}
+                Continue
+              {% endif %}
+            </button>
+          </div>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

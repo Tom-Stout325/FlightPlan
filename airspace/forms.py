@@ -1,9 +1,15 @@
 from django import forms
-from .models import AirspaceWaiver, WaiverPlanning
-from equipment.models import Equipment
+
+from documents.models import GeneralDocument
 from pilot.models import PilotProfile
+from equipment.models import Equipment
+from .models import AirspaceWaiver, WaiverPlanning
 
 
+
+# ---------------------------------------------------------------------
+# Choice constants
+# ---------------------------------------------------------------------
 
 TIMEFRAME_CHOICES = [
     ("sunrise_noon", "Sunrise to Noon"),
@@ -46,177 +52,22 @@ YES_NO_CHOICES = [
     (True, "Yes"),
 ]
 
-DIRECTION_NS_CHOICES = [
-    ("N", "N"),
-    ("S", "S"),
-]
-
-DIRECTION_EW_CHOICES = [
-    ("E", "E"),
-    ("W", "W"),
-]
+DIRECTION_NS_CHOICES = [("N", "N"), ("S", "S")]
+DIRECTION_EW_CHOICES = [("E", "E"), ("W", "W")]
 
 
-class AirspaceWaiverForm(forms.ModelForm):
-    # 1. Operation overview
-    operation_title = forms.CharField(
-        label="Operation Title",
-        max_length=200,
-        widget=forms.TextInput(
-            attrs={"class": "form-control", "placeholder": "NHRA National Event FPV Operations"}
-        ),
-    )
-    start_date = forms.DateField(
-        widget=forms.DateInput(attrs={"type": "date", "class": "form-control"}),
-        required=True,
-    )
-    end_date = forms.DateField(
-        widget=forms.DateInput(attrs={"type": "date", "class": "form-control"}),
-        required=True,
-    )
-    timeframe = forms.ChoiceField(
-        choices=TIMEFRAME_CHOICES,
-        widget=forms.Select(attrs={"class": "form-select"}),
-    )
-    frequency = forms.ChoiceField(
-        choices=FREQUENCY_CHOICES,
-        widget=forms.Select(attrs={"class": "form-select"}),
-    )
-    local_timezone = forms.ChoiceField(
-        label="Local Time Zone",
-        choices=TZ_CHOICES,
-        widget=forms.Select(attrs={"class": "form-select"}),
-    )
-
-    # 2. Location
-    proposed_location = forms.CharField(
-        label="Proposed Location of Operation",
-        widget=forms.Textarea(
-            attrs={
-                "class": "form-control",
-                "rows": 2,
-                "placeholder": "Venue name, city/state, brief description...",
-            }
-        ),
-    )
-    max_agl = forms.IntegerField(
-        label="Proposed Maximum Flight Altitude (AGL, ft)",
-        widget=forms.NumberInput(attrs={"class": "form-control", "min": 0}),
-    )
-
-    # Latitude (DMS)
-    lat_degrees = forms.IntegerField(
-        label="Latitude Degrees",
-        min_value=0,
-        max_value=90,
-        widget=forms.NumberInput(
-            attrs={"class": "form-control", "placeholder": "Enter Degrees"}
-        ),
-    )
-    lat_minutes = forms.IntegerField(
-        label="Latitude Minutes",
-        min_value=0,
-        max_value=59,
-        widget=forms.NumberInput(
-            attrs={"class": "form-control", "placeholder": "Enter Minutes"}
-        ),
-    )
-    lat_seconds = forms.DecimalField(
-        label="Latitude Seconds",
-        min_value=0,
-        max_value=59.9999,
-        decimal_places=4,
-        widget=forms.NumberInput(
-            attrs={"class": "form-control", "placeholder": "Enter Seconds"}
-        ),
-    )
-    lat_direction = forms.ChoiceField(
-        label="Latitude Direction",
-        choices=DIRECTION_NS_CHOICES,
-        widget=forms.Select(attrs={"class": "form-select"}),
-    )
-
-    # Longitude (DMS)
-    lon_degrees = forms.IntegerField(
-        label="Longitude Degrees",
-        min_value=0,
-        max_value=180,
-        widget=forms.NumberInput(
-            attrs={"class": "form-control", "placeholder": "Enter Degrees"}
-        ),
-    )
-    lon_minutes = forms.IntegerField(
-        label="Longitude Minutes",
-        min_value=0,
-        max_value=59,
-        widget=forms.NumberInput(
-            attrs={"class": "form-control", "placeholder": "Enter Minutes"}
-        ),
-    )
-    lon_seconds = forms.DecimalField(
-        label="Longitude Seconds",
-        min_value=0,
-        max_value=59.9999,
-        decimal_places=4,
-        widget=forms.NumberInput(
-            attrs={"class": "form-control", "placeholder": "Enter Seconds"}
-        ),
-    )
-    lon_direction = forms.ChoiceField(
-        label="Longitude Direction",
-        choices=DIRECTION_EW_CHOICES,
-        widget=forms.Select(attrs={"class": "form-select"}),
-    )
-
-    radius_nm = forms.ChoiceField(
-        label="Radius (NM)",
-        choices=RADIUS_CHOICES,
-        widget=forms.Select(attrs={"class": "form-select"}),
-    )
-    nearest_airport = forms.CharField(
-        label="Nearest Airport (ICAO)",
-        max_length=10,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "KIND"}),
-    )
-    airspace_class = forms.ChoiceField(
-        label="Class of Airspace",
-        choices=AIRSPACE_CLASS_CHOICES,
-        widget=forms.Select(attrs={"class": "form-select"}),
-    )
-
-    # 3. Description & waivers
-    short_description = forms.CharField(
-        label="Description of Your Proposed Operation",
-        widget=forms.Textarea(
-            attrs={
-                "class": "form-control",
-                "rows": 4,
-                "placeholder": "Purpose of operation and how it will be safely conducted...",
-            }
-        ),
-    )
-    has_related_waiver = forms.TypedChoiceField(
-        label="Is there a pending or approved waiver associated with this operation?",
-        choices=YES_NO_CHOICES,
-        coerce=lambda v: v == "True",
-        widget=forms.Select(attrs={"class": "form-select"}),
-    )
-
-    related_waiver_details = forms.CharField(
-        label="Relevant Existing Waivers (details)",
-        required=False,
-        widget=forms.Textarea(
-            attrs={
-                "class": "form-control",
-                "rows": 3,
-                "placeholder": "If yes, list waiver number(s), regulation(s) waived, expiry date(s)...",
-            }
-        ),
-    )
+class AirspaceWaiverBaseForm(forms.ModelForm):
+    """
+    Base form shared by all wizard steps.
+    Handles:
+      - common excludes
+      - aircraft queryset
+      - timeframe (multi-select) ↔ model CharField conversion
+      - basic start/end date validation
+    """
 
     class Meta:
         model = AirspaceWaiver
-        # We let Django include all model fields except these internal ones.
         exclude = (
             "user",
             "lat_decimal",
@@ -228,16 +79,24 @@ class AirspaceWaiverForm(forms.ModelForm):
             "conops_generated_at",
         )
 
-    def __init__(self, *args, **kwargs):
-        user = kwargs.pop("user", None)
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Optional: restrict aircraft dropdown to this user's drones
-        if "aircraft" in self.fields and user is not None:
-            self.fields["aircraft"].queryset = Equipment.objects.filter(
-                owner=user,
-                type="Drone",
+        # Limit aircraft choices to active drones
+        if "aircraft" in self.fields:
+            self.fields["aircraft"].queryset = (
+                Equipment.objects.filter(equipment_type="Drone", active=True)
+                .order_by("brand", "model", "name")
             )
+
+        # Prefill timeframe (model stores comma-separated string)
+        if "timeframe" in self.fields and getattr(self.instance, "timeframe", None):
+            current = self.instance.timeframe
+            if isinstance(current, str):
+                self.initial.setdefault(
+                    "timeframe",
+                    [v.strip() for v in current.split(",") if v.strip()],
+                )
 
     def clean(self):
         cleaned = super().clean()
@@ -247,16 +106,238 @@ class AirspaceWaiverForm(forms.ModelForm):
             self.add_error("end_date", "End date must be on or after the start date.")
         return cleaned
 
+    def clean_timeframe(self):
+        """
+        Convert MultipleChoiceField (list) to comma-separated string
+        for storage in the model CharField.
+        """
+        tf = self.cleaned_data.get("timeframe")
+        if isinstance(tf, (list, tuple)):
+            return ",".join(tf)
+        return tf
 
 
 
+
+class AirspaceWaiverOverviewForm(AirspaceWaiverBaseForm):
+    """
+    Step 1 – Operation Overview + Aircraft.
+    Timeframe = multi-select checkboxes.
+    Frequency = single-select dropdown.
+    """
+
+    timeframe = forms.MultipleChoiceField(
+        label="Timeframe of Operation",
+        required=True,
+        choices=TIMEFRAME_CHOICES,
+        widget=forms.CheckboxSelectMultiple,
+        help_text="Select all that apply.",
+    )
+
+    frequency = forms.ChoiceField(
+        label="Frequency of Operation",
+        required=True,
+        choices=FREQUENCY_CHOICES,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+    local_timezone = forms.ChoiceField(
+        label="Local Time Zone",
+        choices=TZ_CHOICES,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+    operation_activities = forms.MultipleChoiceField(
+        label="What are you doing?",
+        required=False,
+        choices=AirspaceWaiver.OPERATION_ACTIVITY_CHOICES,
+        widget=forms.CheckboxSelectMultiple,
+    )
+
+    operation_activities_other = forms.CharField(
+        label="Additional details (optional)",
+        required=False,
+        widget=forms.Textarea(
+            attrs={
+                "class": "form-control",
+                "rows": 2,
+                "placeholder": "e.g. Live broadcast coverage of NHRA national events for television...",
+            }
+        ),
+    )
+
+    class Meta(AirspaceWaiverBaseForm.Meta):
+        fields = [
+            "operation_title",
+            "start_date",
+            "end_date",
+            "timeframe",
+            "frequency",
+            "local_timezone",
+            "aircraft",
+            "aircraft_custom",
+            "proposed_location",
+            "max_agl",
+            "operation_activities",
+            "operation_activities_other",
+        ]
+        widgets = {
+            "operation_title": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "NHRA National Event FPV Operations",
+                }
+            ),
+            "start_date": forms.DateInput(
+                attrs={"type": "date", "class": "form-control"}
+            ),
+            "end_date": forms.DateInput(
+                attrs={"type": "date", "class": "form-control"}
+            ),
+            "aircraft_custom": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "If not in the list, describe the aircraft.",
+                }
+            ),
+            "proposed_location": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 2,
+                    "placeholder": "Venue name, city/state, brief description...",
+                }
+            ),
+            "max_agl": forms.NumberInput(
+                attrs={"class": "form-control", "min": 0}
+            ),
+        }
+
+    def clean_operation_activities(self):
+        data = self.cleaned_data.get("operation_activities") or []
+        if isinstance(data, (list, tuple)):
+            return ",".join(data)
+        return data
+
+
+
+
+
+class AirspaceWaiverLocationForm(AirspaceWaiverBaseForm):
+    """
+    Step 2 – Location & Airspace details
+    """
+
+    radius_nm = forms.ChoiceField(
+        label="Radius (NM)",
+        required=True,
+        choices=RADIUS_CHOICES,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+    class Meta(AirspaceWaiverBaseForm.Meta):
+        fields = [
+            "lat_degrees",
+            "lat_minutes",
+            "lat_seconds",
+            "lat_direction",
+            "lon_degrees",
+            "lon_minutes",
+            "lon_seconds",
+            "lon_direction",
+            "radius_nm",
+            "nearest_airport",
+            "airspace_class",
+        ]
+        widgets = {
+            "lat_degrees": forms.NumberInput(
+                attrs={"class": "form-control", "placeholder": "Enter Degrees"}
+            ),
+            "lat_minutes": forms.NumberInput(
+                attrs={"class": "form-control", "placeholder": "Enter Minutes"}
+            ),
+            "lat_seconds": forms.NumberInput(
+                attrs={"class": "form-control", "placeholder": "Enter Seconds"}
+            ),
+            "lat_direction": forms.Select(attrs={"class": "form-select"}),
+            "lon_degrees": forms.NumberInput(
+                attrs={"class": "form-control", "placeholder": "Enter Degrees"}
+            ),
+            "lon_minutes": forms.NumberInput(
+                attrs={"class": "form-control", "placeholder": "Enter Minutes"}
+            ),
+            "lon_seconds": forms.NumberInput(
+                attrs={"class": "form-control", "placeholder": "Enter Seconds"}
+            ),
+            "lon_direction": forms.Select(attrs={"class": "form-select"}),
+            # You can remove this radius_nm widget if you want;
+            # the field definition above already sets its widget.
+            "nearest_airport": forms.TextInput(
+                attrs={"class": "form-control", "placeholder": "KIND"}
+            ),
+            "airspace_class": forms.Select(attrs={"class": "form-select"}),
+        }
+
+
+
+
+
+class AirspaceWaiverDescriptionForm(AirspaceWaiverBaseForm):
+    """
+    Step 3 – Operational Description & Existing Waivers
+    """
+
+    has_related_waiver = forms.TypedChoiceField(
+        label="Is there a pending or approved waiver associated with this operation?",
+        choices=YES_NO_CHOICES,
+        coerce=lambda v: v == "True",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+    class Meta(AirspaceWaiverBaseForm.Meta):
+        fields = [
+            "short_description",
+            "has_related_waiver",
+            "related_waiver_details",
+        ]
+        widgets = {
+            "short_description": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 4,
+                    "placeholder": "Purpose of operation and how it will be safely conducted...",
+                }
+            ),
+            "related_waiver_details": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 3,
+                    "placeholder": "If yes, list waiver number(s), regulation(s) waived, expiry date(s)...",
+                }
+            ),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        has_related = cleaned.get("has_related_waiver")
+        details = (cleaned.get("related_waiver_details") or "").strip()
+        if has_related and str(has_related) == "True" and not details:
+            self.add_error(
+                "related_waiver_details",
+                "Please provide details for the related waiver(s).",
+            )
+        return cleaned
+
+
+# ---------------------------------------------------------------------
+# WaiverPlanning form
+# ---------------------------------------------------------------------
 
 
 class WaiverPlanningForm(forms.ModelForm):
     """
-    Step 1 – planning form that collects non-FAA waiver info
-    used to enrich the CONOPS: aircraft, pilot, hours, launch location,
-    and safety features.
+    Planning form used to enrich the CONOPS:
+    aircraft, pilot, hours, launch location, safety features, and
+    whether the operation is under an existing 107.39 waiver.
     """
 
     aircraft = forms.ModelChoiceField(
@@ -299,6 +380,9 @@ class WaiverPlanningForm(forms.ModelForm):
             "pilot_flight_hours",
             "launch_location",
             "safety_features_notes",
+            "operates_under_10739",
+            "oop_waiver_document",
+            "oop_waiver_number",
         ]
         widgets = {
             "aircraft_manual": forms.TextInput(
@@ -316,13 +400,13 @@ class WaiverPlanningForm(forms.ModelForm):
             "pilot_cert_manual": forms.TextInput(
                 attrs={
                     "class": "form-control",
-                    "placeholder": "Part 107 certificate # (if not using a profile)",
+                    "placeholder": "Part 107 certificate number (if not using a profile)",
                 }
             ),
             "launch_location": forms.TextInput(
                 attrs={
                     "class": "form-control",
-                    "placeholder": "e.g., paddock roof, media platform, staging area",
+                    "placeholder": "Launch/staging location (city, venue, or coordinates)",
                 }
             ),
             "safety_features_notes": forms.Textarea(
@@ -332,16 +416,25 @@ class WaiverPlanningForm(forms.ModelForm):
                     "placeholder": "Redundancies, geofencing, RTH, parachute, etc.",
                 }
             ),
+            "operates_under_10739": forms.CheckboxInput(
+                attrs={"class": "form-check-input"}
+            ),
+            "oop_waiver_document": forms.Select(
+                attrs={"class": "form-select"}
+            ),
+            "oop_waiver_number": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "107W-2024-01234",
+                }
+            ),
         }
 
     def __init__(self, *args, **kwargs):
-        # Pull user out of kwargs safely
         user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
 
-        # --- Querysets ---
-
-        # Pilot dropdown: scope to this user if your model uses user FK
+        # Pilot dropdown
         if user is not None:
             self.fields["pilot_profile"].queryset = PilotProfile.objects.filter(
                 user=user
@@ -351,15 +444,13 @@ class WaiverPlanningForm(forms.ModelForm):
                 "user__first_name", "user__last_name"
             )
 
-        # Drone dropdown: only active drones from Equipment
+        # Drone dropdown
         self.fields["aircraft"].queryset = Equipment.objects.filter(
             equipment_type="Drone",
             active=True,
         ).order_by("brand", "model", "name")
 
-        # --- Pretty labels for dropdowns ---
-
-        # Pilot labels: "FirstName LastName" (fallback to username)
+        # Label formatting
         def pilot_label(obj):
             u = obj.user
             full = f"{u.first_name} {u.last_name}".strip()
@@ -367,33 +458,52 @@ class WaiverPlanningForm(forms.ModelForm):
 
         self.fields["pilot_profile"].label_from_instance = pilot_label
 
-        # Drone labels: "Brand Model — FAA X, SN Y"
         def aircraft_label(obj):
-            parts = []
+            parts = [obj.brand, obj.model]
+            base = " ".join(p for p in parts if p)
             if obj.name:
-                parts.append(obj.name)
-        
-            main = " ".join(parts) if parts else obj.name
-
-            return main
+                return f"{base} ({obj.name})" if base else obj.name
+            return base or str(obj)
 
         self.fields["aircraft"].label_from_instance = aircraft_label
 
-        # --- Prefill cert + flight hours from PilotProfile on EDIT only ---
+        # Scope OOP waiver document dropdown
+        if "oop_waiver_document" in self.fields:
+            qs = GeneralDocument.objects.all()
+            # If your GeneralDocument has a user FK, filter it here.
+            try:
+                # this will raise if field doesn't exist
+                GeneralDocument._meta.get_field("user")
+                if user is not None:
+                    qs = qs.filter(user=user)
+            except Exception:
+                pass
+
+            self.fields["oop_waiver_document"].queryset = qs.order_by("title")
+
+        # Pre-fill waiver number from document, if present
         instance = getattr(self, "instance", None)
-        if instance and instance.pk and instance.pilot_profile:
-            profile = instance.pilot_profile
+        if (
+            instance
+            and instance.pk
+            and instance.oop_waiver_document
+            and not instance.oop_waiver_number
+        ):
+            doc_number = getattr(instance.oop_waiver_document, "waiver_number", None)
+            if doc_number:
+                self.initial.setdefault("oop_waiver_number", doc_number)
 
-            # Cert: only if manual cert is blank and profile has license_number
-            if (
-                not instance.pilot_cert_manual
-                and getattr(profile, "license_number", None)
-            ):
-                self.initial.setdefault("pilot_cert_manual", profile.license_number)
 
-            # UAS flight hours from profile.flight_time_total() (seconds → hours)
-            if not instance.pilot_flight_hours:
-                total_seconds = profile.flight_time_total() or 0
-                hours_value = round(total_seconds / 3600.0, 1)
-                if hours_value > 0:
-                    self.initial.setdefault("pilot_flight_hours", hours_value)
+
+
+class AirspaceWaiverForm(forms.ModelForm):
+    """
+    Full edit/create form for an AirspaceWaiver, used by:
+      - airspace_waiver_form
+      - airspace_waiver_edit
+    This uses the model fields directly (single-page form), separate from the wizard.
+    """
+
+    class Meta:
+        model = AirspaceWaiver
+        fields = "__all__"

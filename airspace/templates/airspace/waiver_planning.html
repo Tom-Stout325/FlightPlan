@@ -6,7 +6,13 @@
 
 {% block content %}
 <div class="container mt-4 mb-5" style="max-width: 900px;">
+<div>
+  <a href="{% url 'airspace:waiver_draft_new' %}?planning_id={{ planning.id }}"
+   class="btn btn-primary">
+  Start Waiver Draft
+</a>
 
+</div>
   <div class="mb-4">
     <h1 class="h4 mb-1">
       {% if planning_mode == "edit" %}Edit Waiver Planning{% else %}Waiver Planning{% endif %}
@@ -30,7 +36,7 @@
             </label>
             {{ form.aircraft }}
             <div class="form-text">
-              Only equipment marked as "Drone" is shown here.
+              Select the drone model you will be using.  This selection will populate the Drone Safety Features later in your form.
             </div>
             {{ form.aircraft.errors }}
           </div>
@@ -86,10 +92,49 @@
         <h2 class="h6 text-uppercase text-muted mb-3">Launch Location</h2>
         <div class="mb-4">
           <label class="form-label fw-semibold" for="{{ form.launch_location.id_for_label }}">
-            Typical launch / staging location
+            Detail the specific location from which you will conduct drone operations.  Example:  "West parking lot"
           </label>
           {{ form.launch_location }}
           {{ form.launch_location.errors }}
+        </div>
+                <!-- Operations Over People (107.39) -->
+        <h2 class="h6 text-uppercase text-muted mb-3">Operations Over People (107.39)</h2>
+
+        <div class="mb-3">
+          <div class="form-check form-switch">
+            {{ form.operates_under_10739 }}
+            <label class="form-check-label ms-2" for="{{ form.operates_under_10739.id_for_label }}">
+              This operation will be conducted under an approved 14 CFR §107.39 Operations Over People waiver
+            </label>
+          </div>
+          <div class="form-text">
+            Turn this on if you have an FAA-approved 107.39 waiver, Operations Over People, that applies to this operation.
+          </div>
+          {{ form.operates_under_10739.errors }}
+        </div>
+
+        <div id="oop-waiver-details" class="border rounded-3 p-3 bg-light mb-4 d-none">
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="{{ form.oop_waiver_document.id_for_label }}">
+              Select approved 107.39 waiver
+            </label>
+            {{ form.oop_waiver_document }}
+            <div class="form-text">
+              This list is pulled from your General Documents. Choose the 107.39 waiver that covers this operation.
+            </div>
+            {{ form.oop_waiver_document.errors }}
+          </div>
+
+          <div class="mb-0">
+            <label class="form-label fw-semibold" for="{{ form.oop_waiver_number.id_for_label }}">
+              Approved 107.39 Waiver Number
+            </label>
+            {{ form.oop_waiver_number }}
+            <div class="form-text">
+              Example: <code>107W-2024-01234</code>. If left blank, we’ll try to pull it from the attached document.
+            </div>
+            {{ form.oop_waiver_number.errors }}
+          </div>
         </div>
 
         <!-- Safety features -->
@@ -100,7 +145,7 @@
           </label>
           {{ form.safety_features_notes }}
           <div class="form-text">
-            Include redundancies, geofencing, return-to-home behavior, parachute systems, etc.
+            If you have selected a drone from the drop-down menu, this will be auto-populated from our drone database.  If you added the drone in Other/Aditional Drones, complete this field.  Include redundancies, geofencing, return-to-home behavior, parachute systems, etc.
           </div>
           {{ form.safety_features_notes.errors }}
         </div>
@@ -206,11 +251,30 @@
       // Run once on load, in case an aircraft is already selected
       updateSafetyFeatures();
     }
+        // -------------------------
+    // 107.39 OOP waiver toggle
+    // -------------------------
+    const oopToggle = document.getElementById("id_operates_under_10739");
+    const oopDetails = document.getElementById("oop-waiver-details");
+
+    function updateOopVisibility() {
+      if (!oopToggle || !oopDetails) return;
+      if (oopToggle.checked) {
+        oopDetails.classList.remove("d-none");
+      } else {
+        oopDetails.classList.add("d-none");
+      }
+    }
+
+    if (oopToggle && oopDetails) {
+      oopToggle.addEventListener("change", updateOopVisibility);
+      // Initialize on page load
+      updateOopVisibility();
+    }
+
   });
 </script>
 
 {% endblock %}
-
-
 
 

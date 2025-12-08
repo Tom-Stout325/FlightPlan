@@ -1,9 +1,0 @@
-id,name,equipment_type,brand,model,serial_number,faa_number,faa_certificate,purchase_date,purchase_cost,receipt,date_sold,sale_price,deducted_full_cost,active,notes,drone_safety_profile_id
-6853f3c0-022f-4cd1-9916-a2eeb76ef673,Avata 2 Controller,Controller,DJI,Avata 2 Controller,"","","",2025-06-25,214.19,"",,,t,f,"",
-b09f10bf-3ec6-4877-b2d1-31ea84e98af1,Mavic 3 Pro,Drone,DJI,Mavic 3 Pro,1581F67Q72497M04W1D4,FA3CYL3KLR,registrations/Screenshot_2025-08-04_at_11.59.20PM.png,2023-05-20,3888.00,"",2025-07-07,2200.00,t,f,Sold with DJI RC Controller and 4 batteries,
-2f95e3a8-f729-4dc6-bcbf-fcaecce50e48,Avata 2,Drone,DJI,Avata 2,1581F6W8A242S0A32PRP,FATPXYFAA,registrations/Screenshot_2025-07-13_at_10.29.34PM.png,2024-04-24,1283.99,receipts/Screenshot_2025-08-20_at_2.40.48PM.png,,,t,t,"Includes Goggles, Motion Controller and 3 Batteries",
-fa8eab3a-3564-4447-b49b-42172e3ba3c0,Mavic 4 Pro,Drone,DJI,Mavic 4 Creator Combo,1581F986C255U0021R71,FA3C3YE9XA,registrations/Screenshot_2025-07-13_at_10.32.41PM.png,2025-07-03,5220.16,receipts/Screenshot_2025-08-20_at_2.50.05PM.png,,,t,t,Includes RC Pro 2 Controller and 3 Batteries,
-990c8ebd-2896-41d7-9f89-dbd93240348f,Air 3S,Drone,DJI,Air 3S,1581F895C2527007AYR1,FA34H9C34F,registrations/Air_3s.png,2025-06-16,1616.45,receipts/Adorama_-_Air_3s_Receipt.pdf,,,t,t,Included DJI RC 2 Controller and 3 Batteries,
-84141d84-d135-4662-bc5d-222d321466b9,RC Pro 2,Controller,DJI,RC Pro,"","","",2023-06-20,1042.00,"",2025-04-02,625.00,t,f,"",
-419b1d20-e25d-43a8-97c6-0d729e23cac9,Mavic 3 Classic,Drone,DJI,Mavic 3 Classic,1581F67PB229G00207EW,FA3W9RKWM9,registrations/Screenshot_2025-08-04_at_11.59.20PM.png,2024-04-11,1389.93,receipts/mavic_3.pdf,2025-08-04,1200.00,t,f,Sold with DJI RC Controller and 3 batteries,
-9a2d9605-7f5b-47b5-bf28-98bd8518b447,RC Pro,Controller,DJI,RC Pro Controller,"","","",2024-05-14,922.13,receipts/3WK-kEE7Mr7CnoD9Paodf9VwNKewEJHZ.pdf,2025-06-24,600.00,t,f,"",

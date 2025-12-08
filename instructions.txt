@@ -1,10 +1,24 @@
 Next Steps:
 
-- Add safety profile for mini 5 production
+
+- Add safety profile for mini 5 pro
+- Add Location for drone operations 
+    - Get:
+        Location name
+        Address
+        Grid coordinates
 
 
 
+FAA Waivers:
+https://www.faa.gov/uas/commercial_operators/part_107_waivers
 
+Category Explanations:
+https://www.ecfr.gov/current/title-14/chapter-I/subchapter-F/part-107/subpart-D
+
+
+Wide Area Authorizations:
+used often for real estate, click in the center of the airport and use those GPS coordinates
 
 
 IMPROVEMENTS:
@@ -26,7 +40,6 @@ SELECT COUNT(*) FROM flightplan_equipment;
 
 
 Run Migrations on Heroku:
-
 heroku run -a flightplan-airborne -- python manage.py migrate
 
 Heroku logs:

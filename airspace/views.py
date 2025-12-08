@@ -5,15 +5,30 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.generic import ListView, TemplateView
-from django.urls import reverse 
+from django.urls import reverse
+from formtools.wizard.views import SessionWizardView
 
-from .forms import AirspaceWaiverForm, WaiverPlanningForm
+
 from .models import AirspaceWaiver, WaiverPlanning
 from .services import generate_conops_text
-
-
-from flightlogs.models import FlightLog 
+from flightlogs.models import FlightLog
 from equipment.models import Equipment
+
+from .forms import (
+    AirspaceWaiverForm,
+    AirspaceWaiverOverviewForm,
+    AirspaceWaiverLocationForm,
+    AirspaceWaiverDescriptionForm,
+    WaiverPlanningForm,
+)
+
+
+
+
+
+
+
+
 
 
 
@@ -58,12 +73,194 @@ class AirspacePortalView(LoginRequiredMixin, TemplateView):
 
 
 
+
+
+
 @login_required
 def airspace_waiver(request):
     """
     Simple landing/helper page for the airspace waiver helper.
     """
     return render(request, "airspace/airspace_waiver.html")
+
+
+
+
+
+
+# --- Airspace Waiver Draft Wizard ------------------------------------
+
+
+STEP_TITLES = {
+    "overview": "Operation Overview",
+    "location": "Location & Airspace Details",
+    "description": "Operational Description & Existing Waivers",
+}
+
+
+class AirspaceWaiverDraftWizard(LoginRequiredMixin, SessionWizardView):
+    """
+    3-step wizard for creating an AirspaceWaiver draft:
+
+      1) Operation Overview
+      2) Location & Airspace
+      3) Operational Description & Existing Waivers
+
+    If started with ?planning_id=<id>, we pull initial data from that
+    WaiverPlanning record (aircraft, pilot, 107.39 info, etc).
+    """
+
+    template_name = "airspace/waiver_wizard.html"
+
+    # If your urls.py passes a form_list into as_view(), that will override this.
+    form_list = [
+        ("overview", AirspaceWaiverOverviewForm),
+        ("location", AirspaceWaiverLocationForm),
+        ("description", AirspaceWaiverDescriptionForm),
+    ]
+
+    # ---------- plumbing: preserve planning_id between steps ----------
+
+    def dispatch(self, request, *args, **kwargs):
+        """
+        Capture planning_id from GET/POST once and store it in the wizard
+        storage so it's available on every step.
+        """
+        planning_id = request.GET.get("planning_id") or request.POST.get("planning_id")
+        if planning_id:
+            self.storage.extra_data["planning_id"] = planning_id
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_planning(self):
+        """
+        Safely fetch the WaiverPlanning record for this user, if any.
+        """
+        planning_id = self.storage.extra_data.get("planning_id")
+        if not planning_id:
+            return None
+        try:
+            return WaiverPlanning.objects.get(pk=planning_id, user=self.request.user)
+        except WaiverPlanning.DoesNotExist:
+            return None
+
+    # ---------- form wiring ----------
+
+    def get_form_kwargs(self, step=None):
+        """
+        Pass the current user into each form so we can limit aircraft
+        querysets etc.
+        """
+        kwargs = super().get_form_kwargs(step)
+        kwargs["user"] = self.request.user
+        return kwargs
+
+    def get_form_initial(self, step):
+        """
+        Seed initial values from WaiverPlanning:
+
+        - Step 'overview': aircraft fields
+        - Step 'description': 107.39 (OOP) waiver info
+        """
+        initial = super().get_form_initial(step)
+        planning = self.get_planning()
+        if not planning:
+            return initial
+
+        # STEP 1 – Operation Overview
+        if step == "overview":
+            if planning.aircraft_id:
+                initial.setdefault("aircraft", planning.aircraft_id)
+            if planning.aircraft_manual:
+                initial.setdefault("aircraft_manual", planning.aircraft_manual)
+
+        # STEP 3 – Description & Existing Waivers
+        elif step == "description":
+            if planning.operates_under_10739:
+                initial.setdefault("has_related_waiver", True)
+
+                parts = []
+                if planning.oop_waiver_number:
+                    parts.append(f"Approved 107.39 waiver {planning.oop_waiver_number}")
+                if planning.oop_waiver_document_id and planning.oop_waiver_document:
+                    parts.append(f"Document: {planning.oop_waiver_document.title}")
+
+                existing_text = (initial.get("related_waiver_details") or "").strip()
+                composed = ". ".join(parts)
+
+                if composed:
+                    if existing_text:
+                        initial["related_waiver_details"] = (
+                            existing_text.rstrip(". ") + ". " + composed + "."
+                        )
+                    else:
+                        initial["related_waiver_details"] = composed + "."
+
+        return initial
+
+    # ---------- context: pilot/aircraft snapshot for the UI ----------
+
+    def get_context_data(self, form, **kwargs):
+        context = super().get_context_data(form=form, **kwargs)
+
+        current_step_key = self.steps.current  # 'overview', 'location', 'description'
+
+        # Use the wizard's form list (always an OrderedDict) to compute index
+        form_list = self.get_form_list()
+        step_keys = list(form_list.keys())
+        current_idx = step_keys.index(current_step_key) + 1  # 1-based index
+        total_steps = len(step_keys)
+        progress_percent = int((current_idx / total_steps) * 100)
+
+        planning = self.get_planning()
+
+        planning_snapshot = None
+        if planning:
+            planning_snapshot = {
+                "aircraft": planning.aircraft_display(),
+                "pilot": planning.pilot_display_name(),
+                "pilot_cert": planning.pilot_cert_display(),
+                "flight_hours": planning.pilot_flight_hours,
+                "oop_flag": planning.operates_under_10739,
+                "oop_number": planning.oop_waiver_number,
+            }
+
+        context.update(
+            step_titles=STEP_TITLES,
+            current_step_key=current_step_key,
+            current_step_number=current_idx,
+            total_steps=total_steps,
+            progress_percent=progress_percent,
+            planning=planning,
+            planning_snapshot=planning_snapshot,
+        )
+        return context
+
+    # ---------- final save ----------
+
+    def done(self, form_list, **kwargs):
+        """
+        Collect data from all three steps and create a single AirspaceWaiver.
+        If a planning entry was used, link it to the new waiver.
+        """
+        data = {}
+        for form in form_list:
+            data.update(form.cleaned_data)
+
+        waiver = AirspaceWaiver.objects.create(
+            user=self.request.user,
+            **data,
+        )
+
+        planning = self.get_planning()
+        if planning and planning.waiver_id is None:
+            planning.waiver = waiver
+            planning.save(update_fields=["waiver"])
+
+        messages.success(
+            self.request,
+            "Waiver draft saved. You can now generate a CONOPS from this data.",
+        )
+        return redirect("airspace:waiver_conops", pk=waiver.pk)
 
 
 
