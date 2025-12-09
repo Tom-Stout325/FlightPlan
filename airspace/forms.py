@@ -148,14 +148,14 @@ class AirspaceWaiverOverviewForm(AirspaceWaiverBaseForm):
     )
 
     operation_activities = forms.MultipleChoiceField(
-        label="What are you doing?",
+        label="Pupose of the Operation",
         required=False,
         choices=AirspaceWaiver.OPERATION_ACTIVITY_CHOICES,
         widget=forms.CheckboxSelectMultiple,
     )
 
     operation_activities_other = forms.CharField(
-        label="Additional details (optional)",
+        label="Additional Details (optional)",
         required=False,
         widget=forms.Textarea(
             attrs={
@@ -185,7 +185,7 @@ class AirspaceWaiverOverviewForm(AirspaceWaiverBaseForm):
             "operation_title": forms.TextInput(
                 attrs={
                     "class": "form-control",
-                    "placeholder": "NHRA National Event FPV Operations",
+                    "placeholder": "Indianapolis Drone Operations",
                 }
             ),
             "start_date": forms.DateInput(
@@ -501,9 +501,15 @@ class AirspaceWaiverForm(forms.ModelForm):
     Full edit/create form for an AirspaceWaiver, used by:
       - airspace_waiver_form
       - airspace_waiver_edit
+
     This uses the model fields directly (single-page form), separate from the wizard.
+    Fields managed by the system (like user and status) are excluded so they are
+    not required in the form and are preserved from the existing instance.
     """
 
     class Meta:
         model = AirspaceWaiver
-        fields = "__all__"
+        # Exclude fields that are set in code, not by the user via this form
+        exclude = ["user", "status"]
+        # If you later decide to keep other fields read-only (like created_at),
+        # you can add them to this list as well.

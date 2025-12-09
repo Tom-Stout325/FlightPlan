@@ -1,5 +1,8 @@
-from django.db.models import Sum
 from django.contrib import messages
+import logging
+logger = logging.getLogger(__name__)
+
+from django.db.models import Sum
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect, render
@@ -11,6 +14,8 @@ from formtools.wizard.views import SessionWizardView
 
 from .models import AirspaceWaiver, WaiverPlanning
 from .services import generate_conops_text
+from .utils import dms_to_decimal 
+from .utils import generate_short_description
 from flightlogs.models import FlightLog
 from equipment.models import Equipment
 
@@ -24,8 +29,8 @@ from .forms import (
 
 
 
-
-
+from django.contrib import messages
+import logging
 
 
 
@@ -156,12 +161,37 @@ class AirspaceWaiverDraftWizard(LoginRequiredMixin, SessionWizardView):
 
     def get_form_initial(self, step):
         """
-        Seed initial values from WaiverPlanning:
-
-        - Step 'overview': aircraft fields
-        - Step 'description': 107.39 (OOP) waiver info
+        Seed initial values from WaiverPlanning and, when entering the
+        'description' step, auto-generate the Brief Description of
+        Operations from the data collected in earlier steps.
         """
         initial = super().get_form_initial(step)
+
+        # --------------------------------------------------------------
+        # Auto-generate short_description when we FIRST land on step 3
+        # ('description') – this is effectively when the user clicks
+        # "Continue" on Step 2.
+        # --------------------------------------------------------------
+        if step == "description" and not initial.get("short_description"):
+            # Merge cleaned_data from prior steps (overview + location)
+            data = {}
+            for prev_step in ["overview", "location"]:
+                cleaned = self.get_cleaned_data_for_step(prev_step) or {}
+                data.update(cleaned)
+
+            # Build an unsaved AirspaceWaiver instance using the data we have.
+            # Missing fields are fine for an unsaved instance.
+            temp_waiver = AirspaceWaiver(user=self.request.user, **data)
+
+            try:
+                initial["short_description"] = generate_short_description(temp_waiver)
+            except Exception:
+                # Fail silently – user can still type it manually if something goes wrong.
+                pass
+
+        # --------------------------------------------------------------
+        # Existing WaiverPlanning-based initial data
+        # --------------------------------------------------------------
         planning = self.get_planning()
         if not planning:
             return initial
@@ -239,29 +269,39 @@ class AirspaceWaiverDraftWizard(LoginRequiredMixin, SessionWizardView):
 
     def done(self, form_list, **kwargs):
         """
-        Collect data from all three steps and create a single AirspaceWaiver.
-        If a planning entry was used, link it to the new waiver.
+        Collect data from all wizard steps and create a single AirspaceWaiver
+        draft. If a planning entry was used, link it to the new waiver.
+        Also auto-generate the short_description (Brief Description of
+        Operations) when it is not provided by the user.
         """
+        # Merge cleaned_data from all steps into a single dict
         data = {}
         for form in form_list:
             data.update(form.cleaned_data)
 
+        # Create the waiver draft
         waiver = AirspaceWaiver.objects.create(
             user=self.request.user,
             **data,
         )
 
+        # Auto-generate the short_description only if it is empty/blank
+        if not waiver.short_description or not waiver.short_description.strip():
+            waiver.short_description = generate_short_description(waiver)
+            waiver.save(update_fields=["short_description"])
+
+        # Link planning record to this waiver if applicable
         planning = self.get_planning()
         if planning and planning.waiver_id is None:
             planning.waiver = waiver
             planning.save(update_fields=["waiver"])
 
+        # User feedback + redirect to CONOPS generation page
         messages.success(
             self.request,
             "Waiver draft saved. You can now generate a CONOPS from this data.",
         )
         return redirect("airspace:waiver_conops", pk=waiver.pk)
-
 
 
 
@@ -315,20 +355,58 @@ def airspace_waiver_form(request):
 
 
 
-@login_required
+
 def airspace_waiver_edit(request, pk):
     """
     Edit an existing AirspaceWaiver.
+
+    Supports two actions:
+    - Normal save (Save / Save Waiver Draft)
+    - Regenerate Brief Description of Operations from current form data
     """
     waiver = get_object_or_404(AirspaceWaiver, pk=pk, user=request.user)
 
     if request.method == "POST":
         form = AirspaceWaiverForm(request.POST, instance=waiver)
+
+        # --- Regenerate button clicked ---
+        if "regen_short_description" in request.POST:
+            temp_waiver = waiver
+
+            # Try to use the posted values if they validate; otherwise fall back
+            if form.is_valid():
+                temp_waiver = form.save(commit=False)
+
+            # Generate description from whichever data we have in temp_waiver
+            temp_waiver.short_description = generate_short_description(temp_waiver)
+
+            # Rebuild a form bound to the updated temp_waiver so the textarea shows the new text
+            form = AirspaceWaiverForm(instance=temp_waiver)
+
+            messages.info(
+                request,
+                "Brief Description of Operations regenerated from the current waiver details.",
+            )
+
+            context = {
+                "form": form,
+                "waiver": waiver,
+                "lat_decimal": waiver.lat_decimal,
+                "lon_decimal": waiver.lon_decimal,
+            }
+            return render(request, "airspace/waiver_form.html", context)
+
+        # --- Normal save path ---
         if form.is_valid():
-            waiver = form.save()
+            form.save()
             messages.success(request, "Waiver updated successfully.")
             return redirect("airspace:waiver_list")
         else:
+            # 🔍 TEMP: log exactly what failed
+            logger.error("AirspaceWaiverForm errors: %s", form.errors)
+            # or, if you prefer, in dev:
+            print("AirspaceWaiverForm errors:", form.errors)
+
             messages.error(request, "Please correct the errors below.")
     else:
         form = AirspaceWaiverForm(instance=waiver)
@@ -340,6 +418,7 @@ def airspace_waiver_edit(request, pk):
         "lon_decimal": waiver.lon_decimal,
     }
     return render(request, "airspace/waiver_form.html", context)
+
 
 
 
@@ -471,56 +550,56 @@ def waiver_planning_new(request):
 
 
 
-@login_required
-def waiver_planning_edit(request, pk):
-    waiver = get_object_or_404(AirspaceWaiver, pk=pk, user=request.user)
-    planning, created = WaiverPlanning.objects.get_or_create(
-        waiver=waiver,
-        defaults={"user": request.user},
-    )
+# @login_required
+# def waiver_planning_edit(request, pk):
+#     waiver = get_object_or_404(AirspaceWaiver, pk=pk, user=request.user)
+#     planning, created = WaiverPlanning.objects.get_or_create(
+#         waiver=waiver,
+#         defaults={"user": request.user},
+#     )
 
-    if request.method == "POST":
-        form = WaiverPlanningForm(request.POST, instance=planning, user=request.user)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Planning details updated.")
-            return redirect("airspace:waiver_edit", pk=waiver.pk)
-    else:
-        form = WaiverPlanningForm(instance=planning, user=request.user)
+#     if request.method == "POST":
+#         form = WaiverPlanningForm(request.POST, instance=planning, user=request.user)
+#         if form.is_valid():
+#             form.save()
+#             messages.success(request, "Planning details updated.")
+#             return redirect("airspace:waiver_edit", pk=waiver.pk)
+#     else:
+#         form = WaiverPlanningForm(instance=planning, user=request.user)
 
-    pilot_qs = form.fields["pilot_profile"].queryset
-    pilot_profile_data = []
-    for p in pilot_qs:
-        total_seconds = p.flight_time_total() or 0
-        hours_value = round(total_seconds / 3600.0, 1)
-        pilot_profile_data.append(
-            {
-                "id": p.id,
-                "first_name": p.user.first_name,
-                "last_name": p.user.last_name,
-                "license_number": getattr(p, "license_number", "") or "",
-                "flight_hours": hours_value,
-            }
-        )
+#     pilot_qs = form.fields["pilot_profile"].queryset
+#     pilot_profile_data = []
+#     for p in pilot_qs:
+#         total_seconds = p.flight_time_total() or 0
+#         hours_value = round(total_seconds / 3600.0, 1)
+#         pilot_profile_data.append(
+#             {
+#                 "id": p.id,
+#                 "first_name": p.user.first_name,
+#                 "last_name": p.user.last_name,
+#                 "license_number": getattr(p, "license_number", "") or "",
+#                 "flight_hours": hours_value,
+#             }
+#         )
 
-    # Aircraft -> safety features data
-    aircraft_qs = form.fields["aircraft"].queryset.select_related("drone_safety_profile")
-    drone_safety_data = []
-    for eq in aircraft_qs:
-        profile = getattr(eq, "drone_safety_profile", None)
-        if profile and profile.safety_features:
-            drone_safety_data.append(
-                {
-                    "id": str(eq.pk),
-                    "safety_features": profile.safety_features,
-                }
-            )
+#     # Aircraft -> safety features data
+#     aircraft_qs = form.fields["aircraft"].queryset.select_related("drone_safety_profile")
+#     drone_safety_data = []
+#     for eq in aircraft_qs:
+#         profile = getattr(eq, "drone_safety_profile", None)
+#         if profile and profile.safety_features:
+#             drone_safety_data.append(
+#                 {
+#                     "id": str(eq.pk),
+#                     "safety_features": profile.safety_features,
+#                 }
+#             )
 
-    context = {
-        "form": form,
-        "planning_mode": "edit",
-        "waiver": waiver,
-        "pilot_profile_data": pilot_profile_data,
-        "drone_safety_data": drone_safety_data,
-    }
-    return render(request, "airspace/waiver_planning.html", context)
+#     context = {
+#         "form": form,
+#         "planning_mode": "edit",
+#         "waiver": waiver,
+#         "pilot_profile_data": pilot_profile_data,
+#         "drone_safety_data": drone_safety_data,
+#     }
+#     return render(request, "airspace/waiver_planning.html", context)

@@ -2,13 +2,24 @@ Next Steps:
 
 
 - Add safety profile for mini 5 pro
-- Add Location for drone operations 
-    - Get:
+
+- Waiver Helper:  Location for drone operations 
+    - Add an Info icon with instriction to get:
         Location name
         Address
         Grid coordinates
 
+    enter venue or address in Google, click on maps - open in maps - click into the center of the location - get coordinates
+    pop up at the bottom of the screen.
 
+    gps-coordinates.net/gps-coordinates-converter
+
+    Format for entering location description:
+    Indianapolis Raceway Park,
+    10267 US Hwy 136, Indianapolis, IN 46234,
+    GPS: 39.811319, -86.343225
+
+    
 
 FAA Waivers:
 https://www.faa.gov/uas/commercial_operators/part_107_waivers

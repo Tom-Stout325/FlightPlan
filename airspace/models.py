@@ -60,41 +60,32 @@ class AirspaceWaiver(models.Model):
     operation_title = models.CharField(max_length=200)
     start_date = models.DateField()
     end_date = models.DateField()
-
-    # Store multiple timeframes as a comma-separated list of codes
-    # e.g. "noon_4pm,4pm_sunset"
-    timeframe = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="Comma-separated timeframe codes selected for this operation.",
-    )
-
+    timeframe = models.CharField(max_length=100, blank=True, help_text="Comma-separated timeframe codes selected for this operation.",)
     operation_activities = models.CharField(max_length=200, blank=True, help_text="Comma-separated activity codes describing what you are doing.",)
     operation_activities_other = models.CharField(max_length=255, blank=True, help_text="Optional free-text description of the operation.",)
     
     frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES)
-    # we enforce timezone choices in the form; model just stores the string
     local_timezone = models.CharField(max_length=64)
 
     # ----- 2. Location & airspace -----
-    proposed_location = models.TextField()
-    max_agl = models.PositiveIntegerField(help_text="Maximum altitude AGL in feet")
+    proposed_location = models.TextField(verbose_name="Location Description", help_text="Venue name, address, GPS coordinates..")
+    max_agl = models.PositiveIntegerField(verbose_name="Maximum Altitude (AGL)",help_text="Maximum Altitude AGL in feet")
 
     # Latitude (DMS)
-    lat_degrees = models.PositiveSmallIntegerField()
-    lat_minutes = models.PositiveSmallIntegerField()
-    lat_seconds = models.DecimalField(max_digits=7, decimal_places=4)
-    lat_direction = models.CharField(max_length=1, choices=[("N", "N"), ("S", "S")])
+    lat_degrees = models.PositiveSmallIntegerField(verbose_name="Latitude Degrees")
+    lat_minutes = models.PositiveSmallIntegerField(verbose_name="Latitude Minutes")
+    lat_seconds = models.DecimalField(verbose_name="Latitude Seconds", max_digits=7, decimal_places=4)
+    lat_direction = models.CharField(verbose_name="Latitude Direction", max_length=1, choices=[("N", "N"), ("S", "S")])
 
     # Longitude (DMS)
-    lon_degrees = models.PositiveSmallIntegerField()
-    lon_minutes = models.PositiveSmallIntegerField()
-    lon_seconds = models.DecimalField(max_digits=7, decimal_places=4)
-    lon_direction = models.CharField(max_length=1, choices=[("E", "E"), ("W", "W")])
+    lon_degrees = models.PositiveSmallIntegerField(verbose_name="Longitude Degrees")
+    lon_minutes = models.PositiveSmallIntegerField(verbose_name="Longitude Minutes")
+    lon_seconds = models.DecimalField(verbose_name="Longitude Seconds", max_digits=7, decimal_places=4)
+    lon_direction = models.CharField(verbose_name="Longitude Direction", max_length=1, choices=[("E", "E"), ("W", "W")])
 
     radius_nm = models.DecimalField(max_digits=4, decimal_places=2)
-    nearest_airport = models.CharField(max_length=10)
-    airspace_class = models.CharField(max_length=1, choices=AIRSPACE_CLASS_CHOICES)
+    nearest_airport = models.CharField(verbose_name="Nearest Airport (ICAO Code)", max_length=10)
+    airspace_class = models.CharField(verbose_name="Airspace Class", max_length=1, choices=AIRSPACE_CLASS_CHOICES)
 
     # Decimal coordinates (auto-derived)
     lat_decimal = models.DecimalField(
@@ -105,9 +96,9 @@ class AirspaceWaiver(models.Model):
     )
 
     # ----- 3. Description & existing waivers -----
-    short_description = models.TextField()
+    short_description = models.TextField(verbose_name="Brief Description of Operations")
     has_related_waiver = models.BooleanField(default=False)
-    related_waiver_details = models.TextField(blank=True)
+    related_waiver_details = models.CharField(verbose_name="Related Waiver Number", max_length=200, blank=True)
 
     # ----- Aircraft selection -----
     aircraft = models.ForeignKey(
@@ -121,7 +112,8 @@ class AirspaceWaiver(models.Model):
     aircraft_custom = models.CharField(
         max_length=255,
         blank=True,
-        help_text="If not in the list, describe the aircraft here.",
+        verbose_name="Custom Aircraft",
+        help_text="If not listed, enter the Manufacturer and Model.",
     )
 
     # ----- CONOPS output -----
@@ -259,8 +251,6 @@ class WaiverPlanning(models.Model):
         blank=True,
         related_name="oop_waiver_planning_entries",
         help_text="Select your approved 107.39 waiver from General Documents.",
-        # If you have a category enum on GeneralDocument, you can tighten this:
-        # limit_choices_to={"category": GeneralDocument.Category.FAA_OPERATIONS_WAIVER},
     )
 
     oop_waiver_number = models.CharField(
