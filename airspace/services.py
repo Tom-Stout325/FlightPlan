@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.conf import settings
 from openai import OpenAI
 from typing import List
-from .models import AirspaceWaiver
+
 
 
 def get_openai_client() -> OpenAI:
@@ -97,10 +97,10 @@ def build_conops_prompt(waiver: AirspaceWaiver) -> str:
 
     # Visual Observer – always state that a VO will be used, even if identity is unknown.
     visual_observer_text = (
-        "A visual observer (VO) will be used as needed to maintain visual line of sight, "
+        "A visual observer (VO) will be used to maintain visual line of sight, "
         "assist with air and ground risk scanning, and support safe operations in accordance "
         "with 14 CFR § 107.33. Individual VO identities may vary by event and are not fixed "
-        "at the time of application."
+        "at the time of application.  All VOs will undergo internal training prior to operations."
     )
 
     return f"""

@@ -117,7 +117,7 @@
               </div>
               <h1 class="h3 mb-2">Completing Your Airspace Waiver Application</h1>
               <p class="mb-0 text-light">
-                Use this guide to understand what to enter in each field of the FAA airspace waiver form.
+                Use this guide to understand information you will need to have available to complete your FAA Waiver Application.
               </p>
               
             </div>
@@ -243,7 +243,9 @@
             </div>
             <div>
               <div class="section-title">Location & Airspace Details</div>
-              <div class="section-subtitle">Describe exactly where you’ll fly and what airspace you’re in.</div>
+              <div class="section-subtitle">Describe exactly where you’ll fly and what airspace you’re in.  This is critical information you will need
+                                            for your application.  Read this information carefully!
+              </div>
             </div>
           </div>
 
@@ -263,10 +265,14 @@
                   <ul>
                     <li class="list-bullet">Name of venue, park, or event site</li>
                     <li class="list-bullet">Include nearest street address or known landmark</li>
-                    <li class="list-bullet">Include Latitude/Longitude</li>
+                    <li class="list-bullet">Include Latitude/Longitude * OF YOUR LAUNCH STIE *</li>
                   </ul>
                   <p class="mb-0"><strong>Example:</strong><br>
-                    “Charlotte Motor Speedway, Concord, NC — NASCAR Race"
+                    <ul>
+                    <li class="list-bullet">“Charlotte Motor Speedway, Concord, NC — NASCAR Race"</li>
+                    <li class="list-bullet">"5555 Concord Pkwy S, Concord, NC 28027"</li>
+                    <li class="list-bullet">"GPS: 35°21'05.8"N 80°40'52.0"W"  <--- This is your Launch Site, not the address coordinates.</li>
+                    </ul>
                   </p>
                 </div>
               </div>
@@ -306,11 +312,19 @@
               <div id="collapseLatLong" class="accordion-collapse collapse" aria-labelledby="headingLatLong" data-bs-parent="#locationAccordion">
                 <div class="accordion-body">
                   <p class="mb-2">
-                    Provide the <strong>center point</strong> of your intended operations.
+                    Provide the <strong>Launch Site Coordinates</strong> of your intended operations.
                   </p>
                   <ul class="mb-0">
-                    <li class="list-bullet">Use decimal degrees or degrees/minutes/seconds exactly as required by the form.</li>
-                    <li class="list-bullet">Verify coordinates using FAA UAS Facility Maps or tools like Google Earth.</li>
+                    <li class="list-bullet">Use DMS coordinates exactly as required by the form.</li>
+                  </ul>
+                  <ul>Get the exact Coordinates by using Google Maps.
+                    <li class="list-bullet">Type the address of your location into Google Maps, or just use Google, click "Open in Google Maps"</li>
+                    <li class="list-bullet">Tap/click into the map on the exact location of your launch site.  </li>
+                    <li class="list-bullet">A small box will pop up at the bottom of the map showing the GPS Coordinates.</li>
+                    <li class="list-bullet">Click on the coordinates.</li>
+                                           <p class="text-subdued "> This will copy the coordinates into the search bar, and drop a pin on your map.</p>
+                    <li class="list-bullet">Take a screenshot of the map showing your Launch Site.</li>
+                    <li class="list-bullet">Copy the HMS Coordinates from the side bar, paste them into your Waiver Wizard.</li>
                   </ul>
                 </div>
               </div>
@@ -326,11 +340,11 @@
               <div id="collapseRadius" class="accordion-collapse collapse" aria-labelledby="headingRadius" data-bs-parent="#locationAccordion">
                 <div class="accordion-body">
                   <p class="mb-2">
-                    Enter the distance from the center point where operations will occur.
+                    Enter the distance from your Launch Site where operations will occur.
                   </p>
                   <ul class="mb-0">
-                    <li class="list-bullet">Measured in feet or nautical miles, depending on the form.</li>
-                    <li class="list-bullet">Typical range: 100–1,500 ft for event venues; larger if surveying.</li>
+                    <li class="list-bullet">Measured in Nautical Miles (NM).</li>
+                    <li class="list-bullet">Choose from the drop-down on the AirSpace Wizard form.</li>
                   </ul>
                 </div>
               </div>
@@ -346,14 +360,14 @@
               <div id="collapseAirport" class="accordion-collapse collapse" aria-labelledby="headingAirport" data-bs-parent="#locationAccordion">
                 <div class="accordion-body">
                   <p class="mb-2">
-                    List the closest airport, heliport, or airfield.
+                    Locate the nearest airport to your Launch Site.
                   </p>
                   <p class="mb-2">
-                    Include the 3- or 4-letter identifier (ICAO/IATA), which you can look up here:
+                    Enter the 4-letter ICAO code which you can look up here:
                   </p>
                   <p class="mb-0">
-                    <a href="https://ais-faa.opendata.arcgis.com/datasets/e747ab91a11045e8b3f8a3efd093d3b5_0/explore" target="_blank" class="link-light-blue">
-                      FAA Airport Identifiers Lookup
+                    <a href="https://www.landingfinder.com" target="_blank" class="link-light-blue">
+                      Airport Locator & ICAO Codes
                     </a>
                   </p>
                 </div>
@@ -380,7 +394,10 @@
                     <li class="list-bullet">Class G (if requesting a special waiver unrelated to controlled airspace)</li>
                   </ul>
                   <p class="mb-0">
-                    Use FAA sectional charts or UAS Facility Maps to confirm the correct airspace class.
+                    <a href="https://portal.airspacelink.com" target="_blank" class="link-light-blue">
+                    Use FAA sectional charts, or use an app like AirHub Portal to confirm the correct airspace class.
+              
+                    </a>
                   </p>
                 </div>
               </div>
@@ -409,17 +426,20 @@
               <div id="collapseShortDesc" class="accordion-collapse collapse " aria-labelledby="headingShortDesc" data-bs-parent="#operationsAccordion">
                 <div class="accordion-body">
                   <p class="mb-2">
-                    Give a concise operational overview. Briefly cover:
+                 <ul class="mb-0 ps-3">
+                  <li><strong>Purpose:</strong> What the flight supports (media, inspection, mapping, event coverage).</li>
+                  <li><strong>Location:</strong> Venue name, address, and coordinates (decimal latitude/longitude).</li>
+                  <li><strong>Operational Area:</strong> Defined radius or specific zone where the UAS will operate.</li>
+                  <li><strong>Altitude & Profile:</strong> Maximum AGL, typical flight pattern (hover, orbits, lateral moves).</li>
+                  <li><strong>Aircraft & Payload:</strong> UAS model and camera/sensor used.</li>
+                  <li><strong>Launch/Staging:</strong> Controlled launch point, restricted access, separation from public.</li>
+                  <li><strong>VLOS & Crew:</strong> RPIC duties, VO co-location or vantage point.</li>
+                  <li><strong>Safety Actions:</strong> Pre-flight checks, hazard monitoring, procedures for stopping operations.</li>
+                </ul>
+
                   </p>
-                  <ul class="mb-2">
-                    <li class="list-bullet">What you will do</li>
-                    <li class="list-bullet">Why you need the waiver</li>
-                    <li class="list-bullet">Type of aircraft</li>
-                    <li class="list-bullet">Operational environment</li>
-                  </ul>
-                  <p class="mb-0"><strong>Example:</strong><br>
-                    “Small UAS operations for aerial filming during nationally televised motorsports events. FPV drone and standard camera drone operations over portions of the venue with transient crowds. Waiver requested to safely conduct operations over people and in controlled airspace.”
-                  </p>
+                  
+        
                 </div>
               </div>
             </div>

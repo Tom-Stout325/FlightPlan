@@ -78,27 +78,64 @@
   <!-- Cards Section -->
   <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-4">
 
-    <!-- Waivers & CONOPS -->
+
+    <!-- Waiver Guide -->
     <div class="col">
-      <div class="card shadow-sm h-100 border-primary hover-scale">
+      <div class="card shadow-sm h-100 border-info hover-scale">
         <div class="card-body d-flex flex-column">
-          <h5 class="card-title text-primary text-center">🛫 Waivers &amp; CONOPS</h5>
+          <h5 class="card-title text-info text-center">❓ Waiver Guide</h5>
           <p class="card-text mb-3">
-            Plan operations, complete FAA waiver applications, and generate CONOPS documents.
+            Review required FAA Airspace Application sections, safety guidelines
+            before starting a new waiver application.
           </p>
-          <div class="mt-auto d-grid gap-2">
-            <a href="{% url 'airspace:waiver_draft_new' %}"
-               class="btn btn-primary w-100 text-white">
-              Start New Waiver
-            </a>
-            <a href="{% url 'airspace:waiver_list' %}"
-               class="btn btn-outline-primary w-100">
-              View Waivers
+          <div class="mt-auto">
+            <a href="{% url 'airspace:airspace_guide' %}"
+              class="btn btn-info w-100 text-white">
+              AirSpace Waiver Guide
             </a>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Waiver Planning -->
+    <div class="col">
+      <div class="card shadow-sm h-100 border-primary hover-scale">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title text-primary text-center">🛫 Waiver Planning</h5>
+          <p class="card-text mb-3">
+            Plan operations for FAA waiver applications, and generate documents.
+          </p>
+          <div class="mt-auto d-grid gap-2">
+            <a href="{% url 'airspace:waiver_planning_new' %}"
+               class="btn btn-primary w-100 text-white">
+              Start New Waiver
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+
+        <!-- Waiver List -->
+    <div class="col">
+      <div class="card shadow-sm h-100 border-success hover-scale">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title text-success text-center">📋 Waiver List</h5>
+          <p class="card-text mb-3">
+            Review, edit or delete all generated waivers.
+          </p>
+          <div class="mt-auto">
+               <a href=""
+               class="btn btn-success w-100">
+              New Waiver
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
 
     <!-- Pilot Profile -->
     <div class="col">
@@ -117,76 +154,6 @@
       </div>
     </div>
 
-    <!-- Equipment -->
-    <div class="col">
-      <div class="card shadow-sm h-100 border-success hover-scale">
-        <div class="card-body d-flex flex-column">
-          <h5 class="card-title text-success text-center">🛠️ Equipment</h5>
-          <p class="card-text mb-3">
-            Track drones, batteries, controllers, and other critical gear.
-          </p>
-          <div class="mt-auto">
-            <a href="{% url 'equipment:equipment_list' %}" class="btn btn-success w-100">
-              View Equipment
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Flight Logs -->
-    <div class="col">
-      <div class="card shadow-sm h-100 border-info hover-scale">
-        <div class="card-body d-flex flex-column">
-          <h5 class="card-title text-info text-center">
-            <i class="fas fa-map-marked-alt"></i>&nbsp;Flight Logs
-          </h5>
-          <p class="card-text mb-3">
-            Upload logs, review flight history, and generate usage reports.
-          </p>
-          <div class="mt-auto">
-            <a href="{% url 'flightlogs:flightlog_list' %}" class="btn btn-info w-100">
-              View Logs
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Incident Reporting -->
-    <div class="col">
-      <div class="card shadow-sm h-100 border-secondary hover-scale">
-        <div class="card-body d-flex flex-column">
-          <h5 class="card-title text-secondary text-center">🚨 Incident Reporting</h5>
-          <p class="card-text mb-3">
-            Submit and review drone-related incident and hazard reports.
-          </p>
-          <div class="mt-auto">
-            <a href="{% url 'documents:incident_reporting_system' %}"
-               class="btn btn-secondary w-100">
-              View Incidents
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SOPs -->
-    <div class="col">
-      <div class="card shadow-sm h-100 border-dark hover-scale">
-        <div class="card-body d-flex flex-column">
-          <h5 class="card-title text-dark text-center">📝 SOPs</h5>
-          <p class="card-text mb-3">
-            View and manage standard operating procedures and checklists.
-          </p>
-          <div class="mt-auto">
-            <a href="{% url 'documents:sop_list' %}" class="btn btn-dark w-100">
-              View SOPs
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- General Documents -->
     <div class="col">
@@ -206,26 +173,7 @@
       </div>
     </div>
 
-    <!-- Ops Plans -->
-    <div class="col">
-      <div class="card shadow-sm h-100 border-secondary hover-scale">
-        <div class="card-body d-flex flex-column">
-          <h5 class="card-title text-secondary text-center">🗺️ Ops Plans</h5>
-          <p class="card-text mb-3">
-            Create, review, and export operations plans by event and season.
-          </p>
-          <div class="mt-auto">
-            <a href="{% url 'operations:ops_plan_index' %}" class="btn btn-secondary w-100">
-              View Ops Plans
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
+   
 <style>
   .hover-scale {
     transition: all 0.2s ease-in-out;

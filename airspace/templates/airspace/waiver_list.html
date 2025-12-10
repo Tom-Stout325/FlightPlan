@@ -16,28 +16,18 @@
     </div>
     <!-- Desktop actions -->
     <div class="text-end d-none d-md-block">
-      <a href="{% url 'airspace:waiver_form' %}" class="btn btn-primary btn-sm mb-2 px-4">
+      <a href="{% url 'airspace:airspace_waiver_new' %}" class="btn btn-primary btn-sm mb-2 px-4">
         <i class="fa-solid fa-plus me-1"></i>
         New Waiver
       </a>
-      <div>
-        <a href="{% url 'airspace:conops_list' %}" class="btn btn-outline-secondary btn-sm">
-          <i class="fa-solid fa-file-lines me-1"></i>
-          CONOPS Library
-        </a>
-      </div>
     </div>
   </div>
 
   <!-- Mobile actions -->
   <div class="d-md-none mb-3">
-    <a href="{% url 'airspace:waiver_form' %}" class="btn btn-primary w-100 mb-2">
+    <a href="{% url 'airspace:airspace_waiver_new' %}" class="btn btn-primary w-100 mb-2">
       <i class="fa-solid fa-plus me-1"></i>
       New Waiver
-    </a>
-    <a href="{% url 'airspace:conops_list' %}" class="btn btn-outline-secondary w-100">
-      <i class="fa-solid fa-file-lines me-1"></i>
-      CONOPS Library
     </a>
   </div>
 
@@ -107,7 +97,7 @@
 
               <!-- Actions: separate buttons -->
               <div class="d-flex flex-wrap gap-2 mt-3">
-                <a href="{% url 'airspace:waiver_edit' waiver.pk %}" class="btn btn-outline-primary btn-sm">
+                <a href="" class="btn btn-outline-primary btn-sm">
                   View / Edit Waiver
                 </a>
 
@@ -115,9 +105,7 @@
                   Delete Waiver
                 </a>
 
-                <a href="{% url 'airspace:waiver_conops' waiver.pk %}" class="btn btn-success btn-sm">
-                  {% if waiver.conops_text %}View / Regenerate CONOPS{% else %}Create CONOPS{% endif %}
-                </a>
+                
               </div>
             </div>
           </div>
