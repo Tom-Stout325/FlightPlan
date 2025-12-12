@@ -101,11 +101,12 @@
                   View / Edit Waiver
                 </a>
 
-                <a href="" class="btn btn-outline-danger btn-sm">
-                  Delete Waiver
-                </a>
+              <a href="{% url 'airspace:waiver_planning_delete' pk=waiver.id %}"
+                class="btn btn-outline-danger btn-sm">
+                Delete Waiver
+              </a>
 
-                
+    
               </div>
             </div>
           </div>

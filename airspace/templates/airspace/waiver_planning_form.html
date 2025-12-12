@@ -4,14 +4,39 @@
   {% if planning_mode == "edit" %}Edit Waiver Planning{% else %}Waiver Planning{% endif %}
 {% endblock %}
 
+{% block extra_css %}
+<style>
+  /* Keep checkboxes from inheriting big text-input styling */
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: auto;
+    margin: 0 0.35rem 0 0;
+    padding: 0;
+    border: none;
+  }
+
+  .checkbox-group ul {
+    list-style: none;
+    padding-left: 0;
+    margin-bottom: 0;
+  }
+
+  .checkbox-group li {
+    margin-bottom: 0.25rem;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4 mb-5" style="max-width: 900px;">
 
   <div class="mb-3">
-    <a href="{% url 'airspace:waiver_planning_new' %}?planning_id={{ planning.id }}"
-       class="btn btn-primary btn-sm">
-      Start Waiver Draft
-    </a>
+    {% if planning %}
+      <a href="{% url 'airspace:waiver_planning_new' %}?planning_id={{ planning.id }}"
+         class="btn btn-primary btn-sm">
+        Start Waiver Draft
+      </a>
+    {% endif %}
   </div>
 
   <div class="mb-4">
@@ -64,17 +89,27 @@
         </div>
 
         <div class="row g-3 mb-4">
-          <div class="col-12 col-md-4">
+          <div class="col-12 col-md-5">
             <label class="form-label fw-semibold" for="{{ form.timeframe.id_for_label }}">
               Timeframe
             </label>
-            {{ form.timeframe }}
-            <div class="form-text">
-              General time of day when operations will occur.
-            </div>
             {{ form.timeframe.errors }}
+            <div class="checkbox-group">
+              {% for choice in form.timeframe %}
+                <div class="form-check">
+                  {{ choice.tag }}
+                  <label class="form-check-label" for="{{ choice.id_for_label }}">
+                    {{ choice.choice_label }}
+                  </label>
+                </div>
+              {% endfor %}
+            </div>
+            <div class="form-text mt-1">
+              Select all time windows when operations may occur.
+            </div>
           </div>
-          <div class="col-12 col-md-4">
+
+          <div class="col-12 col-md-3">
             <label class="form-label fw-semibold" for="{{ form.frequency.id_for_label }}">
               Frequency
             </label>
@@ -84,6 +119,7 @@
             </div>
             {{ form.frequency.errors }}
           </div>
+
           <div class="col-12 col-md-4">
             <label class="form-label fw-semibold" for="{{ form.local_time_zone.id_for_label }}">
               Local time zone
@@ -153,7 +189,7 @@
           </div>
           <div class="col-12 col-md-6">
             <label class="form-label fw-semibold" for="{{ form.pilot_name_manual.id_for_label }}">
-              Manual pilot name
+              Pilot's Name (If not in Pilot Profiles)
             </label>
             {{ form.pilot_name_manual }}
             {{ form.pilot_name_manual.errors }}
@@ -163,7 +199,7 @@
         <div class="row g-3 mb-4">
           <div class="col-12 col-md-6">
             <label class="form-label fw-semibold" for="{{ form.pilot_cert_manual.id_for_label }}">
-              Manual certificate number
+              Part 107 Certificate Number
             </label>
             {{ form.pilot_cert_manual }}
             {{ form.pilot_cert_manual.errors }}
@@ -180,7 +216,6 @@
         {# -------------------------------------------------- #}
         {# Venue & Location                                     #}
         {# -------------------------------------------------- #}
-
         <h2 class="h6 text-uppercase text-muted mb-3">Venue & Location</h2>
 
         <div class="row g-3 mb-3">
@@ -202,18 +237,18 @@
 
         <div class="row g-3 mb-3">
           <div class="col-12 col-md-4">
-            <label class="form-label fw-semibold" for="{{ form.city.id_for_label }}">
+            <label class="form-label fw-semibold" for="{{ form.location_city.id_for_label }}">
               City
             </label>
-            {{ form.city }}
-            {{ form.city.errors }}
+            {{ form.location_city }}
+            {{ form.location_city.errors }}
           </div>
           <div class="col-6 col-md-4">
-            <label class="form-label fw-semibold" for="{{ form.state.id_for_label }}">
+            <label class="form-label fw-semibold" for="{{ form.location_state.id_for_label }}">
               State
             </label>
-            {{ form.state }}
-            {{ form.state.errors }}
+            {{ form.location_state }}
+            {{ form.location_state.errors }}
           </div>
           <div class="col-6 col-md-4">
             <label class="form-label fw-semibold" for="{{ form.zip_code.id_for_label }}">
@@ -223,24 +258,44 @@
             {{ form.zip_code.errors }}
           </div>
         </div>
+        <div class="row g-3 mb-3">
+          <div class="col-12 col-md-6">
+            <label class="form-label fw-semibold" for="{{ form.airspace_class.id_for_label }}">
+              Class of Airspace
+            </label>
+            {{ form.airspace_class }}
+            <div class="form-text">
+              Example: Class B, C, D, E, or G.
+            </div>
+            {{ form.airspace_class.errors }}
+          </div>
+        </div>
 
-        <!-- Lat / Long in DMS -->
+        {# Centerpoint Coordinates (DMS)                       #}
         <h2 class="h6 text-uppercase text-muted mb-2">Centerpoint Coordinates (DMS)</h2>
 
-        <div class="row g-2 mb-3">
+        <div class="row g-3 mb-3">
           <div class="col-12 col-md-6">
             <label class="form-label fw-semibold">Latitude (DMS)</label>
+
+            <div class="row g-1 small text-muted mb-1">
+              <div class="col-3 text-center">Deg</div>
+              <div class="col-3 text-center">Min</div>
+              <div class="col-3 text-center">Sec</div>
+              <div class="col-3 text-center">Dir</div>
+            </div>
+
             <div class="row g-2">
-              <div class="col-4">
+              <div class="col-3">
                 {{ form.lat_deg }}
               </div>
-              <div class="col-4">
+              <div class="col-3">
                 {{ form.lat_min }}
               </div>
-              <div class="col-4">
+              <div class="col-3">
                 {{ form.lat_sec }}
               </div>
-              <div class="col-12 mt-1">
+              <div class="col-3">
                 {{ form.lat_dir }}
               </div>
             </div>
@@ -248,23 +303,38 @@
 
           <div class="col-12 col-md-6">
             <label class="form-label fw-semibold">Longitude (DMS)</label>
+
+            <div class="row g-1 small text-muted mb-1">
+              <div class="col-3 text-center">Deg</div>
+              <div class="col-3 text-center">Min</div>
+              <div class="col-3 text-center">Sec</div>
+              <div class="col-3 text-center">Dir</div>
+            </div>
+
             <div class="row g-2">
-              <div class="col-4">
+              <div class="col-3">
                 {{ form.lon_deg }}
               </div>
-              <div class="col-4">
+              <div class="col-3">
                 {{ form.lon_min }}
               </div>
-              <div class="col-4">
+              <div class="col-3">
                 {{ form.lon_sec }}
               </div>
-              <div class="col-12 mt-1">
+              <div class="col-3">
                 {{ form.lon_dir }}
               </div>
             </div>
           </div>
         </div>
 
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="{{ form.launch_location.id_for_label }}">
+            Launch location description
+          </label>
+          {{ form.launch_location }}
+          {{ form.launch_location.errors }}
+        </div>
         <div class="row g-3 mb-3">
           <div class="col-12 col-md-6">
             <label class="form-label fw-semibold" for="{{ form.location_radius.id_for_label }}">
@@ -282,11 +352,19 @@
           </div>
         </div>
 
+ 
+
+        <hr class="text-primary w-50 mx-auto my-5">
+
+
+
+
+
 
         {# -------------------------------------------------- #}
         {# Operations Over People (107.39)                     #}
         {# -------------------------------------------------- #}
-        <h2 class="h6 text-uppercase text-muted mb-3">Operations Over People (107.39)</h2>
+        <h2 class="h6 text-uppercase text-muted mb-1">Operations Over People (107.39)</h2>
 
         <div class="mb-3">
           <div class="form-check form-switch">
@@ -295,8 +373,8 @@
               This operation will be conducted under an approved 14 CFR §107.39 Operations Over People waiver
             </label>
           </div>
-          <div class="form-text">
-            Turn this on if you have an FAA-approved 107.39 waiver, Operations Over People, that applies to this operation.
+          <div class="form-text mb-4">
+            Check this box if you have an FAA-approved 107.39 waiver, Operations Over People, <strong>that applies to this operation.</strong>
           </div>
           {{ form.operates_under_10739.errors }}
         </div>
@@ -326,9 +404,57 @@
         </div>
 
         {# -------------------------------------------------- #}
+        {# Operations Over Moving Vehicles (107.145)           #}
+        {# -------------------------------------------------- #}
+        <h2 class="h6 text-uppercase text-muted mb-1">
+          Operations Over Moving Vehicles (107.145)
+        </h2>
+
+        <div class="mb-3">
+          <div class="form-check form-switch">
+            {{ form.operates_under_107145 }}
+            <label class="form-check-label ms-2" for="{{ form.operates_under_107145.id_for_label }}">
+              This operation will be conducted under an approved 14 CFR §107.145 Operations Over Moving Vehicles waiver
+            </label>
+          </div>
+          <div class="form-text mb-4">
+            Check this box if you have an FAA-approved 107.145 waiver, Operations Over Moving Vehicles,
+            <strong>that applies to this operation.</strong>
+          </div>
+          {{ form.operates_under_107145.errors }}
+        </div>
+
+        <div id="mv-waiver-details" class="border rounded-3 p-3 bg-light mb-4 d-none">
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="{{ form.mv_waiver_document.id_for_label }}">
+              Select approved 107.145 waiver
+            </label>
+            {{ form.mv_waiver_document }}
+            <div class="form-text">
+              This list is pulled from your General Documents. Choose the 107.145 waiver that covers this operation.
+            </div>
+            {{ form.mv_waiver_document.errors }}
+          </div>
+
+          <div class="mb-0">
+            <label class="form-label fw-semibold" for="{{ form.mv_waiver_number.id_for_label }}">
+              Approved 107.145 Waiver Number
+            </label>
+            {{ form.mv_waiver_number }}
+            <div class="form-text">
+              Example: <code>107W-2024-04567</code>. If left blank, we’ll try to pull it from the attached document.
+            </div>
+            {{ form.mv_waiver_number.errors }}
+          </div>
+        </div>
+
+
+        <hr class="text-primary w-50 mx-auto my-5">
+        
+        {# -------------------------------------------------- #}
         {# Safety Equipment & Insurance                        #}
         {# -------------------------------------------------- #}
-        <h2 class="h6 text-uppercase text-muted mb-3">Safety Equipment & Insurance</h2>
+        <h2 class="h6 text-uppercase text-muted mt-4">Safety Equipment & Insurance</h2>
         <div class="row g-3 mb-3">
           <div class="col-12 col-md-4">
             <div class="form-check">
@@ -359,7 +485,7 @@
           </div>
         </div>
 
-        <div class="row g-3 mb-4">
+        <div class="row g-3 my-4">
           <div class="col-12 col-md-6">
             <label class="form-label fw-semibold" for="{{ form.insurance_provider.id_for_label }}">
               Insurance provider
@@ -383,7 +509,7 @@
         {# Safety features notes                               #}
         {# -------------------------------------------------- #}
         <h2 class="h6 text-uppercase text-muted mb-3">Safety Features</h2>
-        <div class="mb-4">
+        <div class="mb-5">
           <label class="form-label fw-semibold" for="{{ form.safety_features_notes.id_for_label }}">
             Safety features & mitigations
           </label>
@@ -394,26 +520,148 @@
           {{ form.safety_features_notes.errors }}
         </div>
 
-        <div class="d-flex justify-content-between align-items-center">
-          <a href="" class="btn btn-outline-secondary btn-sm">
+        {# -------------------------------------------------- #}
+        {# Purpose of Drone Operations                        #}
+        {# -------------------------------------------------- #}
+        <h2 class="h6 text-uppercase text-muted mb-3 mt-4">Purpose of Drone Operations</h2>
+
+        <p class="text-muted small mb-2">
+          Select all that apply — this will help generate the Description of Operations.
+        </p>
+
+        <div class="checkbox-group mb-3">
+          {{ form.purpose_operations }}
+        </div>
+        {{ form.purpose_operations.errors }}
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold" for="{{ form.purpose_operations_details.id_for_label }}">
+            Additional Details (optional)
+          </label>
+          {{ form.purpose_operations_details }}
+          {{ form.purpose_operations_details.errors }}
+        </div>
+
+        {# -------------------------------------------------- #}
+        {# Operational Profile & Environment                  #}
+        {# -------------------------------------------------- #}
+        <h2 class="h6 text-uppercase text-muted mb-3 mt-4">
+          Operational Profile & Environment
+        </h2>
+
+        <p class="text-muted small mb-3">
+          These details help generate the FAA Description of Operations.
+        </p>
+
+        <div class="row g-3 mb-4">
+          <div class="col-12 col-md-4">
+            <label class="form-label fw-semibold" for="{{ form.aircraft_count.id_for_label }}">
+              Aircraft in Use
+            </label>
+            {{ form.aircraft_count }}
+            {{ form.aircraft_count.errors }}
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label fw-semibold" for="{{ form.flight_duration.id_for_label }}">
+              Typical Flight Duration
+            </label>
+            {{ form.flight_duration }}
+            {{ form.flight_duration.errors }}
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label fw-semibold" for="{{ form.flights_per_day.id_for_label }}">
+              Flights Per Day
+            </label>
+            {{ form.flights_per_day }}
+            {{ form.flights_per_day.errors }}
+          </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+          <div class="col-12 col-md-6">
+            <label class="form-label fw-semibold" for="{{ form.estimated_crowd_size.id_for_label }}">
+              Estimated Crowd Size
+            </label>
+            {{ form.estimated_crowd_size }}
+            <div class="form-text">
+              If unknown, provide a reasonable upper bound (e.g., “up to 15,000 spectators”).
+            </div>
+            {{ form.estimated_crowd_size.errors }}
+          </div>
+
+          <div class="col-12 col-md-6">
+            <div class="form-check mt-4 pt-2">
+              {{ form.over_moving_vehicles }}
+              <label class="form-check-label ms-1" for="{{ form.over_moving_vehicles.id_for_label }}">
+                Operations may occur over moving vehicles (if separately authorized).
+              </label>
+            </div>
+            {{ form.over_moving_vehicles.errors }}
+          </div>
+        </div>
+
+
+
+        <label class="form-label fw-semibold mt-2" for="{{ form.ground_environment.id_for_label }}">
+          Ground Environment
+        </label>
+        <p class="text-muted small mb-2">
+          Select all types of ground environment present within the operational area.
+          This does <strong>not</strong> mean the UAS will fly over these areas—only that
+          they exist inside the venue for FAA risk assessment.
+        </p>
+
+        <div class="checkbox-group mb-2">
+          {{ form.ground_environment }}
+        </div>
+        {{ form.ground_environment.errors }}
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold" for="{{ form.ground_environment_other.id_for_label }}">
+            Other ground environment (optional)
+          </label>
+          {{ form.ground_environment_other }}
+          <div class="form-text">
+            List any additional ground environment types not covered above
+            (for example, rail yards, marinas, refineries, etc.).
+          </div>
+          {{ form.ground_environment_other.errors }}
+        </div>
+
+        <label class="form-label fw-semibold mt-3" for="{{ form.prepared_procedures.id_for_label }}">
+          Operational Procedures
+        </label>
+        <div class="checkbox-group mb-4">
+          {{ form.prepared_procedures }}
+        </div>
+        {{ form.prepared_procedures.errors }}
+
+        <hr class="text-primary">
+
+        <div class="d-flex justify-content-between align-items-center mt-4">
+          <a href="{% url 'airspace:waiver_planning_list' %}" class="btn btn-outline-secondary btn-sm">
             ← Back to Waivers
           </a>
           <button type="submit" class="btn btn-primary">
             {% if planning_mode == "edit" %}Save Planning{% else %}Save & Continue to Waiver Form{% endif %}
           </button>
         </div>
+
       </form>
     </div>
   </div>
 
-</div>
+  {% if pilot_profile_data %}
+    {{ pilot_profile_data|json_script:"pilot-profile-data" }}
+  {% endif %}
+  {% if drone_safety_data %}
+    {{ drone_safety_data|json_script:"drone-safety-data" }}
+  {% endif %}
 
-{% if pilot_profile_data %}
-  {{ pilot_profile_data|json_script:"pilot-profile-data" }}
-{% endif %}
-{% if drone_safety_data %}
-  {{ drone_safety_data|json_script:"drone-safety-data" }}
-{% endif %}
+
+</div>
 
 <script>
   document.addEventListener("DOMContentLoaded", function () {
@@ -514,10 +762,48 @@
 
     if (oopToggle && oopDetails) {
       oopToggle.addEventListener("change", updateOopVisibility);
-      // Initialize on page load
       updateOopVisibility();
     }
+
+    // -------------------------
+    // 107.145 moving vehicles waiver toggle
+    // -------------------------
+    const mvToggle = document.getElementById("id_operates_under_107145");
+    const mvDetails = document.getElementById("mv-waiver-details");
+
+    function updateMvVisibility() {
+      if (!mvToggle || !mvDetails) return;
+      if (mvToggle.checked) {
+        mvDetails.classList.remove("d-none");
+      } else {
+        mvDetails.classList.add("d-none");
+      }
+    }
+
+    if (mvToggle && mvDetails) {
+      mvToggle.addEventListener("change", updateMvVisibility);
+      updateMvVisibility();
+    }
   });
+
+  // 107.145 moving vehicles waiver toggle
+  const mvToggle = document.getElementById("id_operates_under_107145");
+  const mvDetails = document.getElementById("mv-waiver-details");
+
+  function updateMvVisibility() {
+    if (!mvToggle || !mvDetails) return;
+    if (mvToggle.checked) {
+      mvDetails.classList.remove("d-none");
+    } else {
+      mvDetails.classList.add("d-none");
+    }
+  }
+
+  if (mvToggle && mvDetails) {
+    mvToggle.addEventListener("change", updateMvVisibility);
+    updateMvVisibility();
+  }
+
 </script>
 
 {% endblock %}

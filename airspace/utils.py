@@ -8,30 +8,63 @@ from typing import Any, Optional
 # Coordinate helpers
 # ---------------------------------------------------------------------
 
+from decimal import Decimal
 
-def dms_to_decimal(
-    degrees: int | float | Decimal,
-    minutes: int | float | Decimal,
-    seconds: int | float | Decimal,
-    direction: str,
-) -> Decimal:
+def dms_to_decimal(deg, minutes, seconds, direction):
     """
-    Convert Degrees / Minutes / Seconds + direction (N/S/E/W) to decimal degrees.
+    Convert DMS + direction (N/S/E/W) to signed decimal degrees.
 
-    N / E => positive
-    S / W => negative
+    Example:
+        39, 48, 41.6, "N" ->  39.811556
+        86, 20, 35.6, "W" -> -86.343222
     """
-    deg = Decimal(str(degrees))
-    mins = Decimal(str(minutes))
-    secs = Decimal(str(seconds))
+    if deg is None or minutes is None or seconds is None or not direction:
+        return None
 
-    decimal = deg + (mins / Decimal("60")) + (secs / Decimal("3600"))
+    deg = Decimal(str(deg))
+    minutes = Decimal(str(minutes))
+    seconds = Decimal(str(seconds))
 
-    direction = (direction or "").upper()
-    if direction in ("S", "W"):
+    decimal = deg + (minutes / Decimal("60")) + (seconds / Decimal("3600"))
+
+    if direction.upper() in ("S", "W"):
         decimal = -decimal
 
-    return decimal
+    # store with 6 decimal places (matches your model)
+    return decimal.quantize(Decimal("0.000001"))
+
+
+def decimal_to_dms(value, is_lat=True):
+    """
+    Convert signed decimal degrees to DMS + direction (N/S/E/W).
+
+    Returns a dict:
+      {"deg": 39, "min": 48, "sec": 41.6, "dir": "N"}
+    or None if value is missing.
+    """
+    if value is None:
+        return None
+
+    value = Decimal(str(value))
+    sign = -1 if value < 0 else 1
+    abs_val = float(abs(value))
+
+    deg = int(abs_val)
+    minutes_full = (abs_val - deg) * 60
+    minutes = int(minutes_full)
+    seconds = round((minutes_full - minutes) * 60, 1)
+
+    if is_lat:
+        direction = "N" if sign >= 0 else "S"
+    else:
+        direction = "E" if sign >= 0 else "W"
+
+    return {
+        "deg": deg,
+        "min": minutes,
+        "sec": seconds,
+        "dir": direction,
+    }
 
 
 # ---------------------------------------------------------------------

@@ -1,25 +1,18 @@
-from decimal import Decimal 
+# airspace/models.py
 
 from django.conf import settings
 from django.db import models
+from django.contrib.postgres.fields import ArrayField
 
-from .utils import dms_to_decimal
-from equipment.models import Equipment
-from documents.models import GeneralDocument 
-
-
-
-
-
-
-
+from documents.models import GeneralDocument  # assumes you have this app/model
 
 
 class WaiverPlanning(models.Model):
     """
     Holds planning details that are not part of the FAA waiver form itself but
-    are critical for the waiver application and Description of Operations:
-    aircraft, pilot, dates, location, and safety features.
+    are critical for the waiver application and Description of Operations /
+    CONOPS: aircraft, pilot, dates, location, safety features, and operational
+    profile.
     """
 
     # -------------------------
@@ -47,6 +40,49 @@ class WaiverPlanning(models.Model):
         ("G", "Class G"),
     ]
 
+    PURPOSE_OPERATIONS_CHOICES = [
+        ("event_filming", "Event filming / broadcast"),
+        ("pro_photography", "Professional aerial photography"),
+        ("mapping_survey", "Mapping / survey"),
+        ("infrastructure_inspection", "Infrastructure inspection"),
+        ("public_safety", "Public safety / incident support"),
+        ("training_proficiency", "Training / proficiency flights"),
+        ("real_estate", "Real estate photography"),
+    ]
+
+    # --- Operational Profile & Environment ---
+
+    OP_AIRCRAFT_COUNT_CHOICES = [
+        ("single", "Single aircraft"),
+        ("multi_sequential", "Multiple aircraft (sequential use)"),
+        ("multi_simultaneous", "Multiple aircraft (simultaneous use)"),
+    ]
+
+    GROUND_ENVIRONMENT_CHOICES = [
+        ("residential", "Residential property / housing"),
+        ("commercial", "Commercial buildings / business areas"),
+        ("industrial", "Industrial or construction sites"),
+        ("agricultural", "Agricultural land / open fields"),
+        ("forested", "Forested or rural terrain"),
+        ("water", "Water features (lakes, rivers, coastlines)"),
+        ("roadways", "Roadways / parking areas"),
+        ("pedestrian", "Pedestrian walkways / public access areas"),
+        ("recreational", "Recreational areas (parks, trails, fields)"),
+        ("infrastructure", "Critical infrastructure (utilities, towers, pipelines)"),
+        ("unpopulated", "Unpopulated or remote terrain"),
+        ("crowd_sparse", "Sparse people present"),
+        ("crowd_moderate", "Moderate public presence"),
+        ("crowd_dense", "Dense gatherings / event crowds"),
+    ]
+
+
+    PREPARED_PROCEDURES_CHOICES = [
+        ("preflight", "Pre-flight checklist used"),
+        ("postflight", "Post-flight checklist used"),
+        ("lost_link", "Lost-link / flyaway procedure in place"),
+        ("emergency_lz", "Emergency landing zones pre-identified"),
+    ]
+
     # -------------------------
     # Ownership
     # -------------------------
@@ -71,10 +107,14 @@ class WaiverPlanning(models.Model):
         blank=True,
         help_text="Last date on which operations will occur (optional if single day).",
     )
-    timeframe = models.CharField(
-        max_length=20,
-        choices=TIMEFRAME_CHOICES,
-        help_text="General time of day when operations will occur.",
+    timeframe = ArrayField(
+        base_field=models.CharField(
+            max_length=20,
+            choices=TIMEFRAME_CHOICES,
+        ),
+        blank=True,
+        default=list,
+        help_text="Select all timeframes you expect to operate.",
     )
     frequency = models.CharField(
         max_length=20,
@@ -140,6 +180,9 @@ class WaiverPlanning(models.Model):
         help_text="Approximate total UAS flight hours for this pilot.",
     )
 
+    # -------------------------
+    # Waivers (107.39 & 107.145)
+    # -------------------------
     operates_under_10739 = models.BooleanField(
         default=False,
         help_text=(
@@ -162,6 +205,46 @@ class WaiverPlanning(models.Model):
         help_text="Example: 107W-2024-01234",
     )
 
+    operates_under_107145 = models.BooleanField(
+        default=False,
+        help_text=(
+            "Check if this operation will be conducted under an approved "
+            "14 CFR §107.145 Operations Over Moving Vehicles waiver."
+        ),
+    )
+    mv_waiver_document = models.ForeignKey(
+        GeneralDocument,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="mv_waiver_planning_entries",
+        help_text="Select your approved 107.145 waiver from General Documents.",
+    )
+    mv_waiver_number = models.CharField(
+        "Approved 107.145 Waiver Number",
+        max_length=100,
+        blank=True,
+        help_text="Example: 107W-2024-04567",
+    )
+
+    # -------------------------
+    # Purpose of Operations
+    # -------------------------
+    purpose_operations = ArrayField(
+        base_field=models.CharField(
+            max_length=50,
+            choices=PURPOSE_OPERATIONS_CHOICES,
+        ),
+        blank=True,
+        default=list,
+        help_text="Select all purposes that apply to this operation.",
+    )
+    purpose_operations_details = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Additional context about how the drone will be used.",
+    )
+
     # -------------------------
     # Venue & Location
     # -------------------------
@@ -175,7 +258,6 @@ class WaiverPlanning(models.Model):
         blank=True,
         help_text="Street address of the venue or operation area.",
     )
-
     location_city = models.CharField(
         max_length=100,
         blank=True,
@@ -205,7 +287,12 @@ class WaiverPlanning(models.Model):
         blank=True,
         help_text="Longitude of the center point for operations.",
     )
-    # airspace/models.py – inside WaiverPlanning
+    airspace_class = models.CharField(
+        max_length=1,
+        choices=AIRSPACE_CLASS_CHOICES,
+        blank=True,
+        help_text="Class of airspace where operations will occur.",
+    )
 
     location_radius = models.CharField(
         max_length=20,
@@ -213,7 +300,6 @@ class WaiverPlanning(models.Model):
         null=True,
         help_text="Radius from the center point (in NM or blanket area).",
     )
-
     nearest_airport = models.CharField(
         max_length=255,
         blank=True,
@@ -241,11 +327,7 @@ class WaiverPlanning(models.Model):
         default=False,
         help_text="One or more Visual Observers will be used.",
     )
-    visual_observer_names = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Names of Visual Observers, if applicable.",
-    )
+    # visual_observer_names removed: we’ll capture VO details later in the app
     insurance_provider = models.CharField(
         max_length=255,
         blank=True,
@@ -265,6 +347,63 @@ class WaiverPlanning(models.Model):
         ),
     )
 
+    # -------------------------
+    # Operational Profile
+    # -------------------------
+    aircraft_count = models.CharField(
+        max_length=25,
+        choices=OP_AIRCRAFT_COUNT_CHOICES,
+        blank=True,
+        help_text="Number of aircraft used for this operation.",
+    )
+    flight_duration = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Typical flight duration (e.g., 5–10 min).",
+    )
+    flights_per_day = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text="Approximate number of flights per day (used for narrative only).",
+    )
+    ground_environment = ArrayField(
+        base_field=models.CharField(
+            max_length=50,
+            choices=GROUND_ENVIRONMENT_CHOICES,
+        ),
+        blank=True,
+        default=list,
+        help_text="Types of ground environment present in the area.",
+    )
+
+    # NEW: Free-text additions
+    ground_environment_other = models.TextField(
+        blank=True,
+        help_text=(
+            "Any additional ground environment types not covered by the "
+            "checkbox list (e.g., rail yards, marinas, refineries, etc.)."
+        ),
+    )
+
+    estimated_crowd_size = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Estimated maximum crowd size (e.g., 15,000). Leave blank if unknown.",
+    )
+
+    prepared_procedures = ArrayField(
+        base_field=models.CharField(
+            max_length=30,
+            choices=PREPARED_PROCEDURES_CHOICES,
+        ),
+        blank=True,
+        default=list,
+        help_text="Safety procedures used during operations.",
+    )
+
+    # -------------------------
+    # Timestamps
+    # -------------------------
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -296,10 +435,12 @@ class WaiverPlanning(models.Model):
     def timeframe_codes(self):
         """
         Returns timeframe as a list of codes.
-        If you later store CSV (e.g. 'noon_4pm,4pm_sunset'), this still works.
+        Supports both ArrayField (native list) and legacy CSV storage.
         """
         if not self.timeframe:
             return []
+        if isinstance(self.timeframe, (list, tuple)):
+            return list(self.timeframe)
         return [c.strip() for c in str(self.timeframe).split(",") if c.strip()]
 
     def apply_aircraft_safety_profile(self):
@@ -328,6 +469,16 @@ class WaiverPlanning(models.Model):
             if number:
                 self.oop_waiver_number = number
 
+        # Auto-fill 107.145 waiver number from attached document if available
+        if (
+            self.operates_under_107145
+            and self.mv_waiver_document
+            and not self.mv_waiver_number
+        ):
+            number = getattr(self.mv_waiver_document, "waiver_number", None)
+            if number:
+                self.mv_waiver_number = number
+
         # If you have an update_decimal_coords helper elsewhere, call it safely
         if hasattr(self, "update_decimal_coords"):
             self.update_decimal_coords()
@@ -335,8 +486,6 @@ class WaiverPlanning(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
-        if self.waiver:
-            return f"Planning for {self.waiver.operation_title}"
         return f"{self.operation_title} ({self.user})"
 
     class Meta:
@@ -350,16 +499,37 @@ class WaiverPlanning(models.Model):
 
 
 
+class WaiverApplication(models.Model):
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("submitted", "Submitted"),
+    ]
 
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="waiver_applications",
+    )
+    planning = models.ForeignKey(
+        WaiverPlanning,
+        on_delete=models.CASCADE,
+        related_name="applications",
+    )
 
+    # This will hold the generated Description of Operations text
+    description = models.TextField(
+        blank=True,
+        help_text="Generated Description of Operations for this waiver.",
+    )
 
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="draft",
+    )
 
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-
-
-
-
-
-
-
-
+    def __str__(self) -> str:
+        return f"Waiver Application for {self.planning.operation_title} ({self.user})"

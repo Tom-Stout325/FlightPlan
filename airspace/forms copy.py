@@ -2,15 +2,10 @@
 
 from django import forms
 
+from .models import WaiverPlanning
 from equipment.models import Equipment
 from pilot.models import PilotProfile
 from .utils import dms_to_decimal  # used to convert DMS -> decimal
-
-from .models import WaiverPlanning, WaiverApplication
-
-
-
-
 
 
 TZ_CHOICES = [
@@ -56,22 +51,11 @@ PURPOSE_OPERATIONS_CHOICES = [
 ]
 
 GROUND_ENVIRONMENT_CHOICES = [
-    ("residential", "Residential property / housing"),
-    ("commercial", "Commercial buildings / business areas"),
-    ("industrial", "Industrial or construction sites"),
-    ("agricultural", "Agricultural land / open fields"),
-    ("forested", "Forested or rural terrain"),
-    ("water", "Water features (lakes, rivers, coastlines)"),
-    ("roadways", "Roadways / parking areas"),
-    ("pedestrian", "Pedestrian walkways / public access areas"),
-    ("recreational", "Recreational areas (parks, trails, fields)"),
-    ("infrastructure", "Critical infrastructure (utilities, towers, pipelines)"),
-    ("unpopulated", "Unpopulated or remote terrain"),
-    ("crowd_sparse", "Sparse people present"),
-    ("crowd_moderate", "Moderate public presence"),
-    ("crowd_dense", "Dense gatherings / event crowds"),
+    ("spectator_stands", "Spectator stands"),
+    ("pits_staff", "Pit / staff-only areas"),
+    ("general_admission", "General admission / open grounds"),
+    ("restricted_zones", "Restricted or barricaded zones"),
 ]
-
 
 PREPARED_PROCEDURES_CHOICES = [
     ("preflight", "Pre-flight checklist used"),
@@ -88,35 +72,42 @@ class WaiverPlanningForm(forms.ModelForm):
     operational profile data that will feed the Waiver Application
     and Description of Operations / CONOPS generator.
     """
-    
+
+    # --- Timeframe as multi-select checkbox group ---
     timeframe = forms.MultipleChoiceField(
         choices=TIMEFRAME_CHOICES,
         widget=forms.CheckboxSelectMultiple,
         required=False,
         label="Requested Timeframes",
+        help_text="Select all time windows you expect to fly.",
     )
 
+    # --- Purpose of Operations as multi-select checkboxes ---
     purpose_operations = forms.MultipleChoiceField(
         choices=PURPOSE_OPERATIONS_CHOICES,
         widget=forms.CheckboxSelectMultiple,
         required=False,
         label="Purpose of Drone Operations",
+        help_text="Select all that apply – used to build the Description of Operations.",
     )
 
+    # --- Ground environment as multi-select checkboxes ---
     ground_environment = forms.MultipleChoiceField(
         choices=GROUND_ENVIRONMENT_CHOICES,
         widget=forms.CheckboxSelectMultiple,
         required=False,
         label="Ground Environment",
+        help_text="Select all that describe the area beneath/around the operation.",
     )
 
+    # --- Prepared procedures as multi-select checkboxes ---
     prepared_procedures = forms.MultipleChoiceField(
         choices=PREPARED_PROCEDURES_CHOICES,
         widget=forms.CheckboxSelectMultiple,
         required=False,
         label="Operational Procedures",
+        help_text="Select all procedures you have in place (lost link, emergency, etc.).",
     )
-
 
     # --- DMS fields for latitude/longitude (form-only fields) ---
     lat_deg = forms.IntegerField(
@@ -197,7 +188,6 @@ class WaiverPlanningForm(forms.ModelForm):
             "location_city",
             "location_state",
             "zip_code",
-            "airspace_class", 
             "location_radius",
             "nearest_airport",
 
@@ -208,11 +198,6 @@ class WaiverPlanningForm(forms.ModelForm):
             "operates_under_10739",
             "oop_waiver_document",
             "oop_waiver_number",
-
-            # --- 107.145 Over Moving Vehicles ---
-            "operates_under_107145",    
-            "mv_waiver_document",
-            "mv_waiver_number",
 
             # --- Safety equipment / VO / insurance ---
             "uses_drone_detection",
@@ -234,10 +219,8 @@ class WaiverPlanningForm(forms.ModelForm):
             "flights_per_day",
             "estimated_crowd_size",
             "ground_environment",
-            "ground_environment_other",
             "prepared_procedures",
         ]
-
 
         widgets = {
             "start_date": forms.DateInput(
@@ -255,7 +238,6 @@ class WaiverPlanningForm(forms.ModelForm):
             "location_state": forms.TextInput(
                 attrs={"class": "form-control", "placeholder": "State (e.g. IN)"}
             ),
-            "airspace_class": forms.Select(attrs={"class": "form-select"}),
             "purpose_operations_details": forms.Textarea(
                 attrs={
                     "class": "form-control",
@@ -276,26 +258,16 @@ class WaiverPlanningForm(forms.ModelForm):
                     "placeholder": "Approximate (used for narrative only)",
                 }
             ),
-            "ground_environment_other": forms.Textarea( 
-                attrs={
-                    "class": "form-control",
-                    "rows": 2,
-                    "placeholder": "e.g. Rail yard on north boundary; marina along riverfront…",
-                }
-            ),
         }
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         # Friendly placeholder for operation title
-        if "operation_title" in self.fields:
-            self.fields["operation_title"].widget.attrs.setdefault(
-                "placeholder", "e.g., NHRA Nationals FPV Coverage"
-            )
-            self.fields["operation_title"].widget.attrs.setdefault(
-                "class", "form-control"
-            )
+        self.fields["operation_title"].widget.attrs.setdefault(
+            "placeholder", "e.g., NHRA Nationals FPV Coverage"
+        )
+        self.fields["operation_title"].widget.attrs.setdefault("class", "form-control")
 
         # Add Bootstrap styling to standard widgets
         for name, field in self.fields.items():
@@ -306,23 +278,22 @@ class WaiverPlanningForm(forms.ModelForm):
                 field.widget.attrs.setdefault("class", "form-control")
 
         # Local time zone as select with default
-        if "local_time_zone" in self.fields:
-            self.fields["local_time_zone"].widget = forms.Select(
-                choices=TZ_CHOICES,
-                attrs={"class": "form-select"},
-            )
-            if (
-                not self.initial.get("local_time_zone")
-                and not getattr(self.instance, "local_time_zone", None)
-            ):
-                self.fields["local_time_zone"].initial = "America/Indiana/Indianapolis"
+        self.fields["local_time_zone"].widget = forms.Select(
+            choices=TZ_CHOICES,
+            attrs={"class": "form-select"},
+        )
+        if (
+            not self.initial.get("local_time_zone")
+            and not getattr(self.instance, "local_time_zone", None)
+        ):
+            self.fields["local_time_zone"].initial = "America/Indiana/Indianapolis"
 
         # Radius dropdown
-        if "location_radius" in self.fields:
-            self.fields["location_radius"].widget = forms.Select(
-                choices=[("", "Select Radius")] + RADIUS_CHOICES,
-                attrs={"class": "form-select"},
-            )
+        self.fields["location_radius"].widget = forms.Select(
+            choices=[("", "Select Radius")] + RADIUS_CHOICES,
+            attrs={"class": "form-select"},
+        )
+
 
         # DMS helper fields – small controls
         for name in ["lat_deg", "lat_min", "lat_sec", "lon_deg", "lon_min", "lon_sec"]:
@@ -414,30 +385,3 @@ class WaiverPlanningForm(forms.ModelForm):
             self.save_m2m()
 
         return instance
-
-
-
-
-
-
-
-
-
-
-
-class WaiverApplicationDescriptionForm(forms.ModelForm):
-    """
-    Step 2: Big text box that holds the Description of Operations.
-    """
-    class Meta:
-        model = WaiverApplication
-        fields = ["description"]
-        widgets = {
-            "description": forms.Textarea(
-                attrs={
-                    "class": "form-control",
-                    "rows": 18,
-                    "placeholder": "Description of Operations will appear here…",
-                }
-            )
-        }

@@ -1,5 +1,22 @@
 Next Steps:
 
+**“Please save this in memory:
+We are working in the Airspace app inside FlightPlan.
+The only current model is WaiverPlanning — AirspaceWaiver has been fully removed.
+The Waiver workflow is: Waiver Planning → Waiver Application → Completed Waiver.
+Recent updates to WaiverPlanning:
+Added: street_address, zip_code
+Removed: venue_address, visual_observer_names
+Radius is now a dropdown, not a free-text field
+Latitude/longitude are being converted to split fields (degrees/minutes/seconds + direction)
+Pilot name should show First/Last, not username
+Pages currently working: Airspace Portal, Waiver Planning page.
+Next major task: Build the Waiver Application model, form, and view, and connect it to WaiverPlanning.”**
+
+
+
+
+
 
 - Add safety profile for mini 5 pro
 
