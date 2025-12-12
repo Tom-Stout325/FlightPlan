@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import messages
 import logging
 logger = logging.getLogger(__name__)
@@ -13,7 +14,6 @@ from formtools.wizard.views import SessionWizardView
 from django.http import HttpResponseRedirect
 
 
-from .services import generate_conops_text
 from .utils import dms_to_decimal 
 from .utils import generate_short_description
 from flightlogs.models import FlightLog
@@ -35,6 +35,20 @@ from .forms import (
         WaiverApplicationDescriptionForm,
 
 )
+from .services import (
+            generate_waiver_description_text, 
+            ensure_conops_sections, 
+            generate_conops_section_text,
+            validate_conops_section
+)
+
+from .constants import CONOPS_SECTIONS
+
+
+
+
+
+
 
 
 
@@ -335,18 +349,10 @@ def waiver_application_overview(request, planning_id):
 
 
 
+
 @login_required
 def waiver_application_description(request, pk):
-    """
-    Step 2: Description builder page.
-    Shows key planning inputs (editable) above the Description textarea,
-    plus buttons to save changes or regenerate the description.
-    """
-    application = get_object_or_404(
-        WaiverApplication,
-        pk=pk,
-        user=request.user,
-    )
+    application = get_object_or_404(WaiverApplication, pk=pk, user=request.user)
     planning = application.planning
 
     if request.method == "POST":
@@ -355,62 +361,72 @@ def waiver_application_description(request, pk):
             instance=planning,
             user=request.user,
         )
-        app_form = WaiverApplicationDescriptionForm(
-            request.POST,
-            instance=application,
-        )
 
-        if planning_form.is_valid() and app_form.is_valid():
-            # Save any edits to the planning data
+        # --- PERSIST LOCK TOGGLE (ALWAYS) ---
+        application.locked_description = ("locked_description" in request.POST)
+        application.save(update_fields=["locked_description"])
+
+        # -------------------------
+        # Generate (overwrite)
+        # -------------------------
+        if "generate" in request.POST:
+            # Block regeneration if locked
+            if application.locked_description:
+                messages.error(request, "Description is locked. Unlock it to regenerate.")
+                return redirect("airspace:waiver_application_description", pk=application.pk)
+
+            # Validate planning inputs first (since they feed the prompt)
+            if not planning_form.is_valid():
+                messages.error(request, "Please fix the errors above before generating.")
+                return redirect("airspace:waiver_application_description", pk=application.pk)
+
+            # Save planning changes, then generate
             planning = planning_form.save()
 
-            # Save / update description
-            application = app_form.save(commit=False)
+            try:
+                model = getattr(settings, "OPENAI_TEXT_MODEL", "gpt-4.1-mini")
+                text = generate_waiver_description_text(planning, model=model)
 
-            if "generate" in request.POST:
-                # Placeholder generator — later we’ll drop in OpenAI logic here
-                application.description = (
-                    "Description of Operations (draft)\n\n"
-                    f"Operation: {planning.operation_title}\n"
-                    f"Location: {planning.venue_name}, "
-                    f"{planning.location_city}, {planning.location_state} {planning.zip_code}\n"
-                    f"Dates: {planning.start_date} to "
-                    f"{planning.end_date or planning.start_date}\n\n"
-                    "<<< TODO: Replace this stub with AI-generated narrative "
-                    "using the planning details above. >>>"
-                )
+                if not (text or "").strip():
+                    raise RuntimeError("Generated description was empty.")
 
-            application.save()
+                application.description = text
+                application.generated_description_at = timezone.now()
+                application.save(update_fields=["description", "generated_description_at"])
 
-            # Re-bind fresh instances so the template shows updated values
-            planning = application.planning
-            planning_form = WaiverPlanningDescriptionForm(
-                instance=planning,
-                user=request.user,
-            )
-            app_form = WaiverApplicationDescriptionForm(instance=application)
+                messages.success(request, "Description of Operations generated.")
+            except Exception as exc:
+                messages.error(request, f"Could not generate Description of Operations: {exc}")
 
-    else:
-        planning_form = WaiverPlanningDescriptionForm(
-            instance=planning,
-            user=request.user,
-        )
-        app_form = WaiverApplicationDescriptionForm(instance=application)
+            return redirect("airspace:waiver_application_description", pk=application.pk)
 
-    context = {
-        "planning": planning,
-        "application": application,
-        "planning_form": planning_form,
-        "app_form": app_form,
-    }
+        # -------------------------
+        # Save Changes (keep edits)
+        # -------------------------
+        app_form = WaiverApplicationDescriptionForm(request.POST, instance=application)
+
+        if planning_form.is_valid() and app_form.is_valid():
+            planning_form.save()
+            app_form.save()
+            messages.success(request, "Changes saved.")
+            return redirect("airspace:waiver_application_description", pk=application.pk)
+
+        messages.error(request, "Please fix the errors below and try again.")
+
+    # GET / fallthrough
+    planning_form = WaiverPlanningDescriptionForm(instance=planning, user=request.user)
+    app_form = WaiverApplicationDescriptionForm(instance=application)
+
     return render(
         request,
         "airspace/waiver_application_description.html",
-        context,
+        {
+            "planning": planning,
+            "application": application,
+            "planning_form": planning_form,
+            "app_form": app_form,
+        },
     )
-
-
-
 
 
 
@@ -456,3 +472,118 @@ def waiver_planning_delete(request, pk):
     return render(request, "airspace/waiver_planning_confirm_delete.html", {
         "planning": planning
     })
+
+
+
+
+
+@login_required
+def conops_overview(request, pk):
+    """
+    CONOPS entry point for a waiver application.
+    Shows all CONOPS sections and their status.
+    """
+    application = get_object_or_404(
+        WaiverApplication,
+        pk=pk,
+        user=request.user,
+    )
+
+
+    ensure_conops_sections(application)
+
+    sections = application.conops_sections.order_by("id")
+
+    return render(
+        request,
+        "airspace/conops_overview.html",
+        {
+            "application": application,
+            "planning": application.planning,
+            "sections": sections,
+        },
+    )
+
+
+@login_required
+def conops_section_edit(request, pk, section_key):
+    application = get_object_or_404(
+        WaiverApplication,
+        pk=pk,
+        user=request.user,
+    )
+
+    section = get_object_or_404(
+        ConopsSection,
+        application=application,
+        section_key=section_key,
+    )
+
+    if request.method == "POST":
+        # Persist lock toggle on every POST
+        section.locked = ("locked" in request.POST)
+        section.save(update_fields=["locked"])
+
+        # -------------------------
+        # Generate section text
+        # -------------------------
+        if "generate" in request.POST:
+            if section.locked:
+                messages.error(request, "This section is locked. Unlock it to regenerate.")
+                return redirect(
+                    "airspace:conops_section_edit",
+                    pk=application.pk,
+                    section_key=section.section_key,
+                )
+
+            try:
+                model = getattr(settings, "OPENAI_TEXT_MODEL", "gpt-4.1-mini")
+                text = generate_conops_section_text(
+                    application=application,
+                    section=section,
+                    model=model,
+                )
+
+                if not (text or "").strip():
+                    raise RuntimeError("Generated section text was empty.")
+
+                section.content = text
+                section.generated_at = timezone.now()
+                section.save(update_fields=["content", "generated_at"])
+                validate_conops_section(section)
+
+
+                messages.success(request, f"{section.title} generated.")
+            except Exception as exc:
+                messages.error(request, f"Could not generate section: {exc}")
+
+            return redirect(
+                "airspace:conops_section_edit",
+                pk=application.pk,
+                section_key=section.section_key,
+            )
+
+        # -------------------------
+        # Save manual edits
+        # -------------------------
+        if "save" in request.POST:
+            section.content = request.POST.get("content", "")
+            section.save(update_fields=["content"])
+            messages.success(request, "Section saved.")
+            validate_conops_section(section)
+
+
+            return redirect(
+                "airspace:conops_section_edit",
+                pk=application.pk,
+                section_key=section.section_key,
+            )
+
+    return render(
+        request,
+        "airspace/conops_section_edit.html",
+        {
+            "application": application,
+            "section": section,
+        },
+    )

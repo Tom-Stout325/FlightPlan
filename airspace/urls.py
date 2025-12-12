@@ -14,6 +14,8 @@ from .views import (
     waiver_application_description,
     WaiverEquipmentChecklistView,
 
+    conops_overview,
+    conops_section_edit,
     
 )
 
@@ -31,6 +33,8 @@ urlpatterns = [
 
     path("waiver/planning/<int:pk>/delete/", waiver_planning_delete, name="waiver_planning_delete",),
 
+path("waiver/application/<int:pk>/conops/",conops_overview,name="conops_overview",),
+path("waiver/application/<int:pk>/conops/<slug:section_key>/", conops_section_edit, name="conops_section_edit",),
 
 ]
 

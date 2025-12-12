@@ -404,6 +404,8 @@ class WaiverPlanning(models.Model):
     # -------------------------
     # Timestamps
     # -------------------------
+    generated_description_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -527,9 +529,72 @@ class WaiverApplication(models.Model):
         choices=STATUS_CHOICES,
         default="draft",
     )
+    locked_description = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
         return f"Waiver Application for {self.planning.operation_title} ({self.user})"
+
+
+
+
+#------------------------------------
+#               C O N O P S
+#------------------------------------
+
+
+
+class ConopsSection(models.Model):
+    """
+    One section of a CONOPS document for an FAA waiver application.
+    Sections may be AI-generated or manually edited and locked.
+    """
+
+    application = models.ForeignKey(
+        "airspace.WaiverApplication",
+        on_delete=models.CASCADE,
+        related_name="conops_sections",
+    )
+
+    # Stable internal key (used by code & AI prompts)
+    section_key = models.CharField(
+        max_length=50,
+        db_index=True,
+        help_text="Internal identifier, e.g. 'purpose_of_operations'",
+    )
+
+    # Human-readable heading
+    title = models.CharField(
+        max_length=150,
+        help_text="Section title shown in the CONOPS document",
+    )
+
+    # Section body (AI-generated or edited)
+    content = models.TextField(blank=True)
+
+    # Prevent accidental regeneration
+    locked = models.BooleanField(default=False)
+
+
+    section_key = models.SlugField()
+    title = models.CharField(max_length=255)
+
+    content = models.TextField(blank=True)
+    locked = models.BooleanField(default=False)
+
+    is_complete = models.BooleanField(default=False)
+    validated_at = models.DateTimeField(null=True, blank=True)
+
+    generated_at = models.DateTimeField(null=True, blank=True)
+    # Metadata
+    generated_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("application", "section_key")
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.application_id} – {self.title}"

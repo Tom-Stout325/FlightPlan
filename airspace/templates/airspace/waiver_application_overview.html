@@ -184,13 +184,14 @@
      class="btn btn-outline-danger btn-sm">
     Delete Waiver
   </a>
-
-  <!-- Go to Waiver Application overview for this planning entry -->
-  <!-- Go to Waiver Application Description / Generator -->
   <a href="{% url 'airspace:waiver_application_description' pk=application.id %}"
      class="btn btn-primary btn-sm">
     Waiver Form
   </a>
+  <a href="{% url 'airspace:conops_overview' application.pk %}"
+      class="btn btn-outline-primary">
+      Open CONOPS
+    </a>
 
 </div>
 

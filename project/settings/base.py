@@ -4,11 +4,17 @@ import os
 from django.contrib.messages import constants as messages
 
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+env = environ.Env()
+environ.Env.read_env(BASE_DIR / ".env")
+
+OPENAI_API_KEY = env("OPENAI_API_KEY", default=None)
+OPENAI_TEXT_MODEL = os.getenv("OPENAI_TEXT_MODEL", "gpt-4.1-mini")
+
 
 
 # Set base directory first
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Initialize environment
 env = environ.Env()

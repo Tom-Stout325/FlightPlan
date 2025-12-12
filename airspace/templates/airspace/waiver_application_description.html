@@ -37,10 +37,12 @@
     margin-top: .2rem;
     flex: 0 0 auto;
   }
+
   .purpose-grid label span {
     display: inline-block;
     margin-top: 0.15rem; /* aligns text with checkbox center */
 }
+
 /* Ground Environment – nice 1→2→3 column responsive grid */
 .ground-grid ul {
     list-style: none;
@@ -129,7 +131,7 @@
   .ground-grid ul { ... }
   .procedures-grid ul { ... }
 
-  /* IMPORTANT: normalize checkbox spacing (Bootstrap override) */
+
   .purpose-grid input[type="checkbox"],
   .ground-grid input[type="checkbox"],
   .procedures-grid input[type="checkbox"] {
@@ -465,6 +467,14 @@
         </div>
       </div>
     </div>
+    <div class="form-check mb-2">
+      <input class="form-check-input" type="checkbox" id="lockDescription" name="locked_description" value="1"
+       {% if application.locked_description %}checked{% endif %}>
+      <label class="form-check-label" for="lockDescription">
+        Lock this Description (prevent overwrite)
+      </label>
+      <div class="form-text">When locked, “Generate Description” is disabled to prevent accidental overwrites.</div>
+    </div>
 
     <!-- Buttons -->
     <div class="d-flex justify-content-between mt-3">
@@ -481,7 +491,20 @@
         </button>
       </div>
     </div>
-
   </form>
 </div>
+      <script>
+      (function () {
+        const lock = document.getElementById("lockDescription");
+        const genBtn = document.querySelector('button[name="generate"][value="1"]');
+        if (!lock || !genBtn) return;
+
+        function sync() {
+          genBtn.disabled = lock.checked;
+        }
+        lock.addEventListener("change", sync);
+        sync();
+      })();
+    </script>
+
 {% endblock %}
