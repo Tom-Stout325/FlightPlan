@@ -1,99 +1,36 @@
+# airspace/views.py
+
+import logging
+
 from django.conf import settings
 from django.contrib import messages
-import logging
-logger = logging.getLogger(__name__)
-
-from django.db.models import Sum
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Sum
+from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import ListView, TemplateView
-from django.urls import reverse
 from formtools.wizard.views import SessionWizardView
-from django.http import HttpResponseRedirect
 
-
-from .utils import dms_to_decimal 
-from .utils import generate_short_description
+from equipment.models import Equipment
 from flightlogs.models import FlightLog
-from equipment.models import Equipment
-
-from .utils import decimal_to_dms
-
 from pilot.models import PilotProfile
-from equipment.models import Equipment
 
-from .models import (
-        WaiverPlanning, 
-        WaiverApplication, 
-        WaiverPlanning
-)
-
-from .forms import (
-        WaiverPlanningForm,
-        WaiverApplicationDescriptionForm,
-
-)
+from .forms import WaiverApplicationDescriptionForm, WaiverPlanningForm
+from .models import ConopsSection, WaiverApplication, WaiverPlanning
 from .services import (
-            generate_waiver_description_text, 
-            ensure_conops_sections, 
-            generate_conops_section_text,
-            validate_conops_section
+    ensure_conops_sections,
+    generate_conops_section_text,
+    generate_waiver_description_text,
+    validate_conops_section,
 )
-
 from .constants.conops import CONOPS_SECTIONS
+from .utils import dms_to_decimal, generate_short_description  # keep if used elsewhere
+from .utils import decimal_to_dms  # use the utils version (do NOT override in this file)
 
-
-
-
-
-
-
-
-
-
-
-def decimal_to_dms(value, is_lat=True):
-    """
-    Convert a signed decimal degree value (e.g. 39.811556) into a dict:
-    {
-      "deg": 39,
-      "min": 48,
-      "sec": 41.6,
-      "dir": "N"
-    }
-    is_lat=True -> N/S, is_lat=False -> E/W
-    """
-    if value is None:
-        return None
-
-    # Ensure we can do math on it (handles Decimal)
-    val = float(value)
-
-    if is_lat:
-        pos_dir, neg_dir = "N", "S"
-    else:
-        pos_dir, neg_dir = "E", "W"
-
-    direction = pos_dir if val >= 0 else neg_dir
-    val = abs(val)
-
-    deg = int(val)
-    minutes_full = (val - deg) * 60
-    minutes = int(minutes_full)
-    seconds = round((minutes_full - minutes) * 60, 1)
-
-    return {
-        "deg": deg,
-        "min": minutes,
-        "sec": seconds,
-        "dir": direction,
-    }
-
-
-
-
+logger = logging.getLogger(__name__)
 
 
 class WaiverEquipmentChecklistView(LoginRequiredMixin, TemplateView):
@@ -102,7 +39,6 @@ class WaiverEquipmentChecklistView(LoginRequiredMixin, TemplateView):
     for waiver / ops planning. Does not store data – purely a guide.
     """
     template_name = "airspace/waiver_equipment_checklist.html"
-
 
 
 class AirspacePortalView(LoginRequiredMixin, TemplateView):
@@ -136,18 +72,9 @@ class AirspacePortalView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-
-
-
-
-
 @login_required
 def airspace_helper(request):
     return render(request, "airspace/airspace_guide.html")
-
-
-
-
 
 
 @login_required
@@ -233,10 +160,6 @@ def waiver_planning_new(request):
     return render(request, "airspace/waiver_planning_form.html", context)
 
 
-
-
-
-
 class WaiverPlanningDescriptionForm(WaiverPlanningForm):
     """
     Slimmed-down version of WaiverPlanningForm used on the
@@ -252,7 +175,6 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
             "aircraft_manual",
             "pilot_profile",
             "pilot_flight_hours",
-
             # Waivers
             "operates_under_10739",
             "oop_waiver_document",
@@ -260,11 +182,9 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
             "operates_under_107145",
             "mv_waiver_document",
             "mv_waiver_number",
-
             # Purpose of operations
             "purpose_operations",
             "purpose_operations_details",
-
             # Location / venue
             "venue_name",
             "street_address",
@@ -272,7 +192,6 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
             "location_state",
             "zip_code",
             "launch_location",
-
             # Safety / insurance
             "uses_drone_detection",
             "uses_flight_tracking",
@@ -280,7 +199,6 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
             "insurance_provider",
             "insurance_coverage_limit",
             "safety_features_notes",
-
             # Operational profile
             "aircraft_count",
             "flight_duration",
@@ -289,10 +207,6 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
             "estimated_crowd_size",
             "prepared_procedures",
         ]
-
-
-
-
 
 
 @login_required
@@ -345,11 +259,6 @@ def waiver_application_overview(request, planning_id):
     return render(request, "airspace/waiver_application_overview.html", context)
 
 
-
-
-
-
-
 @login_required
 def waiver_application_description(request, pk):
     application = get_object_or_404(WaiverApplication, pk=pk, user=request.user)
@@ -391,8 +300,11 @@ def waiver_application_description(request, pk):
                     raise RuntimeError("Generated description was empty.")
 
                 application.description = text
-                application.generated_description_at = timezone.now()
-                application.save(update_fields=["description", "generated_description_at"])
+                application.save(update_fields=["description"])
+
+                # NOTE: generated_description_at lives on WaiverPlanning in your model
+                planning.generated_description_at = timezone.now()
+                planning.save(update_fields=["generated_description_at"])
 
                 messages.success(request, "Description of Operations generated.")
             except Exception as exc:
@@ -429,10 +341,6 @@ def waiver_application_description(request, pk):
     )
 
 
-
-
-
-
 class WaiverPlanningListView(LoginRequiredMixin, ListView):
     """
     Lists all WaiverPlanning entries for the logged-in user.
@@ -444,12 +352,8 @@ class WaiverPlanningListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         return (
-            WaiverPlanning.objects
-            .filter(user=self.request.user)
-            .order_by("-created_at")
+            WaiverPlanning.objects.filter(user=self.request.user).order_by("-created_at")
         )
-
-
 
 
 @login_required
@@ -460,7 +364,7 @@ def waiver_planning_delete(request, pk):
     planning = get_object_or_404(
         WaiverPlanning,
         pk=pk,
-        user=request.user, 
+        user=request.user,
     )
 
     if request.method == "POST":
@@ -468,13 +372,11 @@ def waiver_planning_delete(request, pk):
         messages.success(request, "Waiver planning entry deleted.")
         return redirect("airspace:waiver_planning_list")
 
-    # Optional confirmation page:
-    return render(request, "airspace/waiver_planning_confirm_delete.html", {
-        "planning": planning
-    })
-
-
-
+    return render(
+        request,
+        "airspace/waiver_planning_confirm_delete.html",
+        {"planning": planning},
+    )
 
 
 @login_required
@@ -489,9 +391,7 @@ def conops_overview(request, pk):
         user=request.user,
     )
 
-
     ensure_conops_sections(application)
-
     sections = application.conops_sections.order_by("id")
 
     return render(
@@ -550,8 +450,8 @@ def conops_section_edit(request, pk, section_key):
                 section.content = text
                 section.generated_at = timezone.now()
                 section.save(update_fields=["content", "generated_at"])
-                validate_conops_section(section)
 
+                validate_conops_section(section)
 
                 messages.success(request, f"{section.title} generated.")
             except Exception as exc:
@@ -569,10 +469,10 @@ def conops_section_edit(request, pk, section_key):
         if "save" in request.POST:
             section.content = request.POST.get("content", "")
             section.save(update_fields=["content"])
-            messages.success(request, "Section saved.")
+
             validate_conops_section(section)
 
-
+            messages.success(request, "Section saved.")
             return redirect(
                 "airspace:conops_section_edit",
                 pk=application.pk,
@@ -585,5 +485,221 @@ def conops_section_edit(request, pk, section_key):
         {
             "application": application,
             "section": section,
+        },
+    )
+
+
+
+
+
+@login_required
+def conops_review(request, application_id):
+    """
+    Mobile-first accordion editor for CONOPS sections.
+
+    Enhancements:
+      - Progress bar context (complete/total/percent + locked count)
+      - Lock All / Unlock All actions
+      - Save: persists edits + lock states and updates validation flags
+      - Regenerate: regenerates ONLY unlocked sections
+    """
+    application = get_object_or_404(
+        WaiverApplication,
+        pk=application_id,
+        user=request.user,
+    )
+
+    # Ensure all sections exist for this application
+    ensure_conops_sections(application)
+
+    # Auto-only sections (render read-only by default)
+    AUTO_ONLY = {"cover_page", "compliance_statement", "appendices"}
+
+    # Pull all sections once
+    sections_qs = application.conops_sections.all()
+    sections_by_key = {s.section_key: s for s in sections_qs}
+
+    def _validate(section_obj):
+        """
+        Supports validate_conops_section returning:
+          - dict: {"ok": bool, "missing": [...], "fix_url": "airspace:waiver_planning_new"}
+          - tuple/list: (ok, missing_list, fix_url_name)
+          - None: fallback uses section_obj.is_complete
+        """
+        res = validate_conops_section(section_obj)
+
+        if isinstance(res, dict):
+            ok = bool(res.get("ok"))
+            missing = list(res.get("missing") or [])
+            fix_url_name = res.get("fix_url")
+            return ok, missing, fix_url_name
+
+        if isinstance(res, (list, tuple)) and len(res) >= 2:
+            ok = bool(res[0])
+            missing = list(res[1] or [])
+            fix_url_name = res[2] if len(res) >= 3 else None
+            return ok, missing, fix_url_name
+
+        # Fallback: use persisted flag if validator returns None
+        return bool(getattr(section_obj, "is_complete", True)), [], None
+
+    # -----------------------------------
+    # POST actions
+    # -----------------------------------
+    if request.method == "POST":
+        action = request.POST.get("action", "save")
+        now = timezone.now()
+
+        # --- Lock All / Unlock All ---
+        if action in ("lock_all", "unlock_all"):
+            lock_value = (action == "lock_all")
+
+            for sec in sections_by_key.values():
+                if sec.locked != lock_value:
+                    sec.locked = lock_value
+                    sec.updated_at = now
+                    sec.save(update_fields=["locked", "updated_at"])
+
+            messages.success(
+                request,
+                "All sections locked." if lock_value else "All sections unlocked.",
+            )
+            return redirect("airspace:conops_review", application_id=application.id)
+
+        # --- Regenerate unlocked sections ---
+        if action == "regenerate":
+            regenerated = 0
+
+            for section_key, _title in CONOPS_SECTIONS:
+                sec = sections_by_key.get(section_key)
+                if not sec:
+                    continue
+
+                # Update lock state first so user can toggle + regenerate in one click
+                sec.locked = bool(request.POST.get(f"locked_{section_key}"))
+                sec.updated_at = now
+                sec.save(update_fields=["locked", "updated_at"])
+
+                if sec.locked:
+                    continue
+
+                try:
+                    model = getattr(settings, "OPENAI_TEXT_MODEL", "gpt-4.1-mini")
+                    generate_conops_section_text(
+                        application=application,
+                        section=sec,
+                        model=model,
+                    )
+                    # generate_conops_section_text calls validate_conops_section internally
+                    regenerated += 1
+                except Exception as exc:
+                    messages.error(request, f"Could not regenerate {sec.title}: {exc}")
+
+            messages.success(
+                request,
+                f"Regenerated {regenerated} unlocked section(s). Locked sections were preserved.",
+            )
+            return redirect("airspace:conops_review", application_id=application.id)
+
+        # --- Default: Save edits (no regeneration) ---
+        saved = 0
+
+        for section_key, _title in CONOPS_SECTIONS:
+            sec = sections_by_key.get(section_key)
+            if not sec:
+                continue
+
+            # Lock toggle (allowed for all)
+            sec.locked = bool(request.POST.get(f"locked_{section_key}"))
+
+            # Only editable sections accept textarea updates
+            if section_key not in AUTO_ONLY:
+                posted_text = request.POST.get(f"content_{section_key}", "")
+                if posted_text != sec.content:
+                    sec.content = posted_text
+
+            sec.updated_at = now
+            sec.save()
+
+            # Update completeness flag based on validator
+            _validate(sec)
+            saved += 1
+
+        messages.success(request, f"Saved {saved} section(s).")
+        return redirect("airspace:conops_review", application_id=application.id)
+
+    # -----------------------------------
+    # GET: build accordion rows in constant order
+    # -----------------------------------
+    sections = []
+
+    for section_key, title in CONOPS_SECTIONS:
+        sec = sections_by_key.get(section_key)
+        if not sec:
+            continue
+
+        ok, missing, fix_url_name = _validate(sec)
+
+        # If section has no saved content yet, show generated draft (display-only)
+        display_content = sec.content
+        if not (display_content or "").strip():
+            try:
+                model = getattr(settings, "OPENAI_TEXT_MODEL", "gpt-4.1-mini")
+                display_content = generate_conops_section_text(
+                    application=application,
+                    section=sec,
+                    model=model,
+                )
+            except Exception:
+                display_content = ""
+
+        # Build "fix missing info" URL
+        fix_url = None
+        if fix_url_name == "airspace:waiver_planning_new":
+            fix_url = f"{reverse('airspace:waiver_planning_new')}?planning_id={application.planning_id}"
+        elif fix_url_name:
+            try:
+                fix_url = reverse(fix_url_name, args=[application.planning_id])
+            except Exception:
+                try:
+                    fix_url = reverse(fix_url_name)
+                except Exception:
+                    fix_url = None
+
+        sections.append(
+            {
+                "key": section_key,
+                "title": title,
+                "obj": sec,
+                "display_content": display_content,
+                "ok": ok,
+                "missing": missing,
+                "fix_url": fix_url,
+                "auto_only": section_key in {"cover_page", "compliance_statement", "appendices"},
+            }
+        )
+
+    # Progress context
+    total_sections = len(sections)
+    complete_sections = sum(1 for s in sections if s["ok"])
+    percent_complete = int(round((complete_sections / total_sections) * 100)) if total_sections else 0
+    locked_sections = sum(1 for s in sections if s["obj"].locked)
+    total_words = sum(
+        len((s["obj"].content or "").split())
+        for s in sections
+    )
+
+
+    return render(
+        request,
+        "airspace/conops_review.html",
+        {
+            "application": application,
+            "sections": sections,
+            "total_sections": total_sections,
+            "complete_sections": complete_sections,
+            "percent_complete": percent_complete,
+            "locked_sections": locked_sections,
+            "total_words": total_words,
         },
     )

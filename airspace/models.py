@@ -7,6 +7,8 @@ from django.contrib.postgres.fields import ArrayField
 from documents.models import GeneralDocument  # assumes you have this app/model
 
 
+
+
 class WaiverPlanning(models.Model):
     """
     Holds planning details that are not part of the FAA waiver form itself but
@@ -544,51 +546,41 @@ class WaiverApplication(models.Model):
 #               C O N O P S
 #------------------------------------
 
+# airspace/models.py
+
+from django.db import models
+from django.utils import timezone
 
 
 class ConopsSection(models.Model):
     """
     One section of a CONOPS document for an FAA waiver application.
-    Sections may be AI-generated or manually edited and locked.
+    Sections may be generated or manually edited and locked.
     """
-
     application = models.ForeignKey(
         "airspace.WaiverApplication",
         on_delete=models.CASCADE,
         related_name="conops_sections",
     )
 
-    # Stable internal key (used by code & AI prompts)
-    section_key = models.CharField(
+    section_key = models.SlugField(
         max_length=50,
         db_index=True,
         help_text="Internal identifier, e.g. 'purpose_of_operations'",
     )
 
-    # Human-readable heading
     title = models.CharField(
-        max_length=150,
+        max_length=255,
         help_text="Section title shown in the CONOPS document",
     )
 
-    # Section body (AI-generated or edited)
     content = models.TextField(blank=True)
 
-    # Prevent accidental regeneration
-    locked = models.BooleanField(default=False)
-
-
-    section_key = models.SlugField()
-    title = models.CharField(max_length=255)
-
-    content = models.TextField(blank=True)
     locked = models.BooleanField(default=False)
 
     is_complete = models.BooleanField(default=False)
     validated_at = models.DateTimeField(null=True, blank=True)
 
-    generated_at = models.DateTimeField(null=True, blank=True)
-    # Metadata
     generated_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -598,3 +590,4 @@ class ConopsSection(models.Model):
 
     def __str__(self):
         return f"{self.application_id} – {self.title}"
+

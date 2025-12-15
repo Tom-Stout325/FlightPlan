@@ -1,5 +1,4 @@
 # airspace/services.py
-
 from __future__ import annotations
 
 from typing import Optional, List, Dict, Any
@@ -178,25 +177,78 @@ def ensure_conops_sections(application) -> None:
 # ==========================================================
 
 def build_conops_section_prompt(*, application, planning, section) -> str:
+    # Use your existing choice label helpers where possible
+    timeframe_labels = _labels_from_choices(planning.timeframe_codes(), TIMEFRAME_CHOICES)
+    purpose_labels = _labels_from_choices(planning.purpose_operations or [], PURPOSE_OPERATIONS_CHOICES)
+    ground_labels = _labels_from_choices(planning.ground_environment or [], GROUND_ENVIRONMENT_CHOICES)
+    procedure_labels = _labels_from_choices(planning.prepared_procedures or [], PREPARED_PROCEDURES_CHOICES)
+
+    addr_bits = [
+        _clean(planning.street_address),
+        _clean(planning.location_city),
+        _clean(planning.location_state),
+        _clean(planning.zip_code),
+    ]
+    address = ", ".join(b for b in addr_bits if b)
+
     return f"""
 You are writing a professional FAA Concept of Operations (CONOPS) section.
 
 SECTION: {section.title}
+SECTION KEY: {section.section_key}
 
 RULES:
 - Write in formal FAA language.
-- No bullets unless appropriate.
-- Use only data provided by the planning record.
-- This section must stand alone.
+- Use short paragraphs; bullets are allowed only when appropriate.
+- Do NOT invent details. If data is missing, write "TBD" and keep it brief.
+- This output must be ONLY the body text for this section (no headings).
 
-OPERATION TITLE: {_clean(planning.operation_title)}
-VENUE: {_clean(planning.venue_name)}
-AIRSPACE: {_clean(planning.airspace_class)}
-AIRCRAFT: {_clean(planning.aircraft_display())}
-RPIC: {_clean(planning.pilot_display_name())}
+PLANNING DATA:
+Operation Title: {_clean(planning.operation_title)}
+Dates: {planning.start_date} to {planning.end_date or planning.start_date}
+Timeframes: {", ".join(timeframe_labels) or "TBD"}
+Frequency: {_clean(planning.frequency) or "TBD"}
+Local Time Zone: {_clean(planning.local_time_zone) or "TBD"}
+Max Altitude AGL: {planning.proposed_agl or "TBD"}
 
-WRITE THE CONTENT FOR THIS SECTION ONLY.
+Venue Name: {_clean(planning.venue_name) or "TBD"}
+Address: {address or "TBD"}
+Launch Location: {_clean(planning.launch_location) or "TBD"}
+Latitude/Longitude: {planning.location_latitude or "TBD"}, {planning.location_longitude or "TBD"}
+Operational Radius: {_clean(planning.location_radius) or "TBD"}
+Airspace Class: {_clean(planning.airspace_class) or "TBD"}
+Nearest Airport: {_clean(planning.nearest_airport) or "TBD"}
+
+Aircraft: {_clean(planning.aircraft_display()) or "TBD"}
+Aircraft Count: {_clean(planning.aircraft_count) or "TBD"}
+Flight Duration: {_clean(planning.flight_duration) or "TBD"}
+Flights Per Day: {planning.flights_per_day or "TBD"}
+
+RPIC Name: {_clean(planning.pilot_display_name()) or "TBD"}
+RPIC Certificate: {_clean(planning.pilot_cert_display()) or "TBD"}
+RPIC Flight Hours: {planning.pilot_flight_hours or "TBD"}
+Visual Observer Used: {_bool_text(planning.has_visual_observer)}
+
+Purpose of Operations: {", ".join(purpose_labels) or "TBD"}
+Purpose Details: {_clean(planning.purpose_operations_details) or "TBD"}
+
+Ground Environment: {", ".join(ground_labels) or "TBD"}
+Ground Environment Other: {_clean(planning.ground_environment_other) or "TBD"}
+Estimated Crowd Size: {_clean(planning.estimated_crowd_size) or "TBD"}
+
+Drone Detection Used: {_bool_text(planning.uses_drone_detection)}
+Flight Tracking Used: {_bool_text(planning.uses_flight_tracking)}
+Safety Features Notes: {_clean(planning.safety_features_notes) or "TBD"}
+Prepared Procedures: {", ".join(procedure_labels) or "TBD"}
+
+Operating under §107.39 waiver: {_bool_text(planning.operates_under_10739)}
+107.39 Waiver Number: {_clean(planning.oop_waiver_number) or "TBD"}
+Operating under §107.145 waiver: {_bool_text(planning.operates_under_107145)}
+107.145 Waiver Number: {_clean(planning.mv_waiver_number) or "TBD"}
+
+WRITE THE SECTION BODY TEXT ONLY.
 """.strip()
+
 
 
 def generate_conops_section_text(*, application, section, model=None) -> str:
@@ -250,11 +302,137 @@ MIN_WORDS_BY_SECTION = {
 }
 
 
-def validate_conops_section(section) -> None:
-    text = (section.content or "").strip()
-    min_words = MIN_WORDS_BY_SECTION.get(section.section_key, 50)
-    word_count = len(text.split())
 
-    section.is_complete = bool(text and word_count >= min_words)
+# airspace/services.py
+
+from typing import List, Dict, Any
+
+from django.utils import timezone
+
+# keep your MIN_WORDS_BY_SECTION dict as-is
+
+
+def validate_conops_section(section) -> dict:
+    """
+    Data-driven section validation.
+    Returns:
+      {"ok": bool, "missing": [str], "fix_url": "airspace:waiver_planning_new"}
+    """
+    application = section.application
+    planning = application.planning
+    key = section.section_key
+
+    missing: List[str] = []
+
+    def _has_text(v) -> bool:
+        return bool((v or "").strip())
+
+    def _has_any(*vals) -> bool:
+        return any(_has_text(v) for v in vals)
+
+    def _has_coords() -> bool:
+        return planning.location_latitude is not None and planning.location_longitude is not None
+
+    def _require(label: str, condition: bool):
+        if not condition:
+            missing.append(label)
+
+    # -------------------------
+    # Required planning fields per section
+    # -------------------------
+    if key == "cover_page":
+        _require("Operation title", _has_text(planning.operation_title))
+        _require("Start date", bool(planning.start_date))
+        _require("Location (venue/address/city)", _has_any(planning.venue_name, planning.street_address, planning.location_city))
+        _require("Pilot name", _has_text(planning.pilot_display_name()))
+        _require("Aircraft", _has_text(planning.aircraft_display()))
+
+    elif key == "purpose_of_operations":
+        _require("Purpose of operations (select at least one)", bool(planning.purpose_operations))
+        _require("Purpose details (recommended for clarity)", _has_text(planning.purpose_operations_details))
+
+    elif key == "scope_of_operations":
+        _require("Timeframe (select at least one)", bool(planning.timeframe))
+        _require("Frequency", _has_text(planning.frequency))
+        _require("Max altitude AGL", planning.proposed_agl is not None)
+        _require("Operational radius", _has_text(planning.location_radius))
+
+    elif key == "operational_area_airspace":
+        # accept either coords OR address+zip
+        _require("Latitude/Longitude OR Street Address + ZIP", _has_coords() or (_has_text(planning.street_address) and _has_text(planning.zip_code)))
+        _require("Airspace class", _has_text(planning.airspace_class))
+        _require("Operational radius", _has_text(planning.location_radius))
+        _require("Nearest airport (recommended)", _has_text(planning.nearest_airport))
+
+    elif key == "aircraft_equipment":
+        _require("Aircraft", _has_text(planning.aircraft_display()))
+        _require("Safety features notes", _has_text(planning.safety_features_notes))
+
+    elif key == "crew_roles_responsibilities":
+        _require("Pilot name", _has_text(planning.pilot_display_name()))
+        _require("Pilot certificate number", _has_text(planning.pilot_cert_display()))
+        _require("Pilot flight hours", planning.pilot_flight_hours is not None)
+        # VO names removed from model; just require yes/no already exists
+        _require("VO usage selected (yes/no)", planning.has_visual_observer in (True, False))
+
+    elif key == "concept_of_operations":
+        _require("Location (venue/address/city)", _has_any(planning.venue_name, planning.street_address, planning.location_city))
+        _require("Launch location", _has_text(planning.launch_location))
+        _require("Aircraft", _has_text(planning.aircraft_display()))
+        _require("Flight duration", _has_text(planning.flight_duration))
+        _require("Flights per day", planning.flights_per_day is not None)
+
+    elif key == "ground_operations":
+        _require("Launch location", _has_text(planning.launch_location))
+        _require("Prepared procedures (select at least one)", bool(planning.prepared_procedures))
+
+    elif key == "communications_coordination":
+        # you don’t have explicit comms fields yet; don’t block
+        pass
+
+    elif key == "safety_systems_risk_mitigation":
+        _require("Safety features notes", _has_text(planning.safety_features_notes))
+        _require("Prepared procedures (select at least one)", bool(planning.prepared_procedures))
+
+    elif key == "operational_limitations":
+        _require("Max altitude AGL", planning.proposed_agl is not None)
+        _require("Airspace class", _has_text(planning.airspace_class))
+        _require("Timeframe (select at least one)", bool(planning.timeframe))
+
+    elif key == "emergency_contingency":
+        _require("Prepared procedures (select at least one)", bool(planning.prepared_procedures))
+
+    elif key == "compliance_statement":
+        # Only required if they checked these
+        if planning.operates_under_10739:
+            _require("107.39 waiver number or waiver document", bool(planning.oop_waiver_number) or bool(planning.oop_waiver_document_id))
+        if planning.operates_under_107145:
+            _require("107.145 waiver number or waiver document", bool(planning.mv_waiver_number) or bool(planning.mv_waiver_document_id))
+
+    elif key == "appendices":
+        # don’t block
+        pass
+
+    # -------------------------
+    # Content quality gate (optional but useful)
+    # -------------------------
+    text = (section.content or "").strip()
+    min_words = MIN_WORDS_BY_SECTION.get(key, 50)
+    word_count = len(text.split()) if text else 0
+
+    if not text:
+        missing.append("Section text is empty.")
+    elif word_count < min_words:
+        missing.append(f"Section text is too short ({word_count} words). Target: {min_words}+.")
+
+    ok = len(missing) == 0
+
+    section.is_complete = ok
     section.validated_at = timezone.now()
-    section.save(update_fields=["is_complete", "validated_at"])
+    section.save(update_fields=["is_complete", "validated_at", "updated_at"])
+
+    return {
+        "ok": ok,
+        "missing": missing,
+        "fix_url": "airspace:waiver_planning_new",  # your edit flow uses ?planning_id=
+    }

@@ -26,9 +26,11 @@
             {% else %}
               <span class="badge bg-warning text-dark">Needs attention</span>
             {% endif %}
-        <a href="#" class="btn btn-sm btn-outline-primary disabled">
-          Edit
-        </a>
+          <a href="{% url 'airspace:conops_review' application.pk %}"
+            class="btn btn-primary btn-sm">
+            Open CONOPS Editor
+          </a>
+
       </div>
     {% endfor %}
   </div>

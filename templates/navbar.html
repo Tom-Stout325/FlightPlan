@@ -129,20 +129,13 @@
           </a>
           <ul class="dropdown-menu" aria-labelledby="airspaceDropdown">
               <li>
-              <a class="dropdown-item" href="{% url 'airspace:airspace_portal' %}">
-                <i class="fa-solid fa-helicopter-symbol me-2 text-primary"></i>
-                AirSpace Portal
-              </a>
+                <a class="dropdown-item" href="{% url 'airspace:airspace_portal' %}">
+                  <i class="fa-solid fa-helicopter-symbol me-2 text-primary"></i>
+                  AirSpace Portal
+                </a>
             </li>
             <li><hr class="dropdown-divider"></li>
-
-            <!-- Waiver Helper -->
-            <li>
-              <a class="dropdown-item d-flex align-items-center" href="{% url 'airspace:airspace_guide' %}">AirSpace Guide</a>
-                <i class="fa-solid fa-book-open me-2 text-primary"></i>
-                AirSpace Guide
-              </a>
-            </li>
+  
 
             <!-- Waiver Planning -->
             <li>
@@ -151,7 +144,12 @@
                 Waiver Planning List
               </a>
             </li>
- 
+             <li>
+              <a class="dropdown-item d-flex align-items-center" target="_blank" href="{% url 'airspace:waiver_planning_list' %}">
+                <i class="fa-solid fa-table-list me-2 text-primary"></i>
+                Waiver List
+              </a>
+            </li>
             <li>
               <a class="dropdown-item d-flex align-items-center" target="_blank" href="{% url 'airspace:waiver_planning_new' %}">
                 <i class="fa-solid fa-table-list me-2 text-primary"></i>
