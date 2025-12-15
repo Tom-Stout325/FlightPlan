@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from openai import OpenAI
 
-from .constants import CONOPS_SECTIONS
+from .constants.conops import CONOPS_SECTIONS
 from .models import ConopsSection
 from .forms import (
     TIMEFRAME_CHOICES,

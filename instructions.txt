@@ -83,6 +83,8 @@ SELECT COUNT(*) FROM flightplan_equipment;
 
 Run Migrations on Heroku:
 heroku run -a flightplan-airborne -- python manage.py migrate
+Run Migrations on Heroku:
+heroku run -a flightplan-skyguy -- python manage.py migrate
 
 Heroku logs:
 heroku logs --tail -a flightplan-airborne

@@ -42,7 +42,7 @@ from .services import (
             validate_conops_section
 )
 
-from .constants import CONOPS_SECTIONS
+from .constants.conops import CONOPS_SECTIONS
 
 
 
