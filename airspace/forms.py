@@ -358,6 +358,14 @@ class WaiverPlanningForm(forms.ModelForm):
                 .order_by("brand", "model")
             )
             self.fields["aircraft"].widget.attrs.setdefault("class", "form-select")
+        
+        self.fields["nearest_airport"].widget.attrs.update({
+            "class": "form-control",
+            "placeholder": "Type ICAO (e.g., KIND)",
+            "list": "airport-icao-list",
+            "autocomplete": "off",
+        })
+
 
     def clean(self):
         cleaned = super().clean()

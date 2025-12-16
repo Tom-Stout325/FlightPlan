@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Optional
 
+from math import radians, sin, cos, sqrt, atan2
 
 # ---------------------------------------------------------------------
 # Coordinate helpers
@@ -183,3 +184,21 @@ def generate_short_description(waiver: Any) -> str:
 
     # Ensure a clean space between sentences
     return f"{first_sentence} {second_sentence}"
+
+
+
+
+NM_PER_KM = Decimal("0.539956803")
+EARTH_RADIUS_KM = 6371.0088  # km
+
+
+def haversine_nm(lat1, lon1, lat2, lon2) -> Decimal:
+    phi1 = radians(float(lat1))
+    phi2 = radians(float(lat2))
+    dphi = radians(float(lat2 - lat1))
+    dlambda = radians(float(lon2 - lon1))
+
+    a = sin(dphi / 2) ** 2 + cos(phi1) * cos(phi2) * sin(dlambda / 2) ** 2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    km = EARTH_RADIUS_KM * c
+    return (Decimal(str(km)) * NM_PER_KM).quantize(Decimal("0.01"))

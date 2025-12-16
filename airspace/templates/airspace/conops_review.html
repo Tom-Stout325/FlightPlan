@@ -106,9 +106,26 @@
       <button type="submit" name="action" value="regenerate" class="btn btn-outline-secondary">
         Regenerate unlocked sections
       </button>
+
+      
+      {% if all_ready %}
+        <a href="{% url 'airspace:conops_pdf_export' application.pk %}" class="btn btn-outline-primary btn-sm" target='_blank'>
+          Export FAA CONOPS (PDF)
+        </a>  
+
+
+      {% else %}
+        <button class="btn btn-outline-secondary btn-sm" disabled>
+          Export FAA CONOPS (PDF)
+        </button>
+      {% endif %}
+
+
+
       <a href="{% url 'airspace:conops_overview' application.pk %}" class="btn btn-link text-decoration-none">
         Back
       </a>
+            
     </div>
 
     <!-- Accordion -->

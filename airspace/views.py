@@ -1,5 +1,4 @@
 # airspace/views.py
-
 import logging
 
 from django.conf import settings
@@ -7,19 +6,22 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Sum
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import ListView, TemplateView
 from formtools.wizard.views import SessionWizardView
+from django.template.loader import render_to_string
+from .utils import dms_to_decimal, generate_short_description
+from .utils import decimal_to_dms  
 
 from equipment.models import Equipment
 from flightlogs.models import FlightLog
 from pilot.models import PilotProfile
 
 from .forms import WaiverApplicationDescriptionForm, WaiverPlanningForm
-from .models import ConopsSection, WaiverApplication, WaiverPlanning
+from .models import ConopsSection, WaiverApplication, WaiverPlanning, Airport
 from .services import (
     ensure_conops_sections,
     generate_conops_section_text,
@@ -27,10 +29,23 @@ from .services import (
     validate_conops_section,
 )
 from .constants.conops import CONOPS_SECTIONS
-from .utils import dms_to_decimal, generate_short_description  # keep if used elsewhere
-from .utils import decimal_to_dms  # use the utils version (do NOT override in this file)
 
 logger = logging.getLogger(__name__)
+
+from weasyprint import HTML
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class WaiverEquipmentChecklistView(LoginRequiredMixin, TemplateView):
@@ -149,6 +164,13 @@ def waiver_planning_new(request):
                     "safety_features": safety_text or "",
                 }
             )
+        airport_options = (
+            Airport.objects.filter(active=True)
+            .values_list("icao", "name")
+            .order_by("icao")
+        )
+
+
 
     context = {
         "form": form,
@@ -156,6 +178,7 @@ def waiver_planning_new(request):
         "planning_mode": "edit" if planning else "new",
         "pilot_profile_data": pilot_profile_data,
         "drone_safety_data": drone_safety_data,
+        "airport_options": airport_options,
     }
     return render(request, "airspace/waiver_planning_form.html", context)
 
@@ -678,6 +701,8 @@ def conops_review(request, application_id):
                 "auto_only": section_key in {"cover_page", "compliance_statement", "appendices"},
             }
         )
+        all_ready = bool(sections) and all(s["ok"] for s in sections)
+
 
     # Progress context
     total_sections = len(sections)
@@ -701,5 +726,89 @@ def conops_review(request, application_id):
             "percent_complete": percent_complete,
             "locked_sections": locked_sections,
             "total_words": total_words,
+            "all_ready": all_ready,   # ✅ add this
         },
     )
+
+
+
+
+
+
+def get_conops_sections(application):
+    """
+    Build export-ready sections in canonical order using:
+      - CONOPS_SECTIONS (order + titles)
+      - application.conops_sections (DB content + locked)
+    Returns list of dicts compatible with conops_pdf.html
+    """
+    ensure_conops_sections(application)
+
+    sections_qs = application.conops_sections.all()
+    sections_by_key = {s.section_key: s for s in sections_qs}
+
+    out = []
+    for section_key, title in CONOPS_SECTIONS:
+        sec = sections_by_key.get(section_key)
+        if not sec:
+            continue
+
+        out.append({
+            "key": section_key,
+            "title": title,
+            "locked": bool(sec.locked),
+            # ready/ok: use your validator so PDF respects the same rules
+            "ready": bool(_safe_ok(validate_conops_section(sec), sec)),
+            # point this at PDF partials (recommended) OR reuse section template if you already have it
+            "template": f"airspace/pdf/sections/{section_key}.html",
+            "obj": sec,                 # keep reference for templates
+            "content": sec.content or "",# convenience
+        })
+
+    return out
+
+
+def _safe_ok(validation_result, section_obj):
+    """
+    Mirrors your conops_review validator normalization.
+    """
+    res = validation_result
+
+    if isinstance(res, dict):
+        return bool(res.get("ok"))
+
+    if isinstance(res, (list, tuple)) and len(res) >= 1:
+        return bool(res[0])
+
+    return bool(getattr(section_obj, "is_complete", True))
+
+
+
+
+
+@login_required
+def conops_pdf_export(request, application_id):
+    application = get_object_or_404(WaiverApplication, pk=application_id, user=request.user)
+
+    sections = get_conops_sections(application)
+
+    export_sections = sections
+
+    context = {
+        "application": application,
+        "planning": application.planning,
+        "sections": export_sections,
+        "generated_on": timezone.now(),
+        "request_user": request.user,
+    }
+
+    html_string = render_to_string("airspace/conops_pdf.html", context=context, request=request)
+    base_url = request.build_absolute_uri("/")
+    pdf_bytes = HTML(string=html_string, base_url=base_url).write_pdf()
+
+    planning = application.planning
+    filename = f"CONOPS_{getattr(planning, 'operation_title', 'Operation')}_{application.pk}.pdf".replace(" ", "_")
+
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    return response

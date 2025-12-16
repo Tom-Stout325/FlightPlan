@@ -17,7 +17,7 @@ from .views import (
     conops_overview,
     conops_section_edit,
     conops_review,
-    conops_review,
+    conops_pdf_export,
     
 )
 
@@ -40,6 +40,8 @@ urlpatterns = [
 
 
     path("conops/<int:application_id>/review/", conops_review, name="conops_review"),
+    path("conops/<int:application_id>/pdf/", conops_pdf_export, name="conops_pdf_export"),
+
 ]
 
 

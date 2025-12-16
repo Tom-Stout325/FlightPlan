@@ -258,6 +258,9 @@
             {{ form.zip_code.errors }}
           </div>
         </div>
+
+      <hr class="text-primary w-50 mx-auto my-5">
+
         <div class="row g-3 mb-3">
           <div class="col-12 col-md-6">
             <label class="form-label fw-semibold" for="{{ form.airspace_class.id_for_label }}">
@@ -273,18 +276,15 @@
 
         {# Centerpoint Coordinates (DMS)                       #}
         <h2 class="h6 text-uppercase text-muted mb-2">Centerpoint Coordinates (DMS)</h2>
-
         <div class="row g-3 mb-3">
           <div class="col-12 col-md-6">
             <label class="form-label fw-semibold">Latitude (DMS)</label>
-
             <div class="row g-1 small text-muted mb-1">
               <div class="col-3 text-center">Deg</div>
               <div class="col-3 text-center">Min</div>
               <div class="col-3 text-center">Sec</div>
               <div class="col-3 text-center">Dir</div>
             </div>
-
             <div class="row g-2">
               <div class="col-3">
                 {{ form.lat_deg }}
@@ -300,17 +300,14 @@
               </div>
             </div>
           </div>
-
           <div class="col-12 col-md-6">
             <label class="form-label fw-semibold">Longitude (DMS)</label>
-
             <div class="row g-1 small text-muted mb-1">
               <div class="col-3 text-center">Deg</div>
               <div class="col-3 text-center">Min</div>
               <div class="col-3 text-center">Sec</div>
               <div class="col-3 text-center">Dir</div>
             </div>
-
             <div class="row g-2">
               <div class="col-3">
                 {{ form.lon_deg }}
@@ -327,38 +324,51 @@
             </div>
           </div>
         </div>
-
-        <div class="mb-3">
-          <label class="form-label fw-semibold" for="{{ form.launch_location.id_for_label }}">
-            Launch location description
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold" for="{{ form.nearest_airport.id_for_label }}">
+            Nearest airport
           </label>
-          {{ form.launch_location }}
-          {{ form.launch_location.errors }}
-        </div>
-        <div class="row g-3 mb-3">
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold" for="{{ form.location_radius.id_for_label }}">
-              Radius
-            </label>
-            {{ form.location_radius }}
-            {{ form.location_radius.errors }}
+
+          {{ form.nearest_airport }}
+
+          {# ICAO autocomplete list #}
+          <datalist id="airport-icao-list">
+            {% for icao, name in airport_options %}
+              <option value="{{ icao }}">{{ name }}</option>
+            {% endfor %}
+          </datalist>
+
+          {{ form.nearest_airport.errors }}
+
+          <div class="form-text">
+            Type an ICAO code (ex: <strong>KIND</strong>) or start typing to select from the list.
           </div>
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold" for="{{ form.nearest_airport.id_for_label }}">
-              Nearest airport
-            </label>
-            {{ form.nearest_airport }}
-            {{ form.nearest_airport.errors }}
-          </div>
+
+          {# Airport preview (after save) #}
+          {% if planning %}
+            <div class="mt-2">
+              {% if planning.nearest_airport_ref %}
+                <div class="alert alert-light border py-2 mb-0">
+                  <div class="fw-semibold small">Selected Airport</div>
+                  <div>
+                    {{ planning.nearest_airport_ref.icao }} — {{ planning.nearest_airport_ref.name }}
+                    {% if planning.distance_to_airport_nm %}
+                      <span class="text-muted">({{ planning.distance_to_airport_nm }} NM)</span>
+                    {% endif %}
+                  </div>
+                </div>
+              {% elif planning.nearest_airport %}
+                <div class="alert alert-warning py-2 mb-0">
+                  <div class="small mb-0">
+                    ICAO set to <strong>{{ planning.nearest_airport }}</strong>, but no NASR match found yet.
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          {% endif %}
         </div>
 
- 
-
-        <hr class="text-primary w-50 mx-auto my-5">
-
-
-
-
+    <hr class="text-primary w-50 mx-auto my-5">
 
 
         {# -------------------------------------------------- #}

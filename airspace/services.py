@@ -17,6 +17,9 @@ from .forms import (
     PREPARED_PROCEDURES_CHOICES,
 )
 
+
+
+
 # ==========================================================
 # OPENAI CLIENT
 # ==========================================================
@@ -172,6 +175,8 @@ def ensure_conops_sections(application) -> None:
         ConopsSection.objects.bulk_create(new_sections)
 
 
+
+
 # ==========================================================
 # CONOPS GENERATION (PER SECTION)
 # ==========================================================
@@ -223,10 +228,10 @@ Aircraft: {_clean(planning.aircraft_display()) or "TBD"}
 Aircraft Count: {_clean(planning.aircraft_count) or "TBD"}
 Flight Duration: {_clean(planning.flight_duration) or "TBD"}
 Flights Per Day: {planning.flights_per_day or "TBD"}
-
 RPIC Name: {_clean(planning.pilot_display_name()) or "TBD"}
 RPIC Certificate: {_clean(planning.pilot_cert_display()) or "TBD"}
-RPIC Flight Hours: {planning.pilot_flight_hours or "TBD"}
+RPIC Flight Hours: {_clean(planning.pilot_hours_display()) or "TBD"}
+
 Visual Observer Used: {_bool_text(planning.has_visual_observer)}
 
 Purpose of Operations: {", ".join(purpose_labels) or "TBD"}
@@ -303,14 +308,6 @@ MIN_WORDS_BY_SECTION = {
 
 
 
-# airspace/services.py
-
-from typing import List, Dict, Any
-
-from django.utils import timezone
-
-# keep your MIN_WORDS_BY_SECTION dict as-is
-
 
 def validate_conops_section(section) -> dict:
     """
@@ -345,6 +342,8 @@ def validate_conops_section(section) -> dict:
         _require("Start date", bool(planning.start_date))
         _require("Location (venue/address/city)", _has_any(planning.venue_name, planning.street_address, planning.location_city))
         _require("Pilot name", _has_text(planning.pilot_display_name()))
+        _require("Pilot certificate number", _has_text(planning.pilot_cert_display()))
+        _require("Approximate UAS flight hours", planning.pilot_flight_hours is not None)
         _require("Aircraft", _has_text(planning.aircraft_display()))
 
     elif key == "purpose_of_operations":
