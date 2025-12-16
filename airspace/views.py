@@ -5,7 +5,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from django.http import HttpResponseRedirect, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -13,24 +13,35 @@ from django.utils import timezone
 from django.views.generic import ListView, TemplateView
 from formtools.wizard.views import SessionWizardView
 from django.template.loader import render_to_string
+from dal import autocomplete
+
 from .utils import dms_to_decimal, generate_short_description
 from .utils import decimal_to_dms  
 
 from equipment.models import Equipment
 from flightlogs.models import FlightLog
 from pilot.models import PilotProfile
+from .constants.conops import CONOPS_SECTIONS
 
-from .forms import WaiverApplicationDescriptionForm, WaiverPlanningForm
-from .models import ConopsSection, WaiverApplication, WaiverPlanning, Airport
+logger = logging.getLogger(__name__)
+from .forms import (
+    WaiverApplicationDescriptionForm, 
+    WaiverPlanningForm
+)
+
+from .models import (
+        ConopsSection, 
+        WaiverApplication, 
+        WaiverPlanning, 
+        Airport
+)
 from .services import (
     ensure_conops_sections,
     generate_conops_section_text,
     generate_waiver_description_text,
     validate_conops_section,
 )
-from .constants.conops import CONOPS_SECTIONS
 
-logger = logging.getLogger(__name__)
 
 from weasyprint import HTML
 
@@ -164,11 +175,12 @@ def waiver_planning_new(request):
                     "safety_features": safety_text or "",
                 }
             )
-        airport_options = (
-            Airport.objects.filter(active=True)
-            .values_list("icao", "name")
-            .order_by("icao")
-        )
+            
+    airport_options = (
+        Airport.objects.filter(active=True)
+        .values_list("icao", "name")
+        .order_by("icao")
+    )
 
 
 
@@ -520,11 +532,10 @@ def conops_review(request, application_id):
     """
     Mobile-first accordion editor for CONOPS sections.
 
-    Enhancements:
-      - Progress bar context (complete/total/percent + locked count)
-      - Lock All / Unlock All actions
-      - Save: persists edits + lock states and updates validation flags
-      - Regenerate: regenerates ONLY unlocked sections
+    - Progress bar context (complete/total/percent + locked count + word count)
+    - Lock All / Unlock All actions
+    - Save: persists edits + lock states and updates validation flags
+    - Regenerate: regenerates ONLY unlocked sections
     """
     application = get_object_or_404(
         WaiverApplication,
@@ -532,30 +543,23 @@ def conops_review(request, application_id):
         user=request.user,
     )
 
-    # Ensure all sections exist for this application
     ensure_conops_sections(application)
 
-    # Auto-only sections (render read-only by default)
     AUTO_ONLY = {"cover_page", "compliance_statement", "appendices"}
 
     # Pull all sections once
     sections_qs = application.conops_sections.all()
     sections_by_key = {s.section_key: s for s in sections_qs}
 
-    def _validate(section_obj):
+    def _normalize_validation(section_obj):
         """
-        Supports validate_conops_section returning:
-          - dict: {"ok": bool, "missing": [...], "fix_url": "airspace:waiver_planning_new"}
-          - tuple/list: (ok, missing_list, fix_url_name)
-          - None: fallback uses section_obj.is_complete
+        Normalizes validate_conops_section to:
+          (ok: bool, missing: list[str], fix_url_name: str|None)
         """
         res = validate_conops_section(section_obj)
 
         if isinstance(res, dict):
-            ok = bool(res.get("ok"))
-            missing = list(res.get("missing") or [])
-            fix_url_name = res.get("fix_url")
-            return ok, missing, fix_url_name
+            return bool(res.get("ok")), list(res.get("missing") or []), res.get("fix_url")
 
         if isinstance(res, (list, tuple)) and len(res) >= 2:
             ok = bool(res[0])
@@ -563,15 +567,13 @@ def conops_review(request, application_id):
             fix_url_name = res[2] if len(res) >= 3 else None
             return ok, missing, fix_url_name
 
-        # Fallback: use persisted flag if validator returns None
         return bool(getattr(section_obj, "is_complete", True)), [], None
 
-    # -----------------------------------
+    # -------------------------
     # POST actions
-    # -----------------------------------
+    # -------------------------
     if request.method == "POST":
         action = request.POST.get("action", "save")
-        now = timezone.now()
 
         # --- Lock All / Unlock All ---
         if action in ("lock_all", "unlock_all"):
@@ -580,8 +582,7 @@ def conops_review(request, application_id):
             for sec in sections_by_key.values():
                 if sec.locked != lock_value:
                     sec.locked = lock_value
-                    sec.updated_at = now
-                    sec.save(update_fields=["locked", "updated_at"])
+                    sec.save(update_fields=["locked"])
 
             messages.success(
                 request,
@@ -598,10 +599,11 @@ def conops_review(request, application_id):
                 if not sec:
                     continue
 
-                # Update lock state first so user can toggle + regenerate in one click
-                sec.locked = bool(request.POST.get(f"locked_{section_key}"))
-                sec.updated_at = now
-                sec.save(update_fields=["locked", "updated_at"])
+                # Persist lock toggle first
+                new_locked = bool(request.POST.get(f"locked_{section_key}"))
+                if sec.locked != new_locked:
+                    sec.locked = new_locked
+                    sec.save(update_fields=["locked"])
 
                 if sec.locked:
                     continue
@@ -613,7 +615,6 @@ def conops_review(request, application_id):
                         section=sec,
                         model=model,
                     )
-                    # generate_conops_section_text calls validate_conops_section internally
                     regenerated += 1
                 except Exception as exc:
                     messages.error(request, f"Could not regenerate {sec.title}: {exc}")
@@ -632,28 +633,33 @@ def conops_review(request, application_id):
             if not sec:
                 continue
 
-            # Lock toggle (allowed for all)
-            sec.locked = bool(request.POST.get(f"locked_{section_key}"))
+            # Lock toggle
+            new_locked = bool(request.POST.get(f"locked_{section_key}"))
+            changed_fields = []
+            if sec.locked != new_locked:
+                sec.locked = new_locked
+                changed_fields.append("locked")
 
-            # Only editable sections accept textarea updates
+            # Editable text for non-auto sections
             if section_key not in AUTO_ONLY:
-                posted_text = request.POST.get(f"content_{section_key}", "")
-                if posted_text != sec.content:
+                posted_text = request.POST.get(f"content_{section_key}", "") or ""
+                if posted_text != (sec.content or ""):
                     sec.content = posted_text
+                    changed_fields.append("content")
 
-            sec.updated_at = now
-            sec.save()
+            if changed_fields:
+                sec.save(update_fields=changed_fields)
 
-            # Update completeness flag based on validator
-            _validate(sec)
+            # Validate completeness flag (this function also saves is_complete/validated_at)
+            _normalize_validation(sec)
             saved += 1
 
         messages.success(request, f"Saved {saved} section(s).")
         return redirect("airspace:conops_review", application_id=application.id)
 
-    # -----------------------------------
-    # GET: build accordion rows in constant order
-    # -----------------------------------
+    # -------------------------
+    # GET: build accordion rows in canonical order
+    # -------------------------
     sections = []
 
     for section_key, title in CONOPS_SECTIONS:
@@ -661,20 +667,7 @@ def conops_review(request, application_id):
         if not sec:
             continue
 
-        ok, missing, fix_url_name = _validate(sec)
-
-        # If section has no saved content yet, show generated draft (display-only)
-        display_content = sec.content
-        if not (display_content or "").strip():
-            try:
-                model = getattr(settings, "OPENAI_TEXT_MODEL", "gpt-4.1-mini")
-                display_content = generate_conops_section_text(
-                    application=application,
-                    section=sec,
-                    model=model,
-                )
-            except Exception:
-                display_content = ""
+        ok, missing, fix_url_name = _normalize_validation(sec)
 
         # Build "fix missing info" URL
         fix_url = None
@@ -694,26 +687,25 @@ def conops_review(request, application_id):
                 "key": section_key,
                 "title": title,
                 "obj": sec,
-                "display_content": display_content,
+                # IMPORTANT: do NOT auto-generate on GET
+                "display_content": sec.content or "",
                 "ok": ok,
                 "missing": missing,
                 "fix_url": fix_url,
-                "auto_only": section_key in {"cover_page", "compliance_statement", "appendices"},
+                "auto_only": section_key in AUTO_ONLY,
             }
         )
-        all_ready = bool(sections) and all(s["ok"] for s in sections)
-
 
     # Progress context
     total_sections = len(sections)
     complete_sections = sum(1 for s in sections if s["ok"])
     percent_complete = int(round((complete_sections / total_sections) * 100)) if total_sections else 0
     locked_sections = sum(1 for s in sections if s["obj"].locked)
-    total_words = sum(
-        len((s["obj"].content or "").split())
-        for s in sections
-    )
+    total_words = sum(len((s["obj"].content or "").split()) for s in sections)
 
+    all_ready = bool(sections) and all(s["ok"] for s in sections)
+    all_locked = bool(sections) and all(s["obj"].locked for s in sections)
+    can_export = all_ready and all_locked  # optional but recommended for your workflow
 
     return render(
         request,
@@ -726,7 +718,9 @@ def conops_review(request, application_id):
             "percent_complete": percent_complete,
             "locked_sections": locked_sections,
             "total_words": total_words,
-            "all_ready": all_ready,   # ✅ add this
+            "all_ready": all_ready,
+            "all_locked": all_locked,
+            "can_export": can_export,
         },
     )
 
@@ -812,3 +806,25 @@ def conops_pdf_export(request, application_id):
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="{filename}"'
     return response
+
+
+
+
+
+class AirportAutocomplete(autocomplete.Select2QuerySetView):
+    def get_queryset(self):
+        if not self.request.user.is_authenticated:
+            return Airport.objects.none()
+
+        qs = Airport.objects.filter(active=True)
+
+        if self.q:
+            q = self.q.strip()
+            qs = qs.filter(
+                Q(icao__icontains=q) |
+                Q(name__icontains=q) |
+                Q(city__icontains=q) |
+                Q(state__icontains=q)
+            )
+
+        return qs

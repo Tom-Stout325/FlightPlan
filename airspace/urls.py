@@ -13,7 +13,7 @@ from .views import (
     waiver_application_overview,
     waiver_application_description,
     WaiverEquipmentChecklistView,
-
+    AirportAutocomplete,
     conops_overview,
     conops_section_edit,
     conops_review,
@@ -41,8 +41,10 @@ urlpatterns = [
 
     path("conops/<int:application_id>/review/", conops_review, name="conops_review"),
     path("conops/<int:application_id>/pdf/", conops_pdf_export, name="conops_pdf_export"),
-
+    path("airports/autocomplete/", AirportAutocomplete.as_view(), name="airport-autocomplete",),
 ]
+
+
 
 
 

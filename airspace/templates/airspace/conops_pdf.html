@@ -108,6 +108,28 @@
     .toc {
       page-break-inside: avoid;
     }
+    .cover-badge{
+      display:inline-block;
+      margin-top: .35rem;
+      padding: .18rem .55rem;
+      border: 1px solid #bbb;
+      border-radius: 999px;
+      font-size: 9.5pt;
+      letter-spacing: .02em;
+      color: #333;
+    }
+    .badge-controlled {
+      display: inline-block;
+      margin-left: 8pt;
+      padding: 2pt 6pt;
+      font-size: 9pt;
+      font-weight: 600;
+      border-radius: 10pt;
+      border: 1pt solid #0d6efd;
+      color: #0d6efd;
+      background-color: #e7f1ff;
+      vertical-align: middle;
+    }
 
     </style>
 </head>
@@ -115,11 +137,26 @@
 
   <!-- COVER -->
   <div class="cover">
+
+
     <div class="cover-top">
       <img src="{% static 'images/logo2.png' %}" class="logo" alt="{{ BRAND.name }} Logo">
-      <h1>Concept of Operations </h1>
+      <h1>
+        Concept of Operations
+        {% with ac=planning.airspace_class|default:""|upper %}
+          {% if ac in "BCDE" %}
+            <span class="badge-controlled">
+              Controlled Airspace Operations
+            </span>
+          {% endif %}
+        {% endwith %}
+      </h1>
+
       <h3>(CONOPS)</h3>
       <h2>{{ planning.operation_title }}</h2>
+      {% if planning.airspace_class in "BCD E" or planning.airspace_class in "BCDE" %}
+        <div class="cover-badge">Controlled Airspace Operations</div>
+      {% endif %}
     </div>
 
     <div class="cover-meta">
@@ -153,17 +190,26 @@
     <h2 class="section-title">{{ forloop.counter }}. {{ section.title }}</h2>
 
     <div class="section-body">
-      {% if section.key == "cover_page" %}
-        <p><strong>Operation Title:</strong> {{ planning.operation_title|default:"TBD" }}</p>
-        <p><strong>Venue:</strong> {{ planning.venue_name|default:"TBD" }}</p>
-        <p><strong>Airspace Classification:</strong> {{ planning.airspace_class|default:"TBD" }}</p>
-        <p><strong>Unmanned Aircraft System:</strong> {{ planning.aircraft_display|default:"TBD" }}</p>
+        {% if section.key == "cover_page" %}
 
-        <p><strong>Remote Pilot in Command:</strong> {{ planning.pilot_display_name|default:"TBD" }}</p>
-        <p><strong>Part 107 Certificate Number:</strong> {{ planning.pilot_cert_display|default:"TBD" }}</p>
-        <p><strong>Approximate UAS Flight Hours:</strong> {{ planning.pilot_flight_hours|default:"TBD" }}</p>
-
-      {% else %}
+          <p><strong>Operation Title:</strong> {{ planning.operation_title|default:"TBD" }}</p>
+          <p><strong>Venue:</strong> {{ planning.venue_name|default:"TBD" }}</p>
+          <p><strong>Airspace Classification:</strong> {{ planning.airspace_class|default:"TBD" }}</p>
+          <p><strong>Unmanned Aircraft System:</strong> {{ planning.aircraft_display|default:"TBD" }}</p>
+          <p><strong>Remote Pilot in Command:</strong> {{ planning.pilot_display_name|default:"TBD" }}</p>
+          <p><strong>Part 107 Certificate Number:</strong> {{ planning.pilot_cert_display|default:"TBD" }}</p>
+          <p><strong>Approximate UAS Flight Hours:</strong> {{ planning.pilot_flight_hours|default:"TBD" }}</p>
+          <p><strong>Nearest Airport:</strong>
+            {% if planning.nearest_airport_ref %}
+              {{ planning.nearest_airport_ref.icao }} – {{ planning.nearest_airport_ref.name }}
+            {% else %}
+              {{ planning.nearest_airport|default:"TBD" }}
+            {% endif %}
+          </p>
+          <p> <strong>Distance to Airport (NM):</strong>
+            {{ planning.distance_to_airport_nm|default:"TBD" }}
+          </p>
+        {% else %}
         {% if section.obj and section.obj.content %}
           {{ section.obj.content|linebreaks }}
         {% elif section.content %}

@@ -60,6 +60,8 @@ INSTALLED_APPS = [
     'crispy_forms',
     'fontawesomefree',
     'bootstrap5',
+    'dal',
+    'dal_select2',
     
     'accounts',
     'clients',

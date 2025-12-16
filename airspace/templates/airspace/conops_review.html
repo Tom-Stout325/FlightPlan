@@ -18,6 +18,28 @@
         margin-left: 0 !important;
       }
     }
+        .cover-badge{
+      display:inline-block;
+      margin-top: .35rem;
+      padding: .18rem .55rem;
+      border: 1px solid #bbb;
+      border-radius: 999px;
+      font-size: 9.5pt;
+      letter-spacing: .02em;
+      color: #333;
+    }
+    .badge-controlled {
+      display: inline-block;
+      margin-left: 8pt;
+      padding: 2pt 6pt;
+      font-size: 9pt;
+      font-weight: 600;
+      border-radius: 10pt;
+      border: 1pt solid #0d6efd;
+      color: #0d6efd;
+      background-color: #e7f1ff;
+      vertical-align: middle;
+    }
   </style>
 
 {% endblock %}
@@ -28,7 +50,16 @@
 
   <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
     <div>
-      <h1 class="h5 mb-1">CONOPS Review</h1>
+     <h1>
+        Concept of Operations
+        {% with ac=planning.airspace_class|default:""|upper %}
+          {% if ac in "BCDE" %}
+            <span class="badge-controlled">
+              Controlled Airspace Operations
+            </span>
+          {% endif %}
+        {% endwith %}
+      </h1>
       <div class="text-muted small">
         {{ application.planning.operation_title }}
       </div>
@@ -94,7 +125,6 @@
             <i class="fa-solid fa-lock-open me-1"></i>Unlock All
           </button>
         </div>
-
       </div>
     </div>
 
@@ -106,28 +136,19 @@
       <button type="submit" name="action" value="regenerate" class="btn btn-outline-secondary">
         Regenerate unlocked sections
       </button>
-
-      
       {% if all_ready %}
         <a href="{% url 'airspace:conops_pdf_export' application.pk %}" class="btn btn-outline-primary btn-sm" target='_blank'>
           Export FAA CONOPS (PDF)
         </a>  
-
-
       {% else %}
         <button class="btn btn-outline-secondary btn-sm" disabled>
           Export FAA CONOPS (PDF)
         </button>
       {% endif %}
-
-
-
       <a href="{% url 'airspace:conops_overview' application.pk %}" class="btn btn-link text-decoration-none">
         Back
       </a>
-            
     </div>
-
     <!-- Accordion -->
     <div class="accordion" id="conopsAccordion">
       {% for s in sections %}
@@ -162,17 +183,13 @@
                   </span>
                 {% endif %}
               </span>
-
-
             </button>
           </h2>
-
           <div id="collapse-{{ s.key }}"
                class="accordion-collapse collapse"
                aria-labelledby="heading-{{ s.key }}"
                data-bs-parent="#conopsAccordion">
             <div class="accordion-body">
-
               {% if not s.ok %}
                 <div class="alert alert-warning py-2">
                   <div class="small fw-semibold mb-1">Missing information</div>
@@ -186,7 +203,6 @@
                   {% endif %}
                 </div>
               {% endif %}
-
               {% if s.auto_only %}
                 <div class="border rounded p-3 bg-body-tertiary">
                   <div class="small text-muted mb-2">Auto-generated section</div>
@@ -203,7 +219,6 @@
                   rows="8"
                 >{{ s.display_content }}</textarea>
               {% endif %}
-
               <div class="form-check form-switch mt-3">
                 <input class="form-check-input"
                        type="checkbox"
@@ -215,14 +230,11 @@
                   Lock this section (don’t overwrite on regenerate)
                 </label>
               </div>
-
             </div>
           </div>
-
         </div>
       {% endfor %}
     </div>
-
     <!-- Bottom actions -->
     <div class="d-flex gap-2 flex-wrap mt-3">
       <button type="submit" name="action" value="save" class="btn btn-primary">
@@ -232,7 +244,6 @@
         Regenerate unlocked sections
       </button>
     </div>
-
   </form>
 </div>
 

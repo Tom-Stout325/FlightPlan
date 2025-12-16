@@ -1,6 +1,7 @@
 # airspace/forms.py
 
 from django import forms
+from dal import autocomplete
 
 from equipment.models import Equipment
 from pilot.models import PilotProfile
@@ -199,6 +200,7 @@ class WaiverPlanningForm(forms.ModelForm):
             "zip_code",
             "airspace_class", 
             "location_radius",
+            "nearest_airport_ref",
             "nearest_airport",
 
             # --- Launch location description ---
@@ -255,6 +257,19 @@ class WaiverPlanningForm(forms.ModelForm):
             "location_state": forms.TextInput(
                 attrs={"class": "form-control", "placeholder": "State (e.g. IN)"}
             ),
+            "nearest_airport_ref": autocomplete.ModelSelect2(
+                url="airspace:airport-autocomplete",
+                attrs={
+                    "data-placeholder": "Type ICAO or airport name (e.g., KIND)",
+                    "class": "form-select",
+                },
+            ),
+            "nearest_airport": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "Manual fallback (e.g., KIND – Indianapolis Intl)",
+                }
+            ),            
             "airspace_class": forms.Select(attrs={"class": "form-select"}),
             "purpose_operations_details": forms.Textarea(
                 attrs={
@@ -359,12 +374,15 @@ class WaiverPlanningForm(forms.ModelForm):
             )
             self.fields["aircraft"].widget.attrs.setdefault("class", "form-select")
         
-        self.fields["nearest_airport"].widget.attrs.update({
+        nearest_airport_field = self.fields.get("nearest_airport")
+        if nearest_airport_field:
+            nearest_airport_field.widget.attrs.update({
             "class": "form-control",
             "placeholder": "Type ICAO (e.g., KIND)",
-            "list": "airport-icao-list",
             "autocomplete": "off",
         })
+        
+
 
 
     def clean(self):
