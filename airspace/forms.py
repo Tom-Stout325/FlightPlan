@@ -7,7 +7,11 @@ from equipment.models import Equipment
 from pilot.models import PilotProfile
 from .utils import dms_to_decimal  # used to convert DMS -> decimal
 
-from .models import WaiverPlanning, WaiverApplication
+from .models import (
+        WaiverPlanning, 
+        WaiverApplication,
+        Airport,
+)
 
 
 
@@ -85,90 +89,28 @@ PREPARED_PROCEDURES_CHOICES = [
 class WaiverPlanningForm(forms.ModelForm):
     """
     Main planning form for the Airspace waiver workflow.
-    Collects operation, aircraft, pilot, location, safety, and
-    operational profile data that will feed the Waiver Application
-    and Description of Operations / CONOPS generator.
+    Collects operation, aircraft, pilot, location, safety, and operational
+    profile data that will feed the Waiver Application and Description of
+    Operations / CONOPS generator.
     """
-    
-    timeframe = forms.MultipleChoiceField(
-        choices=TIMEFRAME_CHOICES,
-        widget=forms.CheckboxSelectMultiple,
-        required=False,
-        label="Requested Timeframes",
-    )
 
-    purpose_operations = forms.MultipleChoiceField(
-        choices=PURPOSE_OPERATIONS_CHOICES,
-        widget=forms.CheckboxSelectMultiple,
-        required=False,
-        label="Purpose of Drone Operations",
-    )
-
-    ground_environment = forms.MultipleChoiceField(
-        choices=GROUND_ENVIRONMENT_CHOICES,
-        widget=forms.CheckboxSelectMultiple,
-        required=False,
-        label="Ground Environment",
-    )
-
-    prepared_procedures = forms.MultipleChoiceField(
-        choices=PREPARED_PROCEDURES_CHOICES,
-        widget=forms.CheckboxSelectMultiple,
-        required=False,
-        label="Operational Procedures",
-    )
-
+    timeframe = forms.MultipleChoiceField(choices=TIMEFRAME_CHOICES, widget=forms.CheckboxSelectMultiple, required=False, label="Requested Timeframes",)
+    purpose_operations = forms.MultipleChoiceField( choices=PURPOSE_OPERATIONS_CHOICES, widget=forms.CheckboxSelectMultiple, required=False, label="Purpose of Drone Operations",)
+    ground_environment = forms.MultipleChoiceField(choices=GROUND_ENVIRONMENT_CHOICES, widget=forms.CheckboxSelectMultiple, required=False, label="Ground Environment",)
+    prepared_procedures = forms.MultipleChoiceField(choices=PREPARED_PROCEDURES_CHOICES, widget=forms.CheckboxSelectMultiple, required=False, label="Operational Procedures",)
 
     # --- DMS fields for latitude/longitude (form-only fields) ---
-    lat_deg = forms.IntegerField(
-        label="Lat °",
-        required=False,
-        min_value=0,
-        max_value=90,
-    )
-    lat_min = forms.IntegerField(
-        label="Lat ′",
-        required=False,
-        min_value=0,
-        max_value=59,
-    )
-    lat_sec = forms.DecimalField(
-        label="Lat ″",
-        required=False,
-        min_value=0,
-        max_value=59,
-        decimal_places=3,
-    )
-    lat_dir = forms.ChoiceField(
-        label="Lat Dir",
-        required=False,
-        choices=DIRECTION_NS_CHOICES,
-    )
+    lat_deg = forms.IntegerField(label="Lat °", required=False, min_value=0, max_value=90)
+    lat_min = forms.IntegerField(label="Lat ′", required=False, min_value=0, max_value=59)
+    lat_sec = forms.DecimalField(label="Lat ″", required=False, min_value=0, max_value=59, decimal_places=3)
+    lat_dir = forms.ChoiceField(label="Lat Dir", required=False, choices=DIRECTION_NS_CHOICES)
 
-    lon_deg = forms.IntegerField(
-        label="Lon °",
-        required=False,
-        min_value=0,
-        max_value=180,
-    )
-    lon_min = forms.IntegerField(
-        label="Lon ′",
-        required=False,
-        min_value=0,
-        max_value=59,
-    )
-    lon_sec = forms.DecimalField(
-        label="Lon ″",
-        required=False,
-        min_value=0,
-        max_value=59,
-        decimal_places=3,
-    )
-    lon_dir = forms.ChoiceField(
-        label="Lon Dir",
-        required=False,
-        choices=DIRECTION_EW_CHOICES,
-    )
+    lon_deg = forms.IntegerField(label="Lon °", required=False, min_value=0, max_value=180)
+    lon_min = forms.IntegerField(label="Lon ′", required=False, min_value=0, max_value=59)
+    lon_sec = forms.DecimalField(label="Lon ″", required=False, min_value=0, max_value=59, decimal_places=3)
+    lon_dir = forms.ChoiceField(label="Lon Dir", required=False, choices=DIRECTION_EW_CHOICES)
+
+    local_time_zone = forms.ChoiceField(choices=TZ_CHOICES, required=False, label="Local time zone", widget=forms.Select(attrs={"class": "form-select"}),)
 
     class Meta:
         model = WaiverPlanning
@@ -198,7 +140,7 @@ class WaiverPlanningForm(forms.ModelForm):
             "location_city",
             "location_state",
             "zip_code",
-            "airspace_class", 
+            "airspace_class",
             "location_radius",
             "nearest_airport_ref",
             "nearest_airport",
@@ -212,7 +154,7 @@ class WaiverPlanningForm(forms.ModelForm):
             "oop_waiver_number",
 
             # --- 107.145 Over Moving Vehicles ---
-            "operates_under_107145",    
+            "operates_under_107145",
             "mv_waiver_document",
             "mv_waiver_number",
 
@@ -226,7 +168,7 @@ class WaiverPlanningForm(forms.ModelForm):
             # --- Safety features / mitigations ---
             "safety_features_notes",
 
-            # --- Purpose of Operations (ArrayField, mapped via field above) ---
+            # --- Purpose of Operations ---
             "purpose_operations",
             "purpose_operations_details",
 
@@ -240,43 +182,52 @@ class WaiverPlanningForm(forms.ModelForm):
             "prepared_procedures",
         ]
 
-
         widgets = {
-            "start_date": forms.DateInput(
-                attrs={"type": "date", "class": "form-control"}
-            ),
-            "end_date": forms.DateInput(
-                attrs={"type": "date", "class": "form-control"}
-            ),
-            "proposed_agl": forms.NumberInput(
-                attrs={"min": "0", "class": "form-control"}
-            ),
-            "location_city": forms.TextInput(
-                attrs={"class": "form-control", "placeholder": "City"}
-            ),
-            "location_state": forms.TextInput(
-                attrs={"class": "form-control", "placeholder": "State (e.g. IN)"}
-            ),
+            "operation_title": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g., NHRA Nationals FPV Coverage"}),
+
+            "start_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "end_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+
+            "frequency": forms.Select(attrs={"class": "form-select"}),
+            "local_time_zone": forms.Select(attrs={"class": "form-select"}),
+
+            "proposed_agl": forms.NumberInput(attrs={"min": "0", "class": "form-control"}),
+
+            "aircraft": forms.Select(attrs={"class": "form-select"}),
+            "aircraft_manual": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g., Avata 2, Mini 4 Pro"}),
+
+            "pilot_profile": forms.Select(attrs={"class": "form-select"}),
+            "pilot_name_manual": forms.TextInput(attrs={"class": "form-control", "placeholder": "If not in Pilot Profiles"}),
+            "pilot_cert_manual": forms.TextInput(attrs={"class": "form-control"}),
+            "pilot_flight_hours": forms.NumberInput(attrs={"class": "form-control", "min": "0"}),
+
+            "venue_name": forms.TextInput(attrs={"class": "form-control"}),
+            "street_address": forms.TextInput(attrs={"class": "form-control"}),
+            "location_city": forms.TextInput(attrs={"class": "form-control", "placeholder": "City"}),
+            "location_state": forms.TextInput(attrs={"class": "form-control", "placeholder": "State (e.g. IN)"}),
+            "zip_code": forms.TextInput(attrs={"class": "form-control"}),
+
+            "airspace_class": forms.Select(attrs={"class": "form-select"}),
+            "location_radius": forms.Select(attrs={"class": "form-select"}),
+
+            # DAL (Select2) airport picker
             "nearest_airport_ref": autocomplete.ModelSelect2(
                 url="airspace:airport-autocomplete",
                 attrs={
                     "data-placeholder": "Type ICAO or airport name (e.g., KIND)",
-                    "class": "form-select",
+                    "data-minimum-input-length": 1,
                 },
             ),
+
             "nearest_airport": forms.TextInput(
                 attrs={
                     "class": "form-control",
                     "placeholder": "Manual fallback (e.g., KIND – Indianapolis Intl)",
                 }
-            ),            
-            "airspace_class": forms.Select(attrs={"class": "form-select"}),
+            ),
+
             "purpose_operations_details": forms.Textarea(
-                attrs={
-                    "class": "form-control",
-                    "rows": 2,
-                    "placeholder": "e.g. Live broadcast coverage of NHRA national events for television…",
-                }
+                attrs={"class": "form-control", "rows": 2}
             ),
             "flight_duration": forms.TextInput(
                 attrs={"class": "form-control", "placeholder": "e.g. 5–10 minutes"}
@@ -285,73 +236,69 @@ class WaiverPlanningForm(forms.ModelForm):
                 attrs={"class": "form-control", "placeholder": "e.g. ~15,000 (if known)"}
             ),
             "flights_per_day": forms.NumberInput(
-                attrs={
-                    "class": "form-control",
-                    "min": 0,
-                    "placeholder": "Approximate (used for narrative only)",
-                }
+                attrs={"class": "form-control", "min": 0}
             ),
-            "ground_environment_other": forms.Textarea( 
-                attrs={
-                    "class": "form-control",
-                    "rows": 2,
-                    "placeholder": "e.g. Rail yard on north boundary; marina along riverfront…",
-                }
+            "ground_environment_other": forms.Textarea(
+                attrs={"class": "form-control", "rows": 2}
             ),
         }
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Friendly placeholder for operation title
-        if "operation_title" in self.fields:
-            self.fields["operation_title"].widget.attrs.setdefault(
-                "placeholder", "e.g., NHRA Nationals FPV Coverage"
-            )
-            self.fields["operation_title"].widget.attrs.setdefault(
-                "class", "form-control"
-            )
-
-        # Add Bootstrap styling to standard widgets
+        # -------------------------
+        # Consistent Bootstrap classes
+        # -------------------------
         for name, field in self.fields.items():
-            if isinstance(
-                field.widget,
-                (forms.TextInput, forms.Textarea, forms.Select, forms.NumberInput),
-            ):
-                field.widget.attrs.setdefault("class", "form-control")
+            w = field.widget
+            # Don't stomp on DAL widgets
+            if w.__class__.__module__.startswith("dal"):
+                continue
 
-        # Local time zone as select with default
-        if "local_time_zone" in self.fields:
-            self.fields["local_time_zone"].widget = forms.Select(
-                choices=TZ_CHOICES,
-                attrs={"class": "form-select"},
-            )
-            if (
-                not self.initial.get("local_time_zone")
-                and not getattr(self.instance, "local_time_zone", None)
-            ):
-                self.fields["local_time_zone"].initial = "America/Indiana/Indianapolis"
+            if isinstance(w, (forms.Select,)):
+                w.attrs.setdefault("class", "form-select")
+            elif isinstance(w, (forms.TextInput, forms.Textarea, forms.NumberInput, forms.DateInput)):
+                w.attrs.setdefault("class", "form-control")
 
-        # Radius dropdown
+        # -------------------------
+        # Local time zone: enforce choices + default
+        # -------------------------
+        # if "local_time_zone" in self.fields:
+        #     self.fields["local_time_zone"].choices = TZ_CHOICES
+
+        #     # Pick a default that actually exists in TZ_CHOICES
+        #     default_tz = TZ_CHOICES[0][0] if TZ_CHOICES else None
+        #     if default_tz and not (self.initial.get("local_time_zone") or getattr(self.instance, "local_time_zone", None)):
+        #         self.fields["local_time_zone"].initial = default_tz
+        if not self.initial.get("local_time_zone") and not getattr(self.instance, "local_time_zone", None):
+            self.initial["local_time_zone"] = "America/Indiana/Indianapolis"
+
+
+
+
+        # -------------------------
+        # Radius dropdown choices
+        # -------------------------
         if "location_radius" in self.fields:
             self.fields["location_radius"].widget = forms.Select(
                 choices=[("", "Select Radius")] + RADIUS_CHOICES,
                 attrs={"class": "form-select"},
             )
 
-        # DMS helper fields – small controls
+        # -------------------------
+        # DMS helpers (small controls)
+        # -------------------------
         for name in ["lat_deg", "lat_min", "lat_sec", "lon_deg", "lon_min", "lon_sec"]:
             if name in self.fields:
-                self.fields[name].widget.attrs.setdefault(
-                    "class", "form-control form-control-sm"
-                )
+                self.fields[name].widget.attrs.setdefault("class", "form-control form-control-sm")
+
         for name in ["lat_dir", "lon_dir"]:
             if name in self.fields:
-                self.fields[name].widget.attrs.setdefault(
-                    "class", "form-select form-select-sm"
-                )
+                self.fields[name].widget.attrs.setdefault("class", "form-select form-select-sm")
 
-        # Pilot profile queryset + label
+        # -------------------------
+        # Pilot profiles scoped to user
+        # -------------------------
         if user is not None and "pilot_profile" in self.fields:
             qs = (
                 PilotProfile.objects.filter(user=user)
@@ -366,80 +313,65 @@ class WaiverPlanningForm(forms.ModelForm):
 
             self.fields["pilot_profile"].label_from_instance = label_from_instance
 
-        # Aircraft queryset: only active drones
+        # -------------------------
+        # Aircraft: only active drones
+        # -------------------------
         if "aircraft" in self.fields:
             self.fields["aircraft"].queryset = (
                 Equipment.objects.filter(active=True, equipment_type="Drone")
                 .order_by("brand", "model")
             )
-            self.fields["aircraft"].widget.attrs.setdefault("class", "form-select")
-        
-        nearest_airport_field = self.fields.get("nearest_airport")
-        if nearest_airport_field:
-            nearest_airport_field.widget.attrs.update({
-            "class": "form-control",
-            "placeholder": "Type ICAO (e.g., KIND)",
-            "autocomplete": "off",
-        })
-        
 
-
+        # -------------------------
+        # Airport FK: show only active airports
+        # (DAL still uses the autocomplete view, but this keeps instance/forms sane)
+        # -------------------------
+        if "nearest_airport_ref" in self.fields:
+            self.fields["nearest_airport_ref"].queryset = Airport.objects.filter(active=True).order_by("icao")
 
     def clean(self):
         cleaned = super().clean()
 
-        # --- DMS → decimal conversion ---
-        lat_parts = [
-            cleaned.get("lat_deg"),
-            cleaned.get("lat_min"),
-            cleaned.get("lat_sec"),
-            cleaned.get("lat_dir"),
-        ]
-        lon_parts = [
-            cleaned.get("lon_deg"),
-            cleaned.get("lon_min"),
-            cleaned.get("lon_sec"),
-            cleaned.get("lon_dir"),
-        ]
+        lat_parts = [cleaned.get("lat_deg"), cleaned.get("lat_min"), cleaned.get("lat_sec"), cleaned.get("lat_dir")]
+        lon_parts = [cleaned.get("lon_deg"), cleaned.get("lon_min"), cleaned.get("lon_sec"), cleaned.get("lon_dir")]
 
         if all(lat_parts):
             cleaned["location_latitude"] = dms_to_decimal(
-                cleaned["lat_deg"],
-                cleaned["lat_min"],
-                cleaned["lat_sec"],
-                cleaned["lat_dir"],
+                cleaned["lat_deg"], cleaned["lat_min"], cleaned["lat_sec"], cleaned["lat_dir"]
             )
 
         if all(lon_parts):
             cleaned["location_longitude"] = dms_to_decimal(
-                cleaned["lon_deg"],
-                cleaned["lon_min"],
-                cleaned["lon_sec"],
-                cleaned["lon_dir"],
+                cleaned["lon_deg"], cleaned["lon_min"], cleaned["lon_sec"], cleaned["lon_dir"]
             )
 
         return cleaned
 
     def save(self, commit=True):
-        """
-        Ensure converted decimal latitude/longitude are saved on the model,
-        even though those fields are not directly exposed in the form.
-        """
         instance = super().save(commit=False)
 
+        # --- DMS save logic (your existing code) ---
         lat = self.cleaned_data.get("location_latitude")
         lon = self.cleaned_data.get("location_longitude")
-
         if lat is not None:
             instance.location_latitude = lat
         if lon is not None:
             instance.location_longitude = lon
+
+        # --- SAFETY FEATURES FALLBACK (server-side) ---
+        # If user selected an aircraft but the textarea is empty, pull from profile.
+        if instance.aircraft and not (instance.safety_features_notes or "").strip():
+            profile = getattr(instance.aircraft, "drone_safety_profile", None)
+            if profile and (profile.safety_features or "").strip():
+                instance.safety_features_notes = profile.safety_features
 
         if commit:
             instance.save()
             self.save_m2m()
 
         return instance
+
+
 
 
 

@@ -5,145 +5,145 @@
 
 
 {% block extra_css %}
-<style>
-  .purpose-grid ul {
-    list-style: none;
-    padding-left: 0;
-    margin: 0;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: .5rem;
-  }
-  @media (min-width: 768px) {
+  <style>
     .purpose-grid ul {
-      grid-template-columns: 1fr 1fr;
-      column-gap: 1.25rem;
+      list-style: none;
+      padding-left: 0;
+      margin: 0;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: .5rem;
     }
-  }
-  .purpose-grid li {
-    margin: 0;
-  }
-  .purpose-grid label {
-    display: inline-flex;
-    align-items: flex-start;
-    gap: .5rem;
-    line-height: 1.35;
-    cursor: pointer;
-  }
-  /* hard override for checkbox sizing even if you have global input{width:100%} */
-  .purpose-grid input[type="checkbox"] {
-    width: 1.1rem !important;
-    height: 1.1rem !important;
-    margin-top: .2rem;
-    flex: 0 0 auto;
-  }
-
-  .purpose-grid label span {
-    display: inline-block;
-    margin-top: 0.15rem; /* aligns text with checkbox center */
-}
-
-/* Ground Environment – nice 1→2→3 column responsive grid */
-.ground-grid ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-}
-
-@media (min-width: 576px) {
-    .ground-grid ul {
+    @media (min-width: 768px) {
+      .purpose-grid ul {
         grid-template-columns: 1fr 1fr;
+        column-gap: 1.25rem;
+      }
     }
-}
-
-@media (min-width: 992px) {
-    .ground-grid ul {
-        grid-template-columns: repeat(3, 1fr);
-        gap: 1rem;
+    .purpose-grid li {
+      margin: 0;
     }
-}
-
-.ground-grid label {
-    display: inline-flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-    line-height: 1.4;
-    cursor: pointer;
-    font-weight: normal;
-    margin: 0;
-}
-
-.ground-grid input[type="checkbox"] {
-    width: 1.1rem !important;
-    height: 1.1rem !important;
-    margin-top: 0.15rem;
-    flex: 0 0 auto;
-}
-
-.ground-grid label span {
-    display: inline-block;
-    margin-top: 0.15rem; /* perfect vertical alignment with checkbox */
-}
-/* Operational Procedures – clean 2×2 grid */
-.procedures-grid ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-}
-
-@media (min-width: 576px) {
-    .procedures-grid ul {
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem 1.5rem;
+    .purpose-grid label {
+      display: inline-flex;
+      align-items: flex-start;
+      gap: .5rem;
+      line-height: 1.35;
+      cursor: pointer;
     }
-}
+    /* hard override for checkbox sizing even if you have global input{width:100%} */
+    .purpose-grid input[type="checkbox"] {
+      width: 1.1rem !important;
+      height: 1.1rem !important;
+      margin-top: .2rem;
+      flex: 0 0 auto;
+    }
 
-.procedures-grid label {
-    display: inline-flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-    line-height: 1.4;
-    cursor: pointer;
-    font-weight: normal;
-    margin: 0;
-}
+    .purpose-grid label span {
+      display: inline-block;
+      margin-top: 0.15rem; /* aligns text with checkbox center */
+  }
 
-.procedures-grid input[type="checkbox"] {
-    width: 1.1rem !important;
-    height: 1.1rem !important;
-    margin-top: 0.15rem;
-    flex: 0 0 auto;
-}
+  /* Ground Environment – nice 1→2→3 column responsive grid */
+  .ground-grid ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+  }
 
-.procedures-grid label span {
-    display: inline-block;
-    margin-top: 0.15rem;
-}
+  @media (min-width: 576px) {
+      .ground-grid ul {
+          grid-template-columns: 1fr 1fr;
+      }
+  }
 
+  @media (min-width: 992px) {
+      .ground-grid ul {
+          grid-template-columns: repeat(3, 1fr);
+          gap: 1rem;
+      }
+  }
 
-  .purpose-grid ul { ... }
-  .ground-grid ul { ... }
-  .procedures-grid ul { ... }
+  .ground-grid label {
+      display: inline-flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      line-height: 1.4;
+      cursor: pointer;
+      font-weight: normal;
+      margin: 0;
+  }
 
+  .ground-grid input[type="checkbox"] {
+      width: 1.1rem !important;
+      height: 1.1rem !important;
+      margin-top: 0.15rem;
+      flex: 0 0 auto;
+  }
 
-  .purpose-grid input[type="checkbox"],
-  .ground-grid input[type="checkbox"],
+  .ground-grid label span {
+      display: inline-block;
+      margin-top: 0.15rem; /* perfect vertical alignment with checkbox */
+  }
+  /* Operational Procedures – clean 2×2 grid */
+  .procedures-grid ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+  }
+
+  @media (min-width: 576px) {
+      .procedures-grid ul {
+          grid-template-columns: 1fr 1fr;
+          gap: 1rem 1.5rem;
+      }
+  }
+
+  .procedures-grid label {
+      display: inline-flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      line-height: 1.4;
+      cursor: pointer;
+      font-weight: normal;
+      margin: 0;
+  }
+
   .procedures-grid input[type="checkbox"] {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
+      width: 1.1rem !important;
+      height: 1.1rem !important;
+      margin-top: 0.15rem;
+      flex: 0 0 auto;
+  }
+
+  .procedures-grid label span {
+      display: inline-block;
+      margin-top: 0.15rem;
   }
 
 
+    .purpose-grid ul { ... }
+    .ground-grid ul { ... }
+    .procedures-grid ul { ... }
+
+
+    .purpose-grid input[type="checkbox"],
+    .ground-grid input[type="checkbox"],
+    .procedures-grid input[type="checkbox"] {
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+    }
 
 
 
-</style>
+
+
+  </style>
 
 {% endblock %}
 
@@ -176,38 +176,38 @@
           <strong>Generate Description</strong> to update the narrative below.
         </p>
       </div>
-
       <div class="card-body pt-3">
-        <!-- Aircraft & Pilot -->
         <h6 class="text-muted mb-2">Aircraft & Pilot</h6>
-        <div class="row g-3 mb-3">
-          <div class="col-12 col-md-6">
-            {{ planning_form.aircraft.label_tag }}
-            {{ planning_form.aircraft }}
-            {{ planning_form.aircraft.errors }}
-          </div>
-          <div class="col-12 col-md-6">
-            {{ planning_form.aircraft_manual.label_tag }}
-            {{ planning_form.aircraft_manual }}
-            {{ planning_form.aircraft_manual.errors }}
-          </div>
-        </div>
+        <!-- Aircraft -->
+        <p class="mb-2">
+          <strong>Primary aircraft:</strong>
+          {{ aircraft_ctx.primary|default:"—" }}
+        </p>
+        {% if aircraft_ctx.manual_list %}
+          <p class="mb-2">
+            <strong>Additional / alternate aircraft:</strong>
+            {{ aircraft_ctx.manual_list|join:", " }}
+          </p>
+        {% endif %}
+        <!-- Pilot -->
+        <p class="mb-2">
+          <strong>Remote Pilot in Command (PIC):</strong>
+          {% if planning.pilot_profile %}
+            {{ planning.pilot_profile.user.get_full_name|default:planning.pilot_profile.user.username }}
+          {% elif planning.pilot_name_manual %}
+            {{ planning.pilot_name_manual }}
+          {% else %}
+            <span class="text-muted">Not set</span>
+          {% endif %}
+        </p>
 
-        <div class="row g-3 mb-3">
-          <div class="col-12 col-md-6">
-            {{ planning_form.pilot_profile.label_tag }}
-            {{ planning_form.pilot_profile }}
-            {{ planning_form.pilot_profile.errors }}
-          </div>
-          <div class="col-12 col-md-6">
-            {{ planning_form.pilot_flight_hours.label_tag }}
-            {{ planning_form.pilot_flight_hours }}
-            {{ planning_form.pilot_flight_hours.errors }}
-          </div>
-        </div>
-
-        <hr class="my-3">
-
+        {% if pilot_ctx.flight_hours %}
+          <p class="mb-0 text-muted small">
+            Approximate UAS flight experience: {{ pilot_ctx.flight_hours }} hours
+          </p>
+        {% endif %}
+      </div>
+    <hr class="my-3">
         <!-- Waivers -->
         <h6 class="text-muted mb-2">Operations Over People / Vehicles</h6>
         <div class="row g-3 mb-3">
@@ -219,16 +219,13 @@
               </label>
             </div>
             {{ planning_form.operates_under_10739.errors }}
-
             {{ planning_form.oop_waiver_document.label_tag }}
             {{ planning_form.oop_waiver_document }}
             {{ planning_form.oop_waiver_document.errors }}
-
             {{ planning_form.oop_waiver_number.label_tag }}
             {{ planning_form.oop_waiver_number }}
             {{ planning_form.oop_waiver_number.errors }}
           </div>
-
           <div class="col-12 col-md-6">
             <div class="form-check mb-2">
               {{ planning_form.operates_under_107145 }}
@@ -237,7 +234,6 @@
               </label>
             </div>
             {{ planning_form.operates_under_107145.errors }}
-
             {{ planning_form.mv_waiver_document.label_tag }}
             {{ planning_form.mv_waiver_document }}
             {{ planning_form.mv_waiver_document.errors }}
@@ -250,7 +246,6 @@
 
         <hr class="my-3">
 
-        
         <!-- Purpose of Drone Operations -->
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-body">

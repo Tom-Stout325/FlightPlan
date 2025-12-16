@@ -24,6 +24,9 @@ from pilot.models import PilotProfile
 from .constants.conops import CONOPS_SECTIONS
 
 logger = logging.getLogger(__name__)
+
+from .forms import TIMEFRAME_CHOICES
+
 from .forms import (
     WaiverApplicationDescriptionForm, 
     WaiverPlanningForm
@@ -40,16 +43,11 @@ from .services import (
     generate_conops_section_text,
     generate_waiver_description_text,
     validate_conops_section,
+    planning_aircraft_summary,
 )
 
 
 from weasyprint import HTML
-
-
-
-
-
-
 
 
 
@@ -65,6 +63,10 @@ class WaiverEquipmentChecklistView(LoginRequiredMixin, TemplateView):
     for waiver / ops planning. Does not store data – purely a guide.
     """
     template_name = "airspace/waiver_equipment_checklist.html"
+
+
+
+
 
 
 class AirspacePortalView(LoginRequiredMixin, TemplateView):
@@ -98,33 +100,39 @@ class AirspacePortalView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
+
+
+
 @login_required
 def airspace_helper(request):
     return render(request, "airspace/airspace_guide.html")
 
 
+
+
+
 @login_required
 def waiver_planning_new(request):
+    """
+    Step 1 – Create or edit a WaiverPlanning entry.
+    """
     planning_id = request.GET.get("planning_id")
     planning = None
 
     if planning_id:
-        planning = get_object_or_404(
-            WaiverPlanning,
-            id=planning_id,
-            user=request.user,
-        )
+        planning = get_object_or_404(WaiverPlanning, id=planning_id, user=request.user)
 
     if request.method == "POST":
         form = WaiverPlanningForm(request.POST, user=request.user, instance=planning)
         if form.is_valid():
-            planning = form.save(commit=False)
-            planning.user = request.user
-            planning.save()
+            planning_obj = form.save(commit=False)
+            planning_obj.user = request.user
+            planning_obj.save()
             form.save_m2m()
+
             return redirect(
                 "airspace:waiver_application_overview",
-                planning_id=planning.id,
+                planning_id=planning_obj.id,
             )
     else:
         form = WaiverPlanningForm(user=request.user, instance=planning)
@@ -134,17 +142,15 @@ def waiver_planning_new(request):
     # ----------------------------------------
     pilot_profile_data = []
     pilot_field = form.fields.get("pilot_profile")
-
-    if pilot_field is not None:
-        pilot_qs = pilot_field.queryset
-    else:
-        pilot_qs = PilotProfile.objects.none()
+    pilot_qs = pilot_field.queryset if pilot_field is not None else PilotProfile.objects.none()
 
     for profile in pilot_qs.select_related("user"):
+        total_seconds = 0
         try:
-            total_seconds = profile.flight_time_total()  # your helper
-        except TypeError:
+            total_seconds = profile.flight_time_total() or 0
+        except Exception:
             total_seconds = 0
+
         flight_hours = round(total_seconds / 3600, 1) if total_seconds else 0
 
         pilot_profile_data.append(
@@ -162,27 +168,15 @@ def waiver_planning_new(request):
     aircraft_field = form.fields.get("aircraft")
 
     if aircraft_field is not None:
-        # This queryset is Equipment objects limited to equipment_type="Drone"
         equipment_qs = aircraft_field.queryset.select_related("drone_safety_profile")
-
         for equip in equipment_qs:
             profile = getattr(equip, "drone_safety_profile", None)
-            safety_text = profile.safety_features if profile else ""
             drone_safety_data.append(
                 {
-                    # IMPORTANT: id must match the <select> value -> Equipment.pk
-                    "id": equip.id,
-                    "safety_features": safety_text or "",
+                    "id": equip.id,  
+                    "safety_features": (profile.safety_features if profile else "") or "",
                 }
             )
-            
-    airport_options = (
-        Airport.objects.filter(active=True)
-        .values_list("icao", "name")
-        .order_by("icao")
-    )
-
-
 
     context = {
         "form": form,
@@ -190,17 +184,18 @@ def waiver_planning_new(request):
         "planning_mode": "edit" if planning else "new",
         "pilot_profile_data": pilot_profile_data,
         "drone_safety_data": drone_safety_data,
-        "airport_options": airport_options,
     }
     return render(request, "airspace/waiver_planning_form.html", context)
 
 
+
+
+
 class WaiverPlanningDescriptionForm(WaiverPlanningForm):
     """
-    Slimmed-down version of WaiverPlanningForm used on the
-    Description page. Re-uses all widgets/choices/__init__
-    logic from WaiverPlanningForm but only exposes the fields
-    that feed the Description of Operations.
+    Slimmed-down version of WaiverPlanningForm used on the Description page.
+    Keeps the same widget/__init__ behavior, but only exposes fields that
+    influence the Description of Ops prompt and narrative.
     """
 
     class Meta(WaiverPlanningForm.Meta):
@@ -210,6 +205,7 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
             "aircraft_manual",
             "pilot_profile",
             "pilot_flight_hours",
+
             # Waivers
             "operates_under_10739",
             "oop_waiver_document",
@@ -217,9 +213,11 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
             "operates_under_107145",
             "mv_waiver_document",
             "mv_waiver_number",
+
             # Purpose of operations
             "purpose_operations",
             "purpose_operations_details",
+
             # Location / venue
             "venue_name",
             "street_address",
@@ -227,6 +225,7 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
             "location_state",
             "zip_code",
             "launch_location",
+
             # Safety / insurance
             "uses_drone_detection",
             "uses_flight_tracking",
@@ -234,6 +233,7 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
             "insurance_provider",
             "insurance_coverage_limit",
             "safety_features_notes",
+
             # Operational profile
             "aircraft_count",
             "flight_duration",
@@ -244,45 +244,36 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
         ]
 
 
+
+
+
 @login_required
 def waiver_application_overview(request, planning_id):
     """
-    Step 1.5 – Overview of the FAA waiver application, with data coming
-    from WaiverPlanning. This view also ensures a WaiverApplication object
-    exists for this planning entry.
+    Step 1.5 – Overview of the FAA waiver application, populated from WaiverPlanning.
+    Ensures a WaiverApplication exists for this planning entry.
     """
-    planning = get_object_or_404(
-        WaiverPlanning,
-        id=planning_id,
-        user=request.user,
-    )
+    planning = get_object_or_404(WaiverPlanning, id=planning_id, user=request.user)
 
-    # Ensure there is an application object tied to this planning entry
-    application, created = WaiverApplication.objects.get_or_create(
+    application, _ = WaiverApplication.objects.get_or_create(
         planning=planning,
         user=request.user,
     )
 
-    # ----- Build timeframe label list from codes -----
+    # ----- Build timeframe label list from stored codes -----
     timeframe_labels = []
     if planning.timeframe:
-        code_to_label = dict(WaiverPlanning.TIMEFRAME_CHOICES)
-        for code in planning.timeframe:
-            label = code_to_label.get(code, code)
-            timeframe_labels.append(label)
+        code_to_label = dict(TIMEFRAME_CHOICES)  
+        timeframe_labels = [code_to_label.get(code, code) for code in planning.timeframe]
 
-    # ----- Convert stored decimal coords back to DMS for display -----
-    lat_dms = decimal_to_dms(planning.location_latitude, is_lat=True)
-    lon_dms = decimal_to_dms(planning.location_longitude, is_lat=False)
+    lat_dms = decimal_to_dms(planning.location_latitude, is_lat=True) if planning.location_latitude else None
+    lon_dms = decimal_to_dms(planning.location_longitude, is_lat=False) if planning.location_longitude else None
 
     if request.method == "POST":
         if "back" in request.POST:
             return redirect("airspace:waiver_planning_list")
         if "continue" in request.POST:
-            return redirect(
-                "airspace:waiver_application_description",
-                pk=application.pk,
-            )
+            return redirect("airspace:waiver_application_description", pk=application.pk)
 
     context = {
         "planning": planning,
@@ -294,8 +285,14 @@ def waiver_application_overview(request, planning_id):
     return render(request, "airspace/waiver_application_overview.html", context)
 
 
+
+
 @login_required
 def waiver_application_description(request, pk):
+    """
+    Step 2 – Edit the planning inputs that drive the Description of Ops,
+    generate text (unless locked), and save manual edits.
+    """
     application = get_object_or_404(WaiverApplication, pk=pk, user=request.user)
     planning = application.planning
 
@@ -306,7 +303,6 @@ def waiver_application_description(request, pk):
             user=request.user,
         )
 
-        # --- PERSIST LOCK TOGGLE (ALWAYS) ---
         application.locked_description = ("locked_description" in request.POST)
         application.save(update_fields=["locked_description"])
 
@@ -314,18 +310,15 @@ def waiver_application_description(request, pk):
         # Generate (overwrite)
         # -------------------------
         if "generate" in request.POST:
-            # Block regeneration if locked
             if application.locked_description:
                 messages.error(request, "Description is locked. Unlock it to regenerate.")
                 return redirect("airspace:waiver_application_description", pk=application.pk)
 
-            # Validate planning inputs first (since they feed the prompt)
             if not planning_form.is_valid():
                 messages.error(request, "Please fix the errors above before generating.")
                 return redirect("airspace:waiver_application_description", pk=application.pk)
 
-            # Save planning changes, then generate
-            planning = planning_form.save()
+            planning_form.save()
 
             try:
                 model = getattr(settings, "OPENAI_TEXT_MODEL", "gpt-4.1-mini")
@@ -337,7 +330,6 @@ def waiver_application_description(request, pk):
                 application.description = text
                 application.save(update_fields=["description"])
 
-                # NOTE: generated_description_at lives on WaiverPlanning in your model
                 planning.generated_description_at = timezone.now()
                 planning.save(update_fields=["generated_description_at"])
 
@@ -360,9 +352,9 @@ def waiver_application_description(request, pk):
 
         messages.error(request, "Please fix the errors below and try again.")
 
-    # GET / fallthrough
     planning_form = WaiverPlanningDescriptionForm(instance=planning, user=request.user)
     app_form = WaiverApplicationDescriptionForm(instance=application)
+    aircraft_ctx = planning_aircraft_summary(planning)
 
     return render(
         request,
@@ -372,8 +364,12 @@ def waiver_application_description(request, pk):
             "application": application,
             "planning_form": planning_form,
             "app_form": app_form,
+            "aircraft_ctx": aircraft_ctx,
         },
     )
+
+
+
 
 
 class WaiverPlanningListView(LoginRequiredMixin, ListView):
@@ -389,6 +385,9 @@ class WaiverPlanningListView(LoginRequiredMixin, ListView):
         return (
             WaiverPlanning.objects.filter(user=self.request.user).order_by("-created_at")
         )
+
+
+
 
 
 @login_required
@@ -412,6 +411,9 @@ def waiver_planning_delete(request, pk):
         "airspace/waiver_planning_confirm_delete.html",
         {"planning": planning},
     )
+
+
+
 
 
 @login_required
@@ -687,7 +689,6 @@ def conops_review(request, application_id):
                 "key": section_key,
                 "title": title,
                 "obj": sec,
-                # IMPORTANT: do NOT auto-generate on GET
                 "display_content": sec.content or "",
                 "ok": ok,
                 "missing": missing,
@@ -705,8 +706,9 @@ def conops_review(request, application_id):
 
     all_ready = bool(sections) and all(s["ok"] for s in sections)
     all_locked = bool(sections) and all(s["obj"].locked for s in sections)
-    can_export = all_ready and all_locked  # optional but recommended for your workflow
-
+    can_export = all_ready and all_locked  
+    aircraft_ctx = planning_aircraft_summary
+    
     return render(
         request,
         "airspace/conops_review.html",
@@ -721,6 +723,7 @@ def conops_review(request, application_id):
             "all_ready": all_ready,
             "all_locked": all_locked,
             "can_export": can_export,
+            "aircraft_ctx": aircraft_ctx
         },
     )
 
@@ -809,8 +812,6 @@ def conops_pdf_export(request, application_id):
 
 
 
-
-
 class AirportAutocomplete(autocomplete.Select2QuerySetView):
     def get_queryset(self):
         if not self.request.user.is_authenticated:
@@ -827,4 +828,4 @@ class AirportAutocomplete(autocomplete.Select2QuerySetView):
                 Q(state__icontains=q)
             )
 
-        return qs
+        return qs.order_by("icao")

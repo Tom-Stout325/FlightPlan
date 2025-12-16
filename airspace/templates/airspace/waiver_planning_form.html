@@ -5,30 +5,31 @@
 {% endblock %}
 
 {% block extra_css %}
-<style>
-  /* Keep checkboxes/radios from inheriting big text-input styling */
-  input[type="checkbox"],
-  input[type="radio"] {
-    width: auto;
-    margin: 0 0.35rem 0 0;
-    padding: 0;
-    border: none;
-  }
+  {{ form.media.css }}
+  <style>
+    /* Keep checkboxes/radios from inheriting big text-input styling */
+    input[type="checkbox"],
+    input[type="radio"] {
+      width: auto;
+      margin: 0 0.35rem 0 0;
+      padding: 0;
+      border: none;
+    }
 
-  .checkbox-group ul {
-    list-style: none;
-    padding-left: 0;
-    margin-bottom: 0;
-  }
+    .checkbox-group ul {
+      list-style: none;
+      padding-left: 0;
+      margin-bottom: 0;
+    }
 
-  .checkbox-group li {
-    margin-bottom: 0.25rem;
-  }
-</style>
+    .checkbox-group li {
+      margin-bottom: 0.25rem;
+    }
+  </style>
 {% endblock %}
 
 {% block extra_js %}
-  {{ form.media }}
+  {{ form.media.js }}
 
   <script>
     document.addEventListener("DOMContentLoaded", function () {
@@ -149,7 +150,9 @@
       <form method="post" novalidate>
         {% csrf_token %}
 
-        {# --- Operation Basics --- #}
+        {# ----------------------------- #}
+        {# Operation Basics              #}
+        {# ----------------------------- #}
         <h2 class="h6 text-uppercase text-muted mb-3">Operation Basics</h2>
 
         <div class="row g-3 mb-4">
@@ -178,6 +181,7 @@
           <div class="col-12 col-md-5">
             <label class="form-label fw-semibold" for="{{ form.timeframe.id_for_label }}">Timeframe</label>
             {{ form.timeframe.errors }}
+
             <div class="checkbox-group">
               {% for choice in form.timeframe %}
                 <div class="form-check">
@@ -186,6 +190,7 @@
                 </div>
               {% endfor %}
             </div>
+
             <div class="form-text mt-1">Select all time windows when operations may occur.</div>
           </div>
 
@@ -210,7 +215,9 @@
           </div>
         </div>
 
-        {# --- Aircraft --- #}
+        {# ----------------------------- #}
+        {# Aircraft                      #}
+        {# ----------------------------- #}
         <h2 class="h6 text-uppercase text-muted mb-3">Aircraft</h2>
         <div class="row g-3 mb-4">
           <div class="col-12 col-md-6">
@@ -221,11 +228,14 @@
           <div class="col-12 col-md-6">
             <label class="form-label fw-semibold" for="{{ form.aircraft_manual.id_for_label }}">Other / additional drones</label>
             {{ form.aircraft_manual }}
+            <div class="form-text">Comma-separated full model (e.g., “DJI Avata 2, DJI Mini 4 Pro”).</div>
             {{ form.aircraft_manual.errors }}
           </div>
         </div>
 
-        {# --- Pilot --- #}
+        {# ----------------------------- #}
+        {# Pilot                         #}
+        {# ----------------------------- #}
         <h2 class="h6 text-uppercase text-muted mb-3">Pilot</h2>
         <div class="row g-3 mb-4">
           <div class="col-12 col-md-6">
@@ -251,7 +261,9 @@
           </div>
         </div>
 
-        {# --- Venue & Location --- #}
+        {# ----------------------------- #}
+        {# Venue & Location               #}
+        {# ----------------------------- #}
         <h2 class="h6 text-uppercase text-muted mb-3">Venue & Location</h2>
         <div class="row g-3 mb-3">
           <div class="col-12 col-md-6">
@@ -294,8 +306,30 @@
           </div>
         </div>
 
-        {# --- DMS fields (unchanged) --- #}
+        {# ----------------------------- #}
+        {# Coordinates (DMS)             #}
+        {# ----------------------------- #}
         <h2 class="h6 text-uppercase text-muted mb-2">Centerpoint Coordinates (DMS)</h2>
+
+        <div class="row g-1 small text-muted mb-1">
+          <div class="col-6">
+            <div class="row g-1">
+              <div class="col-3 text-center">Deg</div>
+              <div class="col-3 text-center">Min</div>
+              <div class="col-3 text-center">Sec</div>
+              <div class="col-3 text-center">Dir</div>
+            </div>
+          </div>
+          <div class="col-6 d-none d-md-block">
+            <div class="row g-1">
+              <div class="col-3 text-center">Deg</div>
+              <div class="col-3 text-center">Min</div>
+              <div class="col-3 text-center">Sec</div>
+              <div class="col-3 text-center">Dir</div>
+            </div>
+          </div>
+        </div>
+
         <div class="row g-3 mb-3">
           <div class="col-12 col-md-6">
             <label class="form-label fw-semibold">Latitude (DMS)</label>
@@ -318,6 +352,9 @@
           </div>
         </div>
 
+        {# ----------------------------- #}
+        {# Radius + Nearest Airport      #}
+        {# ----------------------------- #}
         <div class="row g-3 mb-2">
           <div class="col-12 col-md-6">
             <label class="form-label fw-semibold" for="{{ form.location_radius.id_for_label }}">{{ form.location_radius.label }}</label>
@@ -325,20 +362,18 @@
             {{ form.location_radius.errors }}
           </div>
 
-          {# ✅ Option A primary airport field: FK autocomplete #}
           <div class="col-12 col-md-6">
             <label class="form-label fw-semibold" for="{{ form.nearest_airport_ref.id_for_label }}">
               Nearest airport (NASR)
             </label>
             {{ form.nearest_airport_ref }}
             <div class="form-text">
-              Start typing ICAO or airport name. Select a match from NASR (preferred).
+              Start typing ICAO or airport name. Select a match (preferred).
             </div>
             {{ form.nearest_airport_ref.errors }}
           </div>
         </div>
 
-        {# ✅ Manual fallback, collapsed #}
         <div class="accordion mb-3" id="airportFallbackAccordion">
           <div class="accordion-item">
             <h2 class="accordion-header" id="airportFallbackHeading">
@@ -362,7 +397,6 @@
           </div>
         </div>
 
-        {# Preview (after save) #}
         {% if planning %}
           <div class="mt-2">
             {% if planning.nearest_airport_ref %}
@@ -385,11 +419,7 @@
           </div>
         {% endif %}
 
-        <hr class="text-primary w-50 mx-auto my-5">
-
-        {# --- keep the rest of your sections as-is (107.39, 107.145, insurance, etc.) --- #}
-
-        <hr class="text-primary">
+        <hr class="text-primary my-5">
 
         <div class="d-flex justify-content-between align-items-center mt-4">
           <a href="{% url 'airspace:waiver_planning_list' %}" class="btn btn-outline-secondary btn-sm">

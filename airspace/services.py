@@ -524,3 +524,43 @@ def generate_conops_section_text(*, application, section, model=None) -> str:
 
     validate_conops_section(section)
     return result
+
+
+
+
+
+def planning_aircraft_summary(planning) -> dict:
+    """
+    Returns normalized aircraft strings for narrative sections.
+    """
+    primary = ""
+    if getattr(planning, "aircraft", None):
+        # Use your Equipment __str__ or build brand/model explicitly
+        primary = str(planning.aircraft).strip()
+
+    manual_raw = (getattr(planning, "aircraft_manual", "") or "").strip()
+
+    # Split on commas / newlines; keep it forgiving
+    manual_list = []
+    if manual_raw:
+        parts = manual_raw.replace("\n", ",").split(",")
+        manual_list = [p.strip() for p in parts if p.strip()]
+
+    # Dedupe (case-insensitive)
+    seen = set()
+    combined = []
+    for item in [primary] + manual_list:
+        if not item:
+            continue
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        combined.append(item)
+
+    return {
+        "primary": primary,
+        "manual_list": manual_list,
+        "combined_list": combined,
+        "combined_display": "; ".join(combined) if combined else "—",
+    }
