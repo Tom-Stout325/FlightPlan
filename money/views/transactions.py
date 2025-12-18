@@ -265,8 +265,62 @@ def add_transaction_success(request):
 
 
 
+import csv
+from django.http import HttpResponse
+from django.contrib.auth.decorators import login_required
 
-export_transactions_csv
+from money.models import Transaction
+
+
+@login_required
+def export_transactions_csv(request):
+    """
+    Export the user's transactions as CSV.
+
+    Fix: Transaction has NO FK named 'invoice', so we must not select_related('invoice').
+    If you need invoice linkage, export Transaction.invoice_number (CharField) instead.
+    """
+    transactions = (
+        Transaction.objects
+        .filter(user=request.user)
+        .select_related("category", "sub_cat", "team", "event")  # ✅ only valid FKs
+        .order_by("-date", "-pk")
+    )
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="transactions.csv"'
+
+    writer = csv.writer(response)
+
+    # Header row (adjust columns to match your Transaction fields)
+    writer.writerow([
+        "Date",
+        "Type",
+        "Description",
+        "Category",
+        "SubCategory",
+        "Amount",
+        "Team",
+        "Event",
+        "Invoice Number",
+    ])
+
+    for t in transactions:
+        writer.writerow([
+            getattr(t, "date", "") or "",
+            getattr(t, "trans_type", "") or "",
+            getattr(t, "transaction", "") or "",
+            getattr(getattr(t, "category", None), "category", "") or "",
+            getattr(getattr(t, "sub_cat", None), "sub_cat", "") or "",
+            getattr(t, "amount", "") or "",
+            getattr(getattr(t, "team", None), "name", "") or "",
+            getattr(getattr(t, "event", None), "title", "") or "",
+            getattr(t, "invoice_number", "") or "",
+        ])
+
+    return response
+
+
 
 
 
