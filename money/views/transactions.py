@@ -24,8 +24,17 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 from ..forms.transactions.transactions import (
     TransForm,
     RecurringTransactionForm,
+    RunRecurringForMonthForm
 )
 from ..models import *
+
+
+
+
+
+
+
+
 
 
 class Transactions(LoginRequiredMixin, ListView):
@@ -265,11 +274,7 @@ def add_transaction_success(request):
 
 
 
-import csv
-from django.http import HttpResponse
-from django.contrib.auth.decorators import login_required
 
-from money.models import Transaction
 
 
 @login_required
@@ -324,21 +329,27 @@ def export_transactions_csv(request):
 
 
 
-# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=->          R E C U R R I N G   T R A N S 
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=->          R E C U R R I N G   T R A N S 
+
+
 
 
 class RecurringTransactionListView(LoginRequiredMixin, ListView):
     model = RecurringTransaction
-    template_name = 'money/transactions/recurring_list.html'
-    context_object_name = 'recurring_transactions'
+    template_name = "money/transactions/recurring_list.html"
+    context_object_name = "recurring_transactions"
 
     def get_queryset(self):
         return RecurringTransaction.objects.filter(user=self.request.user)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['current_page'] = 'recurring transactions'
+        context["today"] = timezone.localdate()
+        context["current_page"] = "recurring_transactions"
         return context
+
+
+
 
 
 class RecurringTransactionCreateView(LoginRequiredMixin, CreateView):
@@ -359,6 +370,8 @@ class RecurringTransactionCreateView(LoginRequiredMixin, CreateView):
         context = super().get_context_data(**kwargs)
         context['current_page'] = 'recurring_transactions'
         return context
+
+
 
 
 
@@ -401,6 +414,8 @@ class RecurringTransactionDeleteView(LoginRequiredMixin, DeleteView):
         return context
 
 
+
+
 @staff_member_required
 def recurring_report_view(request):
     year = int(request.GET.get('year', now().year))
@@ -432,39 +447,75 @@ def recurring_report_view(request):
 
 
 
-def _valid_run_date(today, day_value):
+
+
+def _valid_run_date(year: int, month: int, day_value):
     """
-    Resolve a safe date for this month:
-    - default to 1 if day is None or falsy
+    Resolve a safe date for a given year/month using the template day:
+    - default to 1 if day is None/falsy
     - clamp to [1, last_day_of_month]
     """
-    last_day = monthrange(today.year, today.month)[1]
+    last_day = monthrange(year, month)[1]
     run_day = day_value or 1
-    run_day = max(1, min(run_day, last_day))
-    return date(today.year, today.month, run_day)
+    run_day = max(1, min(int(run_day), last_day))
+    return date(year, month, run_day)
+
+
+
+
 
 
 @staff_member_required
 def run_monthly_recurring_view(request):
     """
-    Generate this month's Transactions from active RecurringTransaction templates
-    for the current user, skipping any that were already created this month.
+    Generate Transactions for a selected month/year from active RecurringTransaction templates
+    for the current user, skipping any that were already created for that month.
+
+    Expected:
+      - POST: month, year (recommended)
+      - GET fallback: ?month=12&year=2025
+      - Default: current month/year
     """
-    today = timezone.localdate()
     user = request.user
+    today = timezone.localdate()
+
+    if request.method == "POST":
+        form = RunRecurringForMonthForm(request.POST)
+    else:
+        form = RunRecurringForMonthForm(request.GET)
+
+    if form.is_valid():
+        target_month = form.cleaned_data["month"]
+        target_year = form.cleaned_data["year"]
+    else:
+        target_month = today.month
+        target_year = today.year
 
     recurrences = (
         RecurringTransaction.objects
         .filter(user=user, active=True)
-        .exclude(last_created__year=today.year, last_created__month=today.month)
-        .order_by('day', 'transaction')
+        .order_by("day", "transaction")
     )
 
     created_count = 0
+    skipped_count = 0
 
     for r in recurrences:
         try:
-            trans_date = _valid_run_date(today, r.day)
+            trans_date = _valid_run_date(target_year, target_month, r.day)
+
+            # Strong duplicate protection: if we've already created a transaction
+            # for this template in this month/year, skip it.
+            already_exists = Transaction.objects.filter(
+                user=user,
+                recurring_template=r,
+                date__year=target_year,
+                date__month=target_month,
+            ).exists()
+
+            if already_exists:
+                skipped_count += 1
+                continue
 
             data = {
                 "user": user,
@@ -474,11 +525,11 @@ def run_monthly_recurring_view(request):
                 "transaction": r.transaction,
                 "category": (r.sub_cat.category if r.sub_cat else r.category),
                 "sub_cat": r.sub_cat,
-                "invoice_number": "",        
-                "recurring_template": r,       
+                "invoice_number": "",
+                "recurring_template": r,
             }
 
-            # Optional FKs
+            # Optional FKs / files
             if r.team_id:
                 data["team"] = r.team
             if r.event_id:
@@ -488,21 +539,26 @@ def run_monthly_recurring_view(request):
 
             with db_tx.atomic():
                 Transaction.objects.create(**data)
+
+                # Keep last_created as an informational stamp (not used for duplicate protection anymore)
                 r.last_created = today
                 r.save(update_fields=["last_created"])
-                created_count += 1
+
+            created_count += 1
 
         except Exception as e:
             logger.exception(
-                "Error creating recurring (id=%s) for user %s: %s",
-                r.id, user.id, e
+                "Error creating recurring (id=%s) for user %s in %s-%s: %s",
+                r.id, user.id, target_year, target_month, e
             )
 
+    label = timezone.datetime(target_year, target_month, 1).strftime("%B %Y")
     messages.success(
         request,
-        f"Created {created_count} recurring transaction(s) for {today.strftime('%B %Y')}."
+        f"Created {created_count} recurring transaction(s) for {label}. "
+        f"Skipped {skipped_count} already-created."
     )
-    return redirect('money:recurring_transaction_list')
+    return redirect("money:recurring_transaction_list")
 
 
 

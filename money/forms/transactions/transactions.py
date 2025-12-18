@@ -81,3 +81,16 @@ class RecurringTransactionForm(forms.ModelForm):
         return cleaned
 
 
+
+
+
+
+class RunRecurringForMonthForm(forms.Form):
+    month = forms.IntegerField(min_value=1, max_value=12)
+    year = forms.IntegerField(min_value=2000, max_value=2100)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        today = timezone.localdate()
+        self.fields["month"].initial = today.month
+        self.fields["year"].initial = today.year

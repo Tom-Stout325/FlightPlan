@@ -2,16 +2,61 @@
 
 {% block content %}
 
-  <div class="d-flex justify-content-start gap-2 mb-4">
-    <a href="{% url 'money:recurring_add' %}" class="btn btn-success">
-      <i class="fa-solid fa-plus"></i> Add New
-    </a>
-    <a href="{% url 'money:recurring_report' %}" class="btn btn-outline-primary">
-      <i class="fa-solid fa-chart-column"></i> Run Report
-    </a>
-    <a href="{% url 'money:run_monthly_recurring' %}" class="btn btn-outline-warning">
-      <i class="fa-solid fa-bolt"></i> Run Monthly Recurring
-    </a>
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
+
+    <!-- Left actions -->
+    <div class="d-flex flex-wrap justify-content-start gap-2">
+      <a href="{% url 'money:recurring_add' %}" class="btn btn-success">
+        <i class="fa-solid fa-plus"></i> Add New
+      </a>
+
+      <a href="{% url 'money:recurring_report' %}" class="btn btn-outline-primary">
+        <i class="fa-solid fa-chart-column"></i> Run Report
+      </a>
+    </div>
+
+    <!-- Run recurring for selected month/year -->
+    <form method="post" action="{% url 'money:run_monthly_recurring' %}" class="d-flex flex-wrap gap-2 align-items-end">
+      {% csrf_token %}
+
+      <div>
+        <label class="form-label small mb-1">Month</label>
+        <select name="month" class="form-select form-select-sm">
+          <option value="1">Jan</option>
+          <option value="2">Feb</option>
+          <option value="3">Mar</option>
+          <option value="4">Apr</option>
+          <option value="5">May</option>
+          <option value="6">Jun</option>
+          <option value="7">Jul</option>
+          <option value="8">Aug</option>
+          <option value="9">Sep</option>
+          <option value="10">Oct</option>
+          <option value="11">Nov</option>
+          <option value="12">Dec</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="form-label small mb-1">Year</label>
+        <input
+          type="number"
+          name="year"
+          class="form-control form-control-sm"
+          min="2000"
+          max="2100"
+          value="{{ today|date:'Y' }}"
+          style="max-width: 110px;"
+        >
+      </div>
+
+      <div>
+        <button type="submit" class="btn btn-outline-warning">
+          <i class="fa-solid fa-bolt"></i> Run Recurring
+        </button>
+      </div>
+    </form>
+
   </div>
 
   <div class="table-responsive">
@@ -28,7 +73,7 @@
           <th class="d-none d-lg-table-cell">Team</th>
           <th class="d-none d-lg-table-cell">Event</th>
           <th class="text-center">Active</th>
-          <th class="text-nowrap">Last Run</th>  {# NEW #}
+          <th class="text-nowrap">Last Run</th>
           <th class="text-center">Actions</th>
         </tr>
       </thead>
