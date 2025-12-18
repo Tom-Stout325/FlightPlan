@@ -266,40 +266,7 @@ def add_transaction_success(request):
 
 
 
-@login_required
-def export_transactions_csv(request):
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="transactions.csv"'
-
-    writer = csv.writer(response)
-    writer.writerow([
-        'Date', 'Type', 'Amount', 'Transaction',
-        'Category', 'Sub-Category', 'Team', 'Event',
-        'Invoice #', 'Invoice PK', 'Transport Type', 'User'
-    ])
-
-    transactions = Transaction.objects.select_related(
-        'category', 'sub_cat', 'team', 'event', 'invoice', 'user'
-    ).filter(user=request.user).order_by('date')
-
-    for t in transactions:
-        writer.writerow([
-            t.date,
-            t.trans_type,
-            t.amount,
-            t.transaction,
-            t.category.category if t.category else '',
-            t.sub_cat.sub_cat if t.sub_cat else '',
-            t.team.name if t.team else '',
-            f"{t.event.race_name} ({t.event.race_year})" if t.event else '',
-            t.invoice.invoice_number if t.invoice else '',
-            t.invoice.pk if t.invoice else '',
-            t.transport_type or '',
-            t.user.get_full_name() or t.user.username
-        ])
-
-    return response
-
+export_transactions_csv
 
 
 
