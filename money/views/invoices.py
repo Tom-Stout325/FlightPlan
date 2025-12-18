@@ -14,15 +14,6 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.mail import EmailMessage
 from django.db import transaction
 from django.views import View
-from django.db.models import (
-    Case,
-    DecimalField,
-    ExpressionWrapper,
-    F,
-    Sum,
-    Value,
-    When,
-)
 from django.db.models.functions import Coalesce
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -35,6 +26,15 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 import hashlib
 from django.core.files.base import ContentFile
+from django.db.models import (
+    Case,
+    DecimalField,
+    ExpressionWrapper,
+    F,
+    Sum,
+    Value,
+    When,
+)
 
 from weasyprint import CSS, HTML
 
@@ -261,6 +261,10 @@ class InvoiceUpdateView(LoginRequiredMixin, UpdateView):
             return self.render_to_response(self.get_context_data(form=form, formset=formset))
 
 
+
+
+
+
 class InvoiceListView(LoginRequiredMixin, ListView):
     model = Invoice
     template_name = "money/invoices/invoice_list.html"
@@ -316,6 +320,10 @@ class InvoiceListView(LoginRequiredMixin, ListView):
 
 
 
+
+
+
+
 class InvoiceDetailView(LoginRequiredMixin, DetailView):
     model = Invoice
     template_name = 'money/invoices/invoice_detail.html'
@@ -346,6 +354,11 @@ class InvoiceDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
+
+
+
+
+
 class InvoiceDeleteView(LoginRequiredMixin, DeleteView):
     model = Invoice
     template_name = "money/invoices/invoice_confirm_delete.html"
@@ -370,6 +383,14 @@ class InvoiceDeleteView(LoginRequiredMixin, DeleteView):
         context['current_page'] = 'invoices'
         return context
     
+
+
+
+
+
+
+
+
 
 @login_required
 def invoice_review(request, pk):
@@ -462,6 +483,8 @@ def invoice_review(request, pk):
         'current_page': 'invoices',
     }
     return render(request, 'money/invoices/invoice_review.html', context)
+
+
 
 
 
@@ -563,11 +586,19 @@ def invoice_review_pdf(request, pk):
 
 
 
+
+
+
+
 @login_required
 def unpaid_invoices(request):
     invoices = Invoice.objects.filter(paid__iexact="No").select_related('client').order_by('due_date')
     context = {'invoices': invoices, 'current_page': 'invoices'}
     return render(request, 'money/invoices/unpaid_invoices.html', context)
+
+
+
+
 
 
 
@@ -612,6 +643,9 @@ def export_invoices_csv(request):
 
 
 
+
+
+
 @login_required
 def export_invoices_pdf(request):
     invoice_view = InvoiceListView()
@@ -637,6 +671,11 @@ def export_invoices_pdf(request):
         messages.error(request, "Error generating PDF.")
         return redirect('money:invoice_list')
     
+
+
+
+
+
 
 
 @login_required
@@ -790,6 +829,11 @@ def invoice_summary(request: HttpRequest) -> HttpResponse:
 
 
 
+
+
+
+
+
 @require_POST
 def send_invoice_email(request, invoice_id):
     invoice = get_object_or_404(Invoice, pk=invoice_id)
@@ -852,6 +896,8 @@ def send_invoice_email(request, invoice_id):
 
 
 
+
+
 #------------------------------------------------------------------------------------------------------  N E W   I N V O I C E S
 
 class InvoiceV2CreateView(LoginRequiredMixin, CreateView):
@@ -894,6 +940,10 @@ class InvoiceV2CreateView(LoginRequiredMixin, CreateView):
 
 
 
+
+
+
+
 class InvoiceV2UpdateView(LoginRequiredMixin, UpdateView):
     model = InvoiceV2
     form_class = InvoiceV2Form
@@ -930,6 +980,11 @@ class InvoiceV2UpdateView(LoginRequiredMixin, UpdateView):
 
     def get_success_url(self):
         return reverse_lazy("money:invoice_v2_detail", kwargs={"pk": self.object.pk})
+
+
+
+
+
 
 
 
@@ -984,6 +1039,10 @@ class InvoiceV2ListView(LoginRequiredMixin, ListView):
         context["clients"] = Client.objects.all().order_by("business")
 
         return context
+
+
+
+
 
 
 
@@ -1127,6 +1186,11 @@ class InvoiceV2DetailView(LoginRequiredMixin, DetailView):
 
 
 
+
+
+
+
+
 class InvoiceV2MarkPaidView(LoginRequiredMixin, View):
     """
     POST-only view to mark an InvoiceV2 as Paid and create/update the
@@ -1177,6 +1241,10 @@ class InvoiceV2MarkPaidView(LoginRequiredMixin, View):
             )
 
         return redirect("money:invoice_v2_detail", pk=invoice.pk)
+
+
+
+
 
 
 
@@ -1244,6 +1312,9 @@ class InvoiceV2IssueView(LoginRequiredMixin, View):
 
 
 
+
+
+
 def invoice_pdf_view(request, pk):
     invoice = get_object_or_404(Invoice, pk=pk)
 
@@ -1277,6 +1348,9 @@ def invoice_pdf_view(request, pk):
 
 
 
+
+
+
  
 
 @login_required
@@ -1294,6 +1368,10 @@ def invoice_v2_pdf_view(request, pk):
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="{filename}"'
     return response
+
+
+
+
 
 
 
@@ -1373,3 +1451,116 @@ def invoice_v2_send_email(request, pk):
     messages.success(request, f"Invoice emailed to {to_email}.")
     return redirect("money:invoice_v2_detail", pk=invoice.pk)
 
+
+
+
+
+
+
+@login_required
+def invoice_v2_review(request, pk):
+    invoice = get_object_or_404(InvoiceV2, pk=pk)
+
+    transactions = (
+        Transaction.objects
+        .filter(event=invoice.event, invoice_number=invoice.invoice_number)
+        .select_related("sub_cat__category")
+    )
+
+    # mileage rate
+    try:
+        r = MileageRate.objects.first()
+        rate = Decimal(str(r.rate)) if r and r.rate is not None else Decimal("0.70")
+    except Exception:
+        rate = Decimal("0.70")
+
+    base_mileage = Miles.objects.filter(
+        invoice_v2=invoice,
+        user=request.user,
+        mileage_type="Taxable",
+    ).select_related("client", "event")
+
+    miles_expr = ExpressionWrapper(
+        Coalesce(F("total"), F("end") - F("begin"), Value(0)),
+        output_field=DecimalField(max_digits=12, decimal_places=1),
+    )
+
+    amount_expr = ExpressionWrapper(
+        F("miles") * Value(rate),
+        output_field=DecimalField(max_digits=12, decimal_places=2),
+    )
+
+    mileage_entries = (
+        base_mileage
+        .annotate(miles=miles_expr)
+        .annotate(amount=amount_expr)
+        .order_by("date")
+    )
+
+    totals = mileage_entries.aggregate(
+        total_mileage_miles=Sum("miles"),
+        mileage_dollars=Sum("amount"),
+    )
+    total_mileage_miles = totals["total_mileage_miles"] or Decimal("0")
+    mileage_dollars = totals["mileage_dollars"] or Decimal("0")
+
+    total_income = Decimal("0.00")
+    total_expenses = Decimal("0.00")
+    deductible_expenses = Decimal("0.00")
+
+    for t in transactions:
+        if t.trans_type == "Income":
+            total_income += t.amount
+        elif t.trans_type == "Expense":
+            total_expenses += t.amount
+            if t.sub_cat and t.sub_cat.slug == "meals":
+                deductible_expenses += t.deductible_amount
+            elif t.sub_cat and t.sub_cat.slug == "fuel" and t.transport_type == "personal_vehicle":
+                continue
+            else:
+                deductible_expenses += t.amount
+
+    has_income_transaction = total_income > 0
+    total_cost = total_expenses + mileage_dollars
+    net_income = total_income - total_expenses if has_income_transaction else None
+    taxable_income = total_income - deductible_expenses - mileage_dollars if has_income_transaction else None
+
+    context = {
+        "invoice": invoice,
+        "transactions": transactions,
+        "mileage_entries": mileage_entries,
+        "mileage_rate": rate,
+        "mileage_dollars": mileage_dollars,
+        "total_mileage_miles": total_mileage_miles,
+        "invoice_amount": invoice.amount,
+        "total_expenses": total_expenses,
+        "deductible_expenses": deductible_expenses,
+        "total_income": total_income,
+        "net_income": net_income,
+        "taxable_income": taxable_income,
+        "total_cost": total_cost,
+        "has_income_transaction": has_income_transaction,
+        "now": now(),
+        "current_page": "invoices",
+        "is_v2": True,  # handy in the template
+    }
+    return render(request, "money/invoices/invoice_review.html", context)
+
+
+
+
+
+
+
+
+@login_required
+def invoice_review_router(request, pk):
+    # Try V2 first
+    try:
+        InvoiceV2.objects.only("id").get(pk=pk)
+        return redirect("money:invoice_v2_review", pk=pk)
+    except InvoiceV2.DoesNotExist:
+        pass
+
+    # Fall back to legacy
+    return redirect("money:invoice_review", pk=pk)

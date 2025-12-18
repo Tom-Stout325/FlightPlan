@@ -50,7 +50,7 @@ from .services import (
 from weasyprint import HTML
 
 
-
+from django.db import transaction 
 
 
 
@@ -110,7 +110,6 @@ def airspace_helper(request):
 
 
 
-
 @login_required
 def waiver_planning_new(request):
     """
@@ -123,70 +122,86 @@ def waiver_planning_new(request):
         planning = get_object_or_404(WaiverPlanning, id=planning_id, user=request.user)
 
     if request.method == "POST":
-        form = WaiverPlanningForm(request.POST, user=request.user, instance=planning)
-        if form.is_valid():
+        form = WaiverPlanningForm(request.POST, request.FILES, user=request.user, instance=planning)
+
+        is_valid = form.is_valid()
+      
+        print(
+            "DMS cleaned:",
+            form.cleaned_data.get("lat_deg"),
+            form.cleaned_data.get("lat_min"),
+            form.cleaned_data.get("lat_sec"),
+            form.cleaned_data.get("lat_dir"),
+            form.cleaned_data.get("lon_deg"),
+            form.cleaned_data.get("lon_min"),
+            form.cleaned_data.get("lon_sec"),
+            form.cleaned_data.get("lon_dir"),
+        )
+        if not is_valid:
+            print("FORM errors:", form.errors)
+
+        else:
             planning_obj = form.save(commit=False)
             planning_obj.user = request.user
+
+            # ---------------------------------------------------------
+            # Force-assign BOTH ways (object + _id) so we can isolate why
+            # something is ending up as None.
+            # ---------------------------------------------------------
+
+            # Assign via cleaned objects (normal path)
+            planning_obj.pilot_profile = form.cleaned_data.get("pilot_profile")
+            planning_obj.aircraft = form.cleaned_data.get("aircraft")
+
+            # Also assign via raw ids (diagnostic path)
+            planning_obj.pilot_profile_id = request.POST.get("pilot_profile") or None
+            planning_obj.aircraft_id = request.POST.get("aircraft") or None
             planning_obj.save()
             form.save_m2m()
+            
+            
+            planning_obj.refresh_from_db()
+            print(
+                "AFTER SAVE coords:",
+                "location_latitude=", planning_obj.location_latitude,
+                "location_longitude=", planning_obj.location_longitude,
+)
 
-            return redirect(
-                "airspace:waiver_application_overview",
-                planning_id=planning_obj.id,
+            WaiverApplication.objects.get_or_create(
+                planning=planning_obj,
+                user=request.user,
             )
+            
+
+
+            return redirect("airspace:waiver_application_overview", planning_id=planning_obj.id)
+
     else:
         form = WaiverPlanningForm(user=request.user, instance=planning)
+        
+    profiles = PilotProfile.objects.select_related("user").all()
 
-    # ----------------------------------------
-    # Pilot profile data for JS auto-fill
-    # ----------------------------------------
     pilot_profile_data = []
-    pilot_field = form.fields.get("pilot_profile")
-    pilot_qs = pilot_field.queryset if pilot_field is not None else PilotProfile.objects.none()
-
-    for profile in pilot_qs.select_related("user"):
-        total_seconds = 0
-        try:
-            total_seconds = profile.flight_time_total() or 0
-        except Exception:
-            total_seconds = 0
-
-        flight_hours = round(total_seconds / 3600, 1) if total_seconds else 0
-
-        pilot_profile_data.append(
-            {
-                "id": profile.id,
-                "license_number": profile.license_number or "",
-                "flight_hours": flight_hours,
-            }
-        )
-
-    # ----------------------------------------
-    # Drone safety data for JS auto-fill
-    # ----------------------------------------
-    drone_safety_data = []
-    aircraft_field = form.fields.get("aircraft")
-
-    if aircraft_field is not None:
-        equipment_qs = aircraft_field.queryset.select_related("drone_safety_profile")
-        for equip in equipment_qs:
-            profile = getattr(equip, "drone_safety_profile", None)
-            drone_safety_data.append(
-                {
-                    "id": equip.id,  
-                    "safety_features": (profile.safety_features if profile else "") or "",
-                }
-            )
+    for p in profiles:
+        seconds = p.flight_time_total() or 0
+        hours = round(seconds / 3600, 1) if seconds else ""
+        pilot_profile_data.append({
+            "id": p.id,
+            "license_number": p.license_number or "",
+            "flight_hours": hours,
+        })
 
     context = {
         "form": form,
         "planning": planning,
+        "pilot_profile_data": pilot_profile_data, 
         "planning_mode": "edit" if planning else "new",
-        "pilot_profile_data": pilot_profile_data,
-        "drone_safety_data": drone_safety_data,
     }
-    return render(request, "airspace/waiver_planning_form.html", context)
+    
+    print("pilot_profile_data type:", type(context["pilot_profile_data"]), "value:", context["pilot_profile_data"][:1])
 
+
+    return render(request, "airspace/waiver_planning_form.html", context)
 
 
 
@@ -194,18 +209,11 @@ def waiver_planning_new(request):
 class WaiverPlanningDescriptionForm(WaiverPlanningForm):
     """
     Slimmed-down version of WaiverPlanningForm used on the Description page.
-    Keeps the same widget/__init__ behavior, but only exposes fields that
-    influence the Description of Ops prompt and narrative.
+    Exposes only fields that are editable here.
     """
 
     class Meta(WaiverPlanningForm.Meta):
         fields = [
-            # Aircraft / pilot
-            "aircraft",
-            "aircraft_manual",
-            "pilot_profile",
-            "pilot_flight_hours",
-
             # Waivers
             "operates_under_10739",
             "oop_waiver_document",
@@ -242,6 +250,100 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
             "estimated_crowd_size",
             "prepared_procedures",
         ]
+
+@login_required
+def waiver_application_description(request, pk):
+    application = get_object_or_404(WaiverApplication, pk=pk, user=request.user)
+    planning = application.planning
+
+    locked_aircraft_id = planning.aircraft_id
+    locked_pilot_profile_id = planning.pilot_profile_id
+
+    def apply_posted_fields_to_instance(form, instance, post_data, files_data):
+        for name in form.fields:
+            if name not in post_data and name not in files_data:
+                continue
+            setattr(instance, name, form.cleaned_data.get(name))
+
+        instance.aircraft_id = locked_aircraft_id
+        instance.pilot_profile_id = locked_pilot_profile_id
+
+        instance.save()
+        if hasattr(form, "save_m2m"):
+            form.save_m2m()
+        return instance
+
+    if request.method == "POST":
+        planning_form = WaiverPlanningDescriptionForm(
+            request.POST, request.FILES, instance=planning, user=request.user
+        )
+        app_form = WaiverApplicationDescriptionForm(
+            request.POST, request.FILES, instance=application
+        )
+
+        # lock toggle persists regardless of which button was pressed
+        application.locked_description = ("locked_description" in request.POST)
+        application.save(update_fields=["locked_description"])
+
+        if "generate" in request.POST:
+            if application.locked_description:
+                messages.error(request, "Description is locked. Unlock it to regenerate.")
+                return redirect("airspace:waiver_application_description", pk=application.pk)
+
+            if not planning_form.is_valid():
+                messages.error(request, "Please fix the errors above before generating.")
+                return render(
+                    request,
+                    "airspace/waiver_application_description.html",
+                    {
+                        "planning": planning,
+                        "application": application,
+                        "planning_form": planning_form,
+                        "app_form": app_form,
+                        "aircraft_ctx": planning_aircraft_summary(planning),
+                    },
+                )
+
+            apply_posted_fields_to_instance(planning_form, planning, request.POST, request.FILES)
+
+            # ✅ Use the function that worked before
+            generated_text = generate_waiver_description_text(planning)
+
+            # ✅ Persist to the field your template renders: app_form.description
+            application.description = generated_text
+            application.save(update_fields=["description"])
+
+            messages.success(request, "Description generated.")
+            return redirect("airspace:waiver_application_description", pk=application.pk)
+
+        # -------- SAVE ----------
+        if planning_form.is_valid() and app_form.is_valid():
+            apply_posted_fields_to_instance(planning_form, planning, request.POST, request.FILES)
+            app_form.save()
+            messages.success(request, "Changes saved.")
+            return redirect("airspace:waiver_application_description", pk=application.pk)
+
+        messages.error(request, "Please fix the errors below and try again.")
+
+    # GET
+    planning_form = WaiverPlanningDescriptionForm(instance=planning, user=request.user)
+    app_form = WaiverApplicationDescriptionForm(instance=application)
+    aircraft_ctx = planning_aircraft_summary(planning)
+
+    return render(
+        request,
+        "airspace/waiver_application_description.html",
+        {
+            "planning": planning,
+            "application": application,
+            "planning_form": planning_form,
+            "app_form": app_form,
+            "aircraft_ctx": aircraft_ctx,
+        },
+    )
+
+
+
 
 
 
@@ -287,86 +389,8 @@ def waiver_application_overview(request, planning_id):
 
 
 
-@login_required
-def waiver_application_description(request, pk):
-    """
-    Step 2 – Edit the planning inputs that drive the Description of Ops,
-    generate text (unless locked), and save manual edits.
-    """
-    application = get_object_or_404(WaiverApplication, pk=pk, user=request.user)
-    planning = application.planning
 
-    if request.method == "POST":
-        planning_form = WaiverPlanningDescriptionForm(
-            request.POST,
-            instance=planning,
-            user=request.user,
-        )
 
-        application.locked_description = ("locked_description" in request.POST)
-        application.save(update_fields=["locked_description"])
-
-        # -------------------------
-        # Generate (overwrite)
-        # -------------------------
-        if "generate" in request.POST:
-            if application.locked_description:
-                messages.error(request, "Description is locked. Unlock it to regenerate.")
-                return redirect("airspace:waiver_application_description", pk=application.pk)
-
-            if not planning_form.is_valid():
-                messages.error(request, "Please fix the errors above before generating.")
-                return redirect("airspace:waiver_application_description", pk=application.pk)
-
-            planning_form.save()
-
-            try:
-                model = getattr(settings, "OPENAI_TEXT_MODEL", "gpt-4.1-mini")
-                text = generate_waiver_description_text(planning, model=model)
-
-                if not (text or "").strip():
-                    raise RuntimeError("Generated description was empty.")
-
-                application.description = text
-                application.save(update_fields=["description"])
-
-                planning.generated_description_at = timezone.now()
-                planning.save(update_fields=["generated_description_at"])
-
-                messages.success(request, "Description of Operations generated.")
-            except Exception as exc:
-                messages.error(request, f"Could not generate Description of Operations: {exc}")
-
-            return redirect("airspace:waiver_application_description", pk=application.pk)
-
-        # -------------------------
-        # Save Changes (keep edits)
-        # -------------------------
-        app_form = WaiverApplicationDescriptionForm(request.POST, instance=application)
-
-        if planning_form.is_valid() and app_form.is_valid():
-            planning_form.save()
-            app_form.save()
-            messages.success(request, "Changes saved.")
-            return redirect("airspace:waiver_application_description", pk=application.pk)
-
-        messages.error(request, "Please fix the errors below and try again.")
-
-    planning_form = WaiverPlanningDescriptionForm(instance=planning, user=request.user)
-    app_form = WaiverApplicationDescriptionForm(instance=application)
-    aircraft_ctx = planning_aircraft_summary(planning)
-
-    return render(
-        request,
-        "airspace/waiver_application_description.html",
-        {
-            "planning": planning,
-            "application": application,
-            "planning_form": planning_form,
-            "app_form": app_form,
-            "aircraft_ctx": aircraft_ctx,
-        },
-    )
 
 
 
@@ -440,6 +464,8 @@ def conops_overview(request, pk):
             "sections": sections,
         },
     )
+
+
 
 
 @login_required
@@ -575,6 +601,9 @@ def conops_review(request, application_id):
     # POST actions
     # -------------------------
     if request.method == "POST":
+        print("CONOPS POST action =", request.POST.get("action"))   
+        print("CONOPS POST keys =", list(request.POST.keys())[:30], "... total =", len(request.POST.keys()))
+
         action = request.POST.get("action", "save")
 
         # --- Lock All / Unlock All ---
@@ -585,6 +614,7 @@ def conops_review(request, application_id):
                 if sec.locked != lock_value:
                     sec.locked = lock_value
                     sec.save(update_fields=["locked"])
+  
 
             messages.success(
                 request,
@@ -595,6 +625,8 @@ def conops_review(request, application_id):
         # --- Regenerate unlocked sections ---
         if action == "regenerate":
             regenerated = 0
+            print("CONOPS regenerate: starting")
+
 
             for section_key, _title in CONOPS_SECTIONS:
                 sec = sections_by_key.get(section_key)
@@ -754,12 +786,10 @@ def get_conops_sections(application):
             "key": section_key,
             "title": title,
             "locked": bool(sec.locked),
-            # ready/ok: use your validator so PDF respects the same rules
             "ready": bool(_safe_ok(validate_conops_section(sec), sec)),
-            # point this at PDF partials (recommended) OR reuse section template if you already have it
             "template": f"airspace/pdf/sections/{section_key}.html",
-            "obj": sec,                 # keep reference for templates
-            "content": sec.content or "",# convenience
+            "obj": sec,               
+            "content": sec.content or "",
         })
 
     return out

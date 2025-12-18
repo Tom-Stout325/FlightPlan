@@ -38,6 +38,8 @@ from .views.invoices import (
     InvoiceV2IssueView,
     invoice_v2_pdf_view,
     invoice_v2_send_email,
+    invoice_v2_review,
+    invoice_review_router,
 )
 
 from .views.clients import (
@@ -110,7 +112,12 @@ urlpatterns = [
     path("transaction/delete/<int:pk>/", TransactionDeleteView.as_view(), name="delete_transaction"),
     path("transactions/export/", export_transactions_csv, name="export_transactions_csv"),
 
-    # Legacy Invoice tools that you still use (review, edit, email, exports)
+
+    # -------------------------------------------------------------------
+    # Invoices
+    # -------------------------------------------------------------------
+
+    # Legacy Invoice tools (old Invoice model)
     path("invoice/<int:pk>/review/", invoice_review, name="invoice_review"),
     path("invoice/<int:pk>/review/pdf/", invoice_review_pdf, name="invoice_review_pdf"),
     path("invoice/new", InvoiceCreateView.as_view(), name="create_invoice"),
@@ -120,8 +127,10 @@ urlpatterns = [
     path("invoices/export/csv/", export_invoices_csv, name="export_invoices_csv"),
     path("invoices/export/pdf/", export_invoices_pdf, name="export_invoices_pdf"),
 
-    # Unified + V2 Invoices
+    # Unified list (shows v2 + legacy rows together)
     path("invoices/", InvoiceUnifiedListView.as_view(), name="invoice_v2_list"),
+
+    # V2 invoice CRUD
     path("invoices/v2/new/", InvoiceV2CreateView.as_view(), name="invoice_v2_create"),
     path("invoices/v2/<int:pk>/", InvoiceV2DetailView.as_view(), name="invoice_v2_detail"),
     path("invoices/v2/<int:pk>/edit/", InvoiceV2UpdateView.as_view(), name="invoice_v2_edit"),
@@ -130,9 +139,17 @@ urlpatterns = [
     path("invoices/v2/<int:pk>/pdf/", invoice_v2_pdf_view, name="invoice_v2_pdf"),
     path("invoices/v2/<int:pk>/send-email/", invoice_v2_send_email, name="invoice_v2_send_email"),
 
+    # ✅ Review routes
+    # - v2 review (new)
+    path("invoices/v2/<int:pk>/review/", invoice_v2_review, name="invoice_v2_review"),
+    # - router (optional; handy if you want ONE link from the unified table)
+    path("invoices/<int:pk>/review-any/", invoice_review_router, name="invoice_review_router"),
+
     # Legacy invoice detail views (DB + file-only)
     path("invoices/legacy/<int:pk>/", LegacyInvoiceDetailView.as_view(), name="legacy_invoice_detail"),
     path("invoices/legacy/file/<path:filename>/", LegacyFileInvoiceDetailView.as_view(), name="legacy_file_invoice_detail"),
+
+
 
     # Categories & Subcategories
     path("category-report/", CategoryListView.as_view(), name="category_page"),
@@ -168,7 +185,6 @@ urlpatterns = [
     path("receipts/<int:pk>/", receipt_detail, name="receipt_detail"),
     path("reports/invoices/", invoice_summary, name="invoice_summary"),
     
-    path("taxes/schedule-c/", schedule_c_worksheet, name="schedule_c_worksheet",),
     path("taxes/schedule-c/", schedule_c_worksheet, name="schedule_c_worksheet",),
     path("taxes/schedule-c/pdf/<int:year>/", schedule_c_pdf_view, name="schedule_c_pdf",),
 

@@ -11,6 +11,19 @@ from django.utils.functional import cached_property
 from money.models import InvoiceV2, Invoice
 
 
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+from typing import Optional
+from django.utils.functional import cached_property
+
+
+
+
+
+
+
+
 @dataclass
 class UnifiedInvoiceRow:
     """
@@ -32,11 +45,13 @@ class UnifiedInvoiceRow:
     issue_date: Optional[date]
     total_amount: Optional[Decimal]
 
+    # Primary URLs used by the list template
     detail_url: str
+    review_url: Optional[str] = None  # ✅ ADD: points to invoice_review / invoice_v2_review
+
+    # Optional extras
     pdf_url: Optional[str] = None
     status: Optional[str] = None
-
-    # Optional extras used by the template if present
     location: Optional[str] = None
     due_date: Optional[date] = None
 
@@ -51,6 +66,14 @@ class UnifiedInvoiceRow:
     @cached_property
     def is_legacy_file(self) -> bool:
         return self.kind == "legacy_file"
+
+
+
+
+
+
+
+
 
 
 # ----------------------------------------------------------------------
@@ -80,7 +103,7 @@ def load_v2_invoices(request) -> List[UnifiedInvoiceRow]:
                 or str(client)
             )
 
-        # Event display — prefer related Event.title, then event_name
+  
         event_name = None
         event = getattr(inv, "event", None)
         if event is not None:
@@ -110,6 +133,11 @@ def load_v2_invoices(request) -> List[UnifiedInvoiceRow]:
             detail_url = "#"
 
         try:
+            review_url = reverse("money:invoice_v2_review", args=[inv.pk])
+        except NoReverseMatch:
+            review_url = detail_url
+
+        try:
             pdf_url = reverse("money:invoice_v2_pdf", args=[inv.pk])
         except NoReverseMatch:
             pdf_url = None
@@ -118,14 +146,13 @@ def load_v2_invoices(request) -> List[UnifiedInvoiceRow]:
             UnifiedInvoiceRow(
                 kind="v2",
                 id=f"v2-{inv.pk}",
-                invoice_number=str(
-                    getattr(inv, "invoice_number", None) or f"{inv.pk}"
-                ),
+                invoice_number=str(getattr(inv, "invoice_number", None) or f"{inv.pk}"),
                 client_name=client_name or "—",
                 event_name=event_name,
                 issue_date=issue_date,
                 total_amount=total_amount,
                 detail_url=detail_url,
+                review_url=review_url,   
                 pdf_url=pdf_url,
                 status=status,
                 location=location or None,
@@ -134,6 +161,12 @@ def load_v2_invoices(request) -> List[UnifiedInvoiceRow]:
         )
 
     return rows
+
+
+
+
+
+
 
 
 # ----------------------------------------------------------------------
@@ -184,23 +217,29 @@ def load_legacy_model_invoices(request) -> List[UnifiedInvoiceRow]:
         location = getattr(inv, "location", None)
         due_date = getattr(inv, "due", None)
 
+        # Existing legacy detail view (keep it)
         try:
             detail_url = reverse("money:legacy_invoice_detail", args=[inv.pk])
         except NoReverseMatch:
             detail_url = "#"
 
+        # ✅ IMPORTANT: legacy review view (this is what you want back)
+        try:
+            review_url = reverse("money:invoice_review", args=[inv.pk])
+        except NoReverseMatch:
+            review_url = detail_url
+
         rows.append(
             UnifiedInvoiceRow(
                 kind="legacy_model",
                 id=f"legacy-{inv.pk}",
-                invoice_number=str(
-                    getattr(inv, "invoice_number", None) or f"{inv.pk}"
-                ),
+                invoice_number=str(getattr(inv, "invoice_number", None) or f"{inv.pk}"),
                 client_name=client_name or "—",
                 event_name=event_name,
                 issue_date=issue_date,
                 total_amount=total_amount,
                 detail_url=detail_url,
+                review_url=review_url,   # ✅ ADD
                 pdf_url=pdf_url,
                 status=status,
                 location=location or None,
@@ -209,6 +248,12 @@ def load_legacy_model_invoices(request) -> List[UnifiedInvoiceRow]:
         )
 
     return rows
+
+
+
+
+
+
 
 
 # ----------------------------------------------------------------------

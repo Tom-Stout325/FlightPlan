@@ -95,12 +95,37 @@
         <tbody>
           {% for row in invoices %}
             <tr>
-              <!-- Invoice number -->
+              <!-- Invoice number + quick actions -->
               <td>
-                <a href="{{ row.detail_url }}"
-                   class="text-decoration-none">
-                  {{ row.invoice_number|default:"(draft)" }}
-                </a>
+                <div class="d-flex flex-column gap-1">
+                  {# Primary link: invoice number goes to DETAILS #}
+                  {% if row.detail_url and row.detail_url != "#" %}
+                    <a href="{{ row.detail_url }}" class="text-decoration-none fw-semibold">
+                      {{ row.invoice_number|default:"(draft)" }}
+                    </a>
+                  {% else %}
+                    <span class="fw-semibold">
+                      {{ row.invoice_number|default:"(draft)" }}
+                    </span>
+                  {% endif %}
+
+                  {# Action buttons: Review (preferred), PDF, Details #}
+                  <div class="d-flex flex-wrap gap-1">
+                    {% if row.review_url %}
+                      <a class="btn btn-sm btn-primary" href="{{ row.review_url }}">Review</a>
+                    {% endif %}
+
+                    {% if row.pdf_url %}
+                      <a class="btn btn-sm btn-outline-secondary" href="{{ row.pdf_url }}" target="_blank" rel="noopener">
+                        PDF
+                      </a>
+                    {% endif %}
+
+                    {% if row.detail_url and row.detail_url != "#" %}
+                      <a class="btn btn-sm btn-outline-secondary" href="{{ row.detail_url }}">Details</a>
+                    {% endif %}
+                  </div>
+                </div>
               </td>
 
               <!-- Client -->

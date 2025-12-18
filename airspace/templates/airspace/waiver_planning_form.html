@@ -60,8 +60,11 @@
           const profile = profileMap[selectedId];
           if (!profile) return;
 
-          if (certInput && !certInput.value) certInput.value = profile.license_number || "";
-          if (hoursInput && !hoursInput.value) hoursInput.value = profile.flight_hours || "";
+          if (certInput)
+            certInput.value = profile.license_number || "";
+
+          if (hoursInput)
+            hoursInput.value = profile.flight_hours || "";
         }
 
         pilotSelect.addEventListener("change", updatePilotFields);
@@ -147,7 +150,8 @@
 
   <div class="card shadow-sm">
     <div class="card-body">
-      <form method="post" novalidate>
+      <form method="post" novalidate enctype="multipart/form-data">
+
         {% csrf_token %}
 
         {# ----------------------------- #}

@@ -88,12 +88,7 @@ class WaiverPlanning(models.Model):
     # -------------------------
     # Ownership
     # -------------------------
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="waiver_planning_entries",
-    )
-
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="waiver_planning_entries",)
     # -------------------------
     # Operation basics
     # -------------------------
@@ -104,7 +99,6 @@ class WaiverPlanning(models.Model):
     frequency                 = models.CharField(max_length=20, choices=FREQUENCY_CHOICES, blank=True, help_text="How often operations will occur during this date range.",)
     local_time_zone           = models.CharField(max_length=64, blank=True, help_text="Local time zone for the operation (e.g., America/New_York).",)
     proposed_agl              = models.PositiveIntegerField(null=True, blank=True, help_text="Maximum planned altitude AGL in feet.",)
-
 
     # -------------------------
     # Aircraft
@@ -184,22 +178,62 @@ class WaiverPlanning(models.Model):
     # -------------------------
     # Convenience helpers
     # -------------------------
+    def debug_summary(self):
+        """
+        Temporary debugging helper.
+        Use in shell / logs to confirm what is actually saved.
+        """
+        return {
+            "aircraft_id": self.aircraft_id,
+            "aircraft_manual": self.aircraft_manual,
+            "pilot_profile_id": self.pilot_profile_id,
+            "pilot_name_manual": self.pilot_name_manual,
+            "pilot_cert_manual": self.pilot_cert_manual,
+            "pilot_flight_hours": self.pilot_flight_hours,
+        }
+        
+        
     def pilot_display_name(self) -> str:
-        if self.pilot_name_manual:
-            return self.pilot_name_manual
-        if self.pilot_profile and self.pilot_profile.user:
-            u = self.pilot_profile.user
-            return f"{u.first_name} {u.last_name}".strip() or u.username
-        return ""
+        """
+        Best available pilot display name:
+        1) manual override (pilot_name_manual)
+        2) PilotProfile user's first/last
+        3) PilotProfile user's username (last resort)
+        """
+        manual = (self.pilot_name_manual or "").strip()
+        if manual:
+            return manual
+
+        profile = getattr(self, "pilot_profile", None)
+        if not profile or not getattr(profile, "user", None):
+            return ""
+
+        first = (profile.user.first_name or "").strip()
+        last = (profile.user.last_name or "").strip()
+        if first or last:
+            return f"{first} {last}".strip()
+
+        return (profile.user.username or "").strip()
+
 
     def pilot_cert_display(self) -> str:
-        if self.pilot_profile and self.pilot_profile.license_number:
-            return self.pilot_profile.license_number.strip()
-        return (self.pilot_cert_manual or "").strip()
+        """
+        Best available Part 107 certificate / license number:
+        1) manual override (pilot_cert_manual)
+        2) PilotProfile.license_number
+        """
+        manual = (self.pilot_cert_manual or "").strip()
+        if manual:
+            return manual
+
+        profile = getattr(self, "pilot_profile", None)
+        return (getattr(profile, "license_number", "") or "").strip()
+
     
     def pilot_hours_display(self) -> str:
         # you store this explicitly as the “approximate” hours
         return "" if self.pilot_flight_hours is None else f"{self.pilot_flight_hours:.1f}"
+    
     
     def aircraft_display(self) -> str:
         if self.aircraft:
@@ -207,6 +241,7 @@ class WaiverPlanning(models.Model):
         if self.aircraft_manual:
             return self.aircraft_manual
         return ""
+
 
     def timeframe_codes(self):
         """
@@ -219,6 +254,7 @@ class WaiverPlanning(models.Model):
             return list(self.timeframe)
         return [c.strip() for c in str(self.timeframe).split(",") if c.strip()]
 
+
     def apply_aircraft_safety_profile(self):
         """
         If an aircraft with a DroneSafetyProfile is selected and safety_features_notes
@@ -230,68 +266,75 @@ class WaiverPlanning(models.Model):
             profile = getattr(self.aircraft, "drone_safety_profile", None)
             if profile and profile.safety_features:
                 self.safety_features_notes = profile.safety_features
+                
 
-def save(self, *args, **kwargs):
-    # Apply safety features from aircraft profile if appropriate
-    self.apply_aircraft_safety_profile()
+    def save(self, *args, **kwargs):
+        # Apply safety features from aircraft profile if appropriate
+        self.apply_aircraft_safety_profile()
 
-    # Auto-fill 107.39 waiver number from attached document if available
-    if (
-        self.operates_under_10739
-        and self.oop_waiver_document
-        and not self.oop_waiver_number
-    ):
-        number = getattr(self.oop_waiver_document, "waiver_number", None)
-        if number:
-            self.oop_waiver_number = number
-
-    # Auto-fill 107.145 waiver number from attached document if available
-    if (
-        self.operates_under_107145
-        and self.mv_waiver_document
-        and not self.mv_waiver_number
-    ):
-        number = getattr(self.mv_waiver_document, "waiver_number", None)
-        if number:
-            self.mv_waiver_number = number
-
-    # If you have an update_decimal_coords helper elsewhere, call it safely
-    if hasattr(self, "update_decimal_coords"):
-        self.update_decimal_coords()
-
-    # -------------------------------------------------
-    # Airport FK + distance (keeps legacy nearest_airport)
-    # -------------------------------------------------
-    try:
-        from airspace.models import Airport
-        from airspace.utils import haversine_nm
-
-        # If FK not set, try to map from legacy ICAO char field
-        if not self.nearest_airport_ref_id:
-            code = (getattr(self, "nearest_airport", "") or "").strip().upper()
-            if code:
-                self.nearest_airport_ref = Airport.objects.filter(icao=code).first()
-
-        # Recompute distance when we have enough data
-        self.distance_to_airport_nm = None
+        # Auto-fill 107.39 waiver number from attached document if available
         if (
-            self.nearest_airport_ref_id
-            and self.location_latitude is not None
-            and self.location_longitude is not None
-            and self.nearest_airport_ref.latitude is not None
-            and self.nearest_airport_ref.longitude is not None
+            self.operates_under_10739
+            and self.oop_waiver_document
+            and not self.oop_waiver_number
         ):
-            self.distance_to_airport_nm = haversine_nm(
-                self.location_latitude,
-                self.location_longitude,
-                self.nearest_airport_ref.latitude,
-                self.nearest_airport_ref.longitude,
-            )
-    except Exception:
-        # Never block saves if airport table isn't loaded yet or during migrations
-        pass
+            number = getattr(self.oop_waiver_document, "waiver_number", None)
+            if number:
+                self.oop_waiver_number = number
 
-    super().save(*args, **kwargs)
+        # Auto-fill 107.145 waiver number from attached document if available
+        if (
+            self.operates_under_107145
+            and self.mv_waiver_document
+            and not self.mv_waiver_number
+        ):
+            number = getattr(self.mv_waiver_document, "waiver_number", None)
+            if number:
+                self.mv_waiver_number = number
+
+        # If you have an update_decimal_coords helper elsewhere, call it safely
+        if hasattr(self, "update_decimal_coords"):
+            self.update_decimal_coords()
+
+
+
+        # -------------------------------------------------
+        # Airport FK + distance (keeps legacy nearest_airport)
+        # -------------------------------------------------
+        try:
+            from airspace.models import Airport
+            from airspace.utils import haversine_nm
+
+            # If FK not set, try to map from legacy ICAO char field
+            if not self.nearest_airport_ref_id:
+                code = (getattr(self, "nearest_airport", "") or "").strip().upper()
+                if code:
+                    self.nearest_airport_ref = Airport.objects.filter(icao=code).first()
+
+            # Only compute distance when we have enough data
+            if (
+                self.nearest_airport_ref_id
+                and self.location_latitude is not None
+                and self.location_longitude is not None
+                and self.nearest_airport_ref is not None
+                and getattr(self.nearest_airport_ref, "latitude", None) is not None
+                and getattr(self.nearest_airport_ref, "longitude", None) is not None
+            ):
+                self.distance_to_airport_nm = haversine_nm(
+                    self.location_latitude,
+                    self.location_longitude,
+                    self.nearest_airport_ref.latitude,
+                    self.nearest_airport_ref.longitude,
+                )
+            else:
+                # If we can't compute, don't keep stale values around
+                self.distance_to_airport_nm = None
+
+        except Exception:
+            # Never block saves if airport table isn't loaded yet or during migrations
+            pass
+
+        super().save(*args, **kwargs)
 
 
     def __str__(self) -> str:
