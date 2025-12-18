@@ -26,6 +26,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 import hashlib
 from django.core.files.base import ContentFile
+
 from django.db.models import (
     Case,
     DecimalField,
@@ -47,6 +48,41 @@ from ..forms.invoices.invoices import (
 from ..models import *
 
 from ..models import Client, ClientProfile
+from money.models import Miles
+
+
+
+
+
+
+
+
+def mileage_for_legacy_invoice(request, invoice):
+    """
+    Returns (mileage_total, mileage_entries_qs) for a legacy Invoice,
+    working across both SkyGuy and Airborne schemas.
+    """
+    qs = Miles.objects.filter(user=request.user)
+
+    # SkyGuy schema: Miles.invoice_id exists
+    if "invoice_id" in [f.column for f in Miles._meta.fields]:
+        qs = qs.filter(invoice_id=invoice.id)
+
+    # Airborne schema: Miles.invoice_number exists
+    elif "invoice_number" in [f.column for f in Miles._meta.fields]:
+        inv_num = getattr(invoice, "invoice_number", None)
+        if inv_num:
+            qs = qs.filter(invoice_number=inv_num)
+        else:
+            qs = qs.none()
+
+    else:
+        qs = qs.none()
+
+    totals = qs.aggregate(miles=Sum("total"))
+    mileage_total = totals["miles"] or Decimal("0")
+    return mileage_total, qs
+
 
 
 
@@ -391,101 +427,149 @@ class InvoiceDeleteView(LoginRequiredMixin, DeleteView):
 
 
 
-
 @login_required
 def invoice_review(request, pk):
     invoice = get_object_or_404(Invoice, pk=pk)
 
-    transactions = Transaction.objects.filter(
-        event=invoice.event,
-        invoice_number=invoice.invoice_number
-    ).select_related('sub_cat__category')
+    # -------------------------
+    # Transactions tied to this legacy invoice
+    # (Assumes Transaction.invoice_number exists and matches invoice.invoice_number)
+    # -------------------------
+    transactions = (
+        Transaction.objects
+        .filter(event=invoice.event, invoice_number=invoice.invoice_number)
+        .select_related("sub_cat__category")
+    )
 
-    # mileage rate
-    try:
-        r = MileageRate.objects.first()
-        rate = Decimal(str(r.rate)) if r and r.rate is not None else Decimal("0.70")
-    except Exception:
-        rate = Decimal("0.70")
-
+    # -------------------------
+    # Mileage queryset: schema-safe for SkyGuy + Airborne
+    #   - SkyGuy DB: Miles has invoice_id FK to legacy Invoice
+    #   - Airborne DB: Miles uses invoice_number string
+    # -------------------------
+    miles_field_names = {f.name for f in Miles._meta.get_fields()}
     base_mileage = Miles.objects.filter(
-        invoice_number=invoice.invoice_number,
         user=request.user,
         mileage_type="Taxable",
-    ).select_related('client', 'event')
+    ).select_related("client", "event")
 
+    if "invoice" in miles_field_names:
+        # SkyGuy-style: Miles.invoice FK exists (db column invoice_id)
+        base_mileage = base_mileage.filter(invoice_id=invoice.id)
+    elif "invoice_number" in miles_field_names:
+        # Airborne-style: Miles.invoice_number exists
+        base_mileage = base_mileage.filter(invoice_number=invoice.invoice_number)
+    else:
+        # No supported linkage in this deployment
+        base_mileage = base_mileage.none()
+
+    # -------------------------
+    # Compute miles per entry
+    # -------------------------
     miles_expr = ExpressionWrapper(
-        Coalesce(F('total'), F('end') - F('begin'), Value(0)),
+        Coalesce(
+            F("total"),
+            (F("end") - F("begin")),
+            Value(0),
+        ),
         output_field=DecimalField(max_digits=12, decimal_places=1),
     )
 
-    amount_expr = Case(
-        When(
-            mileage_type="Taxable",
-            then=ExpressionWrapper(
-                F('miles') * Value(rate),
-                output_field=DecimalField(max_digits=12, decimal_places=2),
-            ),
-        ),
-        default=Value(0),
-        output_field=DecimalField(max_digits=12, decimal_places=2),
-    )
-
+    # Annotate miles first
     mileage_entries = (
         base_mileage
         .annotate(miles=miles_expr)
-        .annotate(amount=amount_expr)
-        .order_by('date')
+        .order_by("date")
     )
 
-    totals = mileage_entries.aggregate(
-        total_mileage_miles=Sum('miles'),
-        mileage_dollars=Sum('amount'),
+    # -------------------------
+    # Mileage dollars: use the rate for the entry year
+    # Requires MileageRate to be per-year (recommended).
+    # Fallback: first() or 0.70 if not found / model doesn't support year.
+    # -------------------------
+    total_mileage_miles = Decimal("0")
+    mileage_dollars = Decimal("0")
+
+    # Group miles by year to apply correct yearly rate
+    grouped = mileage_entries.values("date__year").annotate(total_miles=Sum("miles"))
+
+    for row in grouped:
+        year = row["date__year"]
+        miles = row["total_miles"] or Decimal("0")
+        total_mileage_miles += miles
+
+        rate_obj = (
+            MileageRate.objects
+            .filter(user=request.user, year=year)
+            .only("rate")
+            .first()
+        )
+        if rate_obj and rate_obj.rate is not None:
+            rate = Decimal(str(rate_obj.rate))
+        else:
+            # Fallback if you haven't populated year rates yet
+            rate_fallback = MileageRate.objects.filter(user=request.user).only("rate").first()
+            rate = Decimal(str(rate_fallback.rate)) if rate_fallback and rate_fallback.rate is not None else Decimal("0.70")
+
+        mileage_dollars += (miles * rate)
+
+    # Keep a display rate for the template (if you want one)
+    # If invoice spans years, this is just the rate for the invoice year (or fallback)
+    invoice_year = getattr(getattr(invoice, "date", None), "year", None) or now().year
+    inv_rate_obj = MileageRate.objects.filter(user=request.user, year=invoice_year).only("rate").first()
+    mileage_rate_display = (
+        Decimal(str(inv_rate_obj.rate))
+        if inv_rate_obj and inv_rate_obj.rate is not None
+        else Decimal("0.70")
     )
-    total_mileage_miles = totals['total_mileage_miles'] or Decimal('0')
-    mileage_dollars = totals['mileage_dollars'] or Decimal('0')
+
+    # -------------------------
+    # Income / Expense totals
+    # -------------------------
     total_income = Decimal("0.00")
     total_expenses = Decimal("0.00")
     deductible_expenses = Decimal("0.00")
+
     for t in transactions:
-        if t.trans_type == 'Income':
+        if t.trans_type == "Income":
             total_income += t.amount
-        elif t.trans_type == 'Expense':
+
+        elif t.trans_type == "Expense":
             total_expenses += t.amount
-            if t.sub_cat and t.sub_cat.slug == 'meals':
+
+            if t.sub_cat and t.sub_cat.slug == "meals":
                 deductible_expenses += t.deductible_amount
-            elif t.sub_cat and t.sub_cat.slug == 'fuel' and t.transport_type == "personal_vehicle":
+
+            elif t.sub_cat and t.sub_cat.slug == "fuel" and t.transport_type == "personal_vehicle":
+                # exclude fuel personal vehicle from taxable calc per your rules
                 continue
+
             else:
                 deductible_expenses += t.amount
 
     has_income_transaction = total_income > 0
     total_cost = total_expenses + mileage_dollars
-    net_income = total_income - total_expenses if has_income_transaction else None
-    taxable_income = total_income - deductible_expenses - mileage_dollars if has_income_transaction else None
+    net_income = (total_income - total_expenses) if has_income_transaction else None
+    taxable_income = (total_income - deductible_expenses - mileage_dollars) if has_income_transaction else None
 
     context = {
-        'invoice': invoice,
-        'transactions': transactions,
-        'mileage_entries': mileage_entries,
-        'mileage_rate': rate,
-        'mileage_dollars': mileage_dollars,    
-        'total_mileage_miles': total_mileage_miles, 
-        'invoice_amount': invoice.amount,
-        'total_expenses': total_expenses,
-        'deductible_expenses': deductible_expenses,
-        'total_income': total_income,
-        'net_income': net_income,
-        'taxable_income': taxable_income,
-        'total_cost': total_cost,
-        'has_income_transaction': has_income_transaction,
-        'now': now(),
-        'current_page': 'invoices',
+        "invoice": invoice,
+        "transactions": transactions,
+        "mileage_entries": mileage_entries,          # entries annotated with miles
+        "mileage_rate": mileage_rate_display,        # display-only
+        "mileage_dollars": mileage_dollars,
+        "total_mileage_miles": total_mileage_miles,
+        "invoice_amount": invoice.amount,
+        "total_expenses": total_expenses,
+        "deductible_expenses": deductible_expenses,
+        "total_income": total_income,
+        "net_income": net_income,
+        "taxable_income": taxable_income,
+        "total_cost": total_cost,
+        "has_income_transaction": has_income_transaction,
+        "now": now(),
+        "current_page": "invoices",
     }
-    return render(request, 'money/invoices/invoice_review.html', context)
-
-
-
+    return render(request, "money/invoices/invoice_review.html", context)
 
 
 
@@ -527,6 +611,8 @@ def invoice_review_pdf(request, pk):
         default=Value(0),
         output_field=DecimalField(max_digits=12, decimal_places=2),
     )
+    
+# *********************
 
     mileage_entries = base_mileage.annotate(miles=miles_expr).annotate(amount=amount_expr)
 
@@ -1489,6 +1575,7 @@ def invoice_v2_review(request, pk):
         F("miles") * Value(rate),
         output_field=DecimalField(max_digits=12, decimal_places=2),
     )
+
 
     mileage_entries = (
         base_mileage

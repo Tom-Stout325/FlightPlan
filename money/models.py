@@ -356,17 +356,43 @@ class Transaction(models.Model):
 
 
 
-class MileageRate(models.Model):
-    rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.70)
+# class MileageRate(models.Model):
+#     rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.70)
     
-    def __str__(self):
-        return f"Current Mileage Rate: ${self.rate}"
+#     def __str__(self):
+#         return f"Current Mileage Rate: ${self.rate}"
+
+#     class Meta:
+#         verbose_name = "Mileage Rate"
+#         verbose_name_plural = "Mileage Rates"
+
+
+class MileageRate(models.Model):
+    """
+    Mileage rate stored per-year so historical reports remain correct.
+    """
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True,help_text="Optional: set per-user rates. Leave blank for a global rate.",)
+    year = models.PositiveIntegerField(db_index=True)
+    rate = models.DecimalField(max_digits=6,  decimal_places=4, default=Decimal("0.7000"), validators=[MinValueValidator(Decimal("0"))], help_text="Dollars per mile for this year (e.g. 0.6700).",)
 
     class Meta:
         verbose_name = "Mileage Rate"
         verbose_name_plural = "Mileage Rates"
+        constraints = [
+            models.UniqueConstraint(fields=["user", "year"], name="uniq_mileage_rate_user_year")
+        ]
+        ordering = ["-year"]
 
-
+    def __str__(self):
+        who = self.user.username if self.user else "Global"
+        return f"{who} – {self.year}: ${self.rate}/mi"
+    
+    
+    
+    
+    
+    
+    
 
 class Miles(models.Model):
     MILEAGE_TYPE_CHOICES = [
