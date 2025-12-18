@@ -33,7 +33,6 @@ except ImportError:
 
 
 
-
 class Category(models.Model):
     INCOME = "Income"
     EXPENSE = "Expense"
@@ -356,15 +355,6 @@ class Transaction(models.Model):
 
 
 
-# class MileageRate(models.Model):
-#     rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.70)
-    
-#     def __str__(self):
-#         return f"Current Mileage Rate: ${self.rate}"
-
-#     class Meta:
-#         verbose_name = "Mileage Rate"
-#         verbose_name_plural = "Mileage Rates"
 
 
 class MileageRate(models.Model):

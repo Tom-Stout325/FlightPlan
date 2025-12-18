@@ -54,9 +54,6 @@ from money.models import Miles
 
 
 
-
-
-
 def mileage_for_legacy_invoice(request, invoice):
     """
     Returns (mileage_total, mileage_entries_qs) for a legacy Invoice,
@@ -425,6 +422,17 @@ class InvoiceDeleteView(LoginRequiredMixin, DeleteView):
 
 
 
+from decimal import Decimal
+
+from django.contrib.auth.decorators import login_required
+from django.db.models import (
+    F, Sum, Value, DecimalField, ExpressionWrapper,
+)
+from django.db.models.functions import Coalesce
+from django.shortcuts import get_object_or_404, render
+from django.utils.timezone import now
+
+from money.models import Invoice, Transaction, Miles, MileageRate
 
 
 @login_required
@@ -433,7 +441,6 @@ def invoice_review(request, pk):
 
     # -------------------------
     # Transactions tied to this legacy invoice
-    # (Assumes Transaction.invoice_number exists and matches invoice.invoice_number)
     # -------------------------
     transactions = (
         Transaction.objects
@@ -443,27 +450,29 @@ def invoice_review(request, pk):
 
     # -------------------------
     # Mileage queryset: schema-safe for SkyGuy + Airborne
-    #   - SkyGuy DB: Miles has invoice_id FK to legacy Invoice
-    #   - Airborne DB: Miles uses invoice_number string
+    #   - SkyGuy DB: Miles.invoice_id FK exists
+    #   - Airborne DB: Miles.invoice_number string exists
     # -------------------------
     miles_field_names = {f.name for f in Miles._meta.get_fields()}
-    base_mileage = Miles.objects.filter(
-        user=request.user,
-        mileage_type="Taxable",
-    ).select_related("client", "event")
+
+    base_mileage = (
+        Miles.objects
+        .filter(user=request.user, mileage_type="Taxable")
+        .select_related("client", "event")
+    )
 
     if "invoice" in miles_field_names:
-        # SkyGuy-style: Miles.invoice FK exists (db column invoice_id)
+        # SkyGuy-style: FK to legacy invoice
         base_mileage = base_mileage.filter(invoice_id=invoice.id)
     elif "invoice_number" in miles_field_names:
-        # Airborne-style: Miles.invoice_number exists
+        # Airborne-style: string link
         base_mileage = base_mileage.filter(invoice_number=invoice.invoice_number)
     else:
-        # No supported linkage in this deployment
         base_mileage = base_mileage.none()
 
     # -------------------------
     # Compute miles per entry
+    # Prefer stored `total`, fallback to end-begin, else 0
     # -------------------------
     miles_expr = ExpressionWrapper(
         Coalesce(
@@ -474,7 +483,6 @@ def invoice_review(request, pk):
         output_field=DecimalField(max_digits=12, decimal_places=1),
     )
 
-    # Annotate miles first
     mileage_entries = (
         base_mileage
         .annotate(miles=miles_expr)
@@ -482,45 +490,59 @@ def invoice_review(request, pk):
     )
 
     # -------------------------
-    # Mileage dollars: use the rate for the entry year
-    # Requires MileageRate to be per-year (recommended).
-    # Fallback: first() or 0.70 if not found / model doesn't support year.
+    # Mileage dollars by YEAR (historically correct)
+    # Rates can be:
+    #   - per-user for a year (user=request.user)
+    #   - global for a year (user=None)
+    # Fallback rate if missing: 0.70
     # -------------------------
+    FALLBACK_RATE = Decimal("0.70")
+
+    # Sum miles by year
+    grouped = mileage_entries.values("date__year").annotate(total_miles=Sum("miles"))
+
+    # Preload all relevant rates for those years in 1–2 queries
+    years = [row["date__year"] for row in grouped if row["date__year"] is not None]
+
+    user_rates = {
+        r.year: (r.rate if r.rate is not None else FALLBACK_RATE)
+        for r in MileageRate.objects.filter(user=request.user, year__in=years).only("year", "rate")
+    }
+    global_rates = {
+        r.year: (r.rate if r.rate is not None else FALLBACK_RATE)
+        for r in MileageRate.objects.filter(user__isnull=True, year__in=years).only("year", "rate")
+    }
+
     total_mileage_miles = Decimal("0")
     mileage_dollars = Decimal("0")
-
-    # Group miles by year to apply correct yearly rate
-    grouped = mileage_entries.values("date__year").annotate(total_miles=Sum("miles"))
 
     for row in grouped:
         year = row["date__year"]
         miles = row["total_miles"] or Decimal("0")
+
         total_mileage_miles += miles
 
-        rate_obj = (
-            MileageRate.objects
-            .filter(user=request.user, year=year)
-            .only("rate")
-            .first()
-        )
-        if rate_obj and rate_obj.rate is not None:
-            rate = Decimal(str(rate_obj.rate))
-        else:
-            # Fallback if you haven't populated year rates yet
-            rate_fallback = MileageRate.objects.filter(user=request.user).only("rate").first()
-            rate = Decimal(str(rate_fallback.rate)) if rate_fallback and rate_fallback.rate is not None else Decimal("0.70")
-
+        rate = user_rates.get(year) or global_rates.get(year) or FALLBACK_RATE
         mileage_dollars += (miles * rate)
 
-    # Keep a display rate for the template (if you want one)
-    # If invoice spans years, this is just the rate for the invoice year (or fallback)
+    # Display rate in template (best effort)
     invoice_year = getattr(getattr(invoice, "date", None), "year", None) or now().year
-    inv_rate_obj = MileageRate.objects.filter(user=request.user, year=invoice_year).only("rate").first()
     mileage_rate_display = (
-        Decimal(str(inv_rate_obj.rate))
-        if inv_rate_obj and inv_rate_obj.rate is not None
-        else Decimal("0.70")
+        user_rates.get(invoice_year)
+        or global_rates.get(invoice_year)
+        or (
+            MileageRate.objects.filter(user=request.user, year=invoice_year).only("rate").first() or
+            MileageRate.objects.filter(user__isnull=True, year=invoice_year).only("rate").first()
+        ).rate
+        if (
+            MileageRate.objects.filter(user=request.user, year=invoice_year).only("rate").exists() or
+            MileageRate.objects.filter(user__isnull=True, year=invoice_year).only("rate").exists()
+        )
+        else FALLBACK_RATE
     )
+
+    if mileage_rate_display is None:
+        mileage_rate_display = FALLBACK_RATE
 
     # -------------------------
     # Income / Expense totals
@@ -540,7 +562,6 @@ def invoice_review(request, pk):
                 deductible_expenses += t.deductible_amount
 
             elif t.sub_cat and t.sub_cat.slug == "fuel" and t.transport_type == "personal_vehicle":
-                # exclude fuel personal vehicle from taxable calc per your rules
                 continue
 
             else:
@@ -554,8 +575,8 @@ def invoice_review(request, pk):
     context = {
         "invoice": invoice,
         "transactions": transactions,
-        "mileage_entries": mileage_entries,          # entries annotated with miles
-        "mileage_rate": mileage_rate_display,        # display-only
+        "mileage_entries": mileage_entries,
+        "mileage_rate": mileage_rate_display,
         "mileage_dollars": mileage_dollars,
         "total_mileage_miles": total_mileage_miles,
         "invoice_amount": invoice.amount,
@@ -612,8 +633,6 @@ def invoice_review_pdf(request, pk):
         output_field=DecimalField(max_digits=12, decimal_places=2),
     )
     
-# *********************
-
     mileage_entries = base_mileage.annotate(miles=miles_expr).annotate(amount=amount_expr)
 
     totals = mileage_entries.aggregate(
@@ -986,6 +1005,7 @@ def send_invoice_email(request, invoice_id):
 
 #------------------------------------------------------------------------------------------------------  N E W   I N V O I C E S
 
+
 class InvoiceV2CreateView(LoginRequiredMixin, CreateView):
     model = InvoiceV2
     form_class = InvoiceV2Form
@@ -994,36 +1014,44 @@ class InvoiceV2CreateView(LoginRequiredMixin, CreateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+
+        # Ensure self.object exists for CreateView formsets
+        if not hasattr(self, "object") or self.object is None:
+            self.object = None
+
         if self.request.method == "POST":
-            context["items_formset"] = InvoiceItemV2FormSet(self.request.POST)
+            context["items_formset"] = InvoiceItemV2FormSet(
+                self.request.POST,
+                instance=self.object,  # None is OK on create
+            )
         else:
             context["items_formset"] = InvoiceItemV2FormSet()
+
         return context
 
     def form_valid(self, form):
-        context = self.get_context_data()
+        context = self.get_context_data(form=form)
         items_formset = context["items_formset"]
 
         if not items_formset.is_valid():
-            return self.render_to_response(self.get_context_data(form=form))
+            return self.render_to_response(context)
 
-        # Save invoice first
-        self.object = form.save()
+        with transaction.atomic():
+            # If InvoiceV2 has a user FK, set it here
+            if hasattr(form.instance, "user_id") and not form.instance.user_id:
+                form.instance.user = self.request.user
 
-        # Attach items to this invoice and save
-        items_formset.instance = self.object
-        items_formset.save()
+            self.object = form.save()
 
-        # Recalculate amount
-        self.object.update_amount()
+            items_formset.instance = self.object
+            items_formset.save()
+
+            self.object.update_amount()
 
         return redirect(self.get_success_url())
 
     def get_success_url(self):
         return reverse_lazy("money:invoice_v2_detail", kwargs={"pk": self.object.pk})
-
-
-
 
 
 
@@ -1038,37 +1066,36 @@ class InvoiceV2UpdateView(LoginRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+
         if self.request.method == "POST":
             context["items_formset"] = InvoiceItemV2FormSet(
                 self.request.POST,
                 instance=self.object,
             )
         else:
-            # 👈 This is what makes existing line items appear on edit
             context["items_formset"] = InvoiceItemV2FormSet(instance=self.object)
+
         return context
 
     def form_valid(self, form):
-        context = self.get_context_data()
+        context = self.get_context_data(form=form)
         items_formset = context["items_formset"]
 
         if not items_formset.is_valid():
-            return self.render_to_response(self.get_context_data(form=form))
+            return self.render_to_response(context)
 
-        self.object = form.save()
+        with transaction.atomic():
+            self.object = form.save()
 
-        items_formset.instance = self.object
-        items_formset.save()
+            items_formset.instance = self.object
+            items_formset.save()
 
-        self.object.update_amount()
+            self.object.update_amount()
 
         return redirect(self.get_success_url())
 
     def get_success_url(self):
         return reverse_lazy("money:invoice_v2_detail", kwargs={"pk": self.object.pk})
-
-
-
 
 
 
