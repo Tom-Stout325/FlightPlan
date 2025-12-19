@@ -1,0 +1,106 @@
+{% extends "index.html" %}
+{% load humanize %}
+
+{% block title %}Travel Summary{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+    <div>
+      <h2 class="text-primary mb-1">Travel Summary</h2>
+      <div class="text-muted small">
+        Mileage rate: ${{ mileage_rate|floatformat:2 }}
+      </div>
+    </div>
+
+    <form method="get" class="card shadow-sm border-0" style="min-width: 220px;">
+      <div class="card-body py-2 d-flex align-items-center gap-2">
+        <label for="year" class="mb-0 text-muted">Year</label>
+        <select id="year" name="year" class="form-select form-select-sm" onchange="this.form.submit()">
+          {% for y in years %}
+            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-responsive shadow-sm rounded">
+    <table class="table table-sm table-striped align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th style="width: 9%;">Invoice #</th>
+          <th>Event</th>
+          <th class="text-end" style="width: 12%;">Invoice Amount</th>
+          <th class="text-end" style="width: 10%;">Airfare</th>
+          <th class="text-end" style="width: 10%;">Hotel</th>
+          <th class="text-end" style="width: 10%;">Rental Car</th>
+          <th class="text-end" style="width: 10%;">Gas</th>
+          <th class="text-end" style="width: 10%;">Mileage</th>
+          <th class="text-end" style="width: 12%;">Net Amount</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            <td class="small">
+              {% with inv=r.invoice %}
+                {% if inv.pk %}
+                  <a href="{% url 'money:invoice_review' inv.pk %}">
+                    {{ inv.invoice_number|default:"—" }}
+                  </a>
+                {% else %}
+                  {{ inv.invoice_number|default:"—" }}
+                {% endif %}
+              {% endwith %}
+            </td>
+
+            <td class="small">
+              {% if r.invoice.event %}
+                {{ r.invoice.event }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+
+            <td class="text-end">${{ r.invoice_amount|floatformat:2|intcomma }}</td>
+            <td class="text-end">${{ r.airfare|floatformat:2|intcomma }}</td>
+            <td class="text-end">${{ r.hotel|floatformat:2|intcomma }}</td>
+            <td class="text-end">${{ r.rental_car|floatformat:2|intcomma }}</td>
+            <td class="text-end">${{ r.gas|floatformat:2|intcomma }}</td>
+            <td class="text-end">${{ r.mileage|floatformat:2|intcomma }}</td>
+
+            <td class="text-end fw-semibold">
+              ${{ r.net_amount|floatformat:2|intcomma }}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="9" class="text-center text-muted py-4">
+              No invoices for {{ selected_year }}.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+
+      <tfoot class="table-light fw-semibold">
+        <tr>
+          <td colspan="2" class="text-end">Totals:</td>
+          <td class="text-end">${{ totals.invoice_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+          <td class="text-end">${{ totals.airfare|default_if_none:0|floatformat:2|intcomma }}</td>
+          <td class="text-end">${{ totals.hotel|default_if_none:0|floatformat:2|intcomma }}</td>
+          <td class="text-end">${{ totals.rental_car|default_if_none:0|floatformat:2|intcomma }}</td>
+          <td class="text-end">${{ totals.gas|default_if_none:0|floatformat:2|intcomma }}</td>
+          <td class="text-end">${{ totals.mileage|default_if_none:0|floatformat:2|intcomma }}</td>
+          <td class="text-end">${{ totals.net_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+<style>
+  tfoot tr { background:#f8f9fa; border-top:2px solid #dee2e6; }
+</style>
+{% endblock %}

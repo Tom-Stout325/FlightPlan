@@ -56,6 +56,7 @@ from .views.reports import (
     nhra_summary_report_pdf,
     travel_expense_analysis,
     travel_expense_analysis_pdf,
+    travel_summary,
 )
 
 from .views.taxes import (
@@ -184,6 +185,7 @@ urlpatterns = [
     path("receipts/", receipts_list, name="receipts_list"),
     path("receipts/<int:pk>/", receipt_detail, name="receipt_detail"),
     path("reports/invoices/", invoice_summary, name="invoice_summary"),
+    path("reports/travel-summary/", travel_summary, name="travel_summary"),
     
     path("taxes/schedule-c/", schedule_c_worksheet, name="schedule_c_worksheet",),
     path("taxes/schedule-c/pdf/<int:year>/", schedule_c_pdf_view, name="schedule_c_pdf",),

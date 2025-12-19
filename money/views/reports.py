@@ -7,24 +7,25 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum
-from django.http import HttpResponse
+from django.db.models import DecimalField, ExpressionWrapper, F, Sum, Value
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.template.loader import get_template, render_to_string
 from django.utils import timezone
 from django.utils.timezone import now
 from django.conf import settings
 from django.urls import reverse
+from django.db.models.functions import Coalesce
 
 from weasyprint import HTML, CSS
 
 from ..forms import *
 from ..models import *
 
+from money.models import Invoice, Transaction, MileageRate, Miles
 
 
-from django.conf import settings
-from django.urls import reverse
+
 
 REPORT_CARDS = [
     {
@@ -401,3 +402,179 @@ def nhra_summary_report_pdf(request):
         return redirect('money:nhra_summary_report')
 
 
+
+
+
+
+def _matches_subcat(t: Transaction, slug_candidates=None, name_candidates=None) -> bool:
+    """
+    Best-effort matcher so the report works even if your slug naming differs.
+    - slug_candidates: list of acceptable slug values
+    - name_candidates: list of acceptable substrings to match against sub_cat.sub_cat (name)
+    """
+    if not t.sub_cat:
+        return False
+
+    slug = (getattr(t.sub_cat, "slug", "") or "").strip().lower()
+    name = (getattr(t.sub_cat, "sub_cat", "") or "").strip().lower()
+
+    if slug_candidates:
+        if slug in {s.lower() for s in slug_candidates}:
+            return True
+
+    if name_candidates:
+        for n in name_candidates:
+            if n.lower() in name:
+                return True
+
+    return False
+
+
+@login_required
+def travel_summary(request: HttpRequest) -> HttpResponse:
+    # --- Year selection -------------------------------------------------
+    all_years_qs = (
+        Invoice.objects
+        .exclude(date__isnull=True)
+        .values_list("date__year", flat=True)
+        .distinct()
+        .order_by("-date__year")
+    )
+    years = list(all_years_qs) or [now().year]
+
+    selected_year = request.GET.get("year")
+    try:
+        selected_year = int(selected_year) if selected_year else years[0]
+    except (TypeError, ValueError):
+        selected_year = years[0]
+
+    # --- Invoices for that year -----------------------------------------
+    invoices = (
+        Invoice.objects
+        .select_related("event", "client", "service")
+        .filter(date__year=selected_year)
+        .order_by("date", "invoice_number")
+    )
+
+    # --- Mileage rate ---------------------------------------------------
+    try:
+        r = MileageRate.objects.first()
+        mileage_rate = Decimal(str(r.rate)) if r and r.rate is not None else Decimal("0.70")
+    except Exception:
+        mileage_rate = Decimal("0.70")
+
+    # --- Preload year-wide txns & mileage -------------------------------
+    year_txns = (
+        Transaction.objects
+        .filter(date__year=selected_year)
+        .select_related("sub_cat__category", "event")
+    )
+
+    base_mileage = (
+        Miles.objects
+        .filter(date__year=selected_year, user=request.user, mileage_type="Taxable")
+    )
+
+    # Miles expressions
+    miles_expr = ExpressionWrapper(
+        Coalesce(F("total"), F("end") - F("begin"), Value(0)),
+        output_field=DecimalField(max_digits=12, decimal_places=1),
+    )
+    amount_expr = ExpressionWrapper(
+        F("miles") * Value(mileage_rate),
+        output_field=DecimalField(max_digits=12, decimal_places=2),
+    )
+
+    # --- SubCategory matching (adjust these if you know your exact slugs) -
+    AIRFARE_SLUGS = ["airfare", "air_fare", "flight", "flights"]
+    HOTEL_SLUGS = ["hotel", "lodging"]
+    RENTAL_CAR_SLUGS = ["rental-car", "rental_car", "car-rental", "car_rental"]
+    GAS_SLUGS = ["gas", "fuel"]
+
+    # name fallback (matches SubCategory.sub_cat text)
+    AIRFARE_NAMES = ["airfare", "flight", "air fare", "airlines"]
+    HOTEL_NAMES = ["hotel", "lodging"]
+    RENTAL_CAR_NAMES = ["rental car", "car rental"]
+    GAS_NAMES = ["gas", "fuel"]
+
+    rows = []
+
+    totals = {
+        "invoice_amount": Decimal("0.00"),
+        "airfare": Decimal("0.00"),
+        "hotel": Decimal("0.00"),
+        "rental_car": Decimal("0.00"),
+        "gas": Decimal("0.00"),
+        "mileage": Decimal("0.00"),
+        "net_amount": Decimal("0.00"),
+    }
+
+    for inv in invoices:
+        # Transactions tied to this invoice (your existing linking approach)
+        inv_txns = year_txns.filter(event=inv.event, invoice_number=inv.invoice_number)
+
+        airfare = Decimal("0.00")
+        hotel = Decimal("0.00")
+        rental_car = Decimal("0.00")
+        gas = Decimal("0.00")
+
+        # Only count EXPENSE transactions for these buckets
+        for t in inv_txns:
+            if t.trans_type != Transaction.EXPENSE:
+                continue
+
+            if _matches_subcat(t, slug_candidates=AIRFARE_SLUGS, name_candidates=AIRFARE_NAMES):
+                airfare += (t.amount or Decimal("0.00"))
+            elif _matches_subcat(t, slug_candidates=HOTEL_SLUGS, name_candidates=HOTEL_NAMES):
+                hotel += (t.amount or Decimal("0.00"))
+            elif _matches_subcat(t, slug_candidates=RENTAL_CAR_SLUGS, name_candidates=RENTAL_CAR_NAMES):
+                rental_car += (t.amount or Decimal("0.00"))
+            elif _matches_subcat(t, slug_candidates=GAS_SLUGS, name_candidates=GAS_NAMES):
+                gas += (t.amount or Decimal("0.00"))
+
+        # Mileage dollars for this invoice number
+        inv_mileage_qs = (
+            base_mileage
+            .filter(invoice_number=inv.invoice_number)
+            .annotate(miles=miles_expr)
+            .annotate(amount=amount_expr)
+        )
+        mtotals = inv_mileage_qs.aggregate(
+            mileage_dollars=Sum("amount"),
+        )
+        mileage_dollars = mtotals["mileage_dollars"] or Decimal("0.00")
+
+        invoice_amount = inv.amount or Decimal("0.00")
+        travel_total = airfare + hotel + rental_car + gas + mileage_dollars
+        net_amount = invoice_amount - travel_total
+
+        rows.append(
+            {
+                "invoice": inv,
+                "invoice_amount": invoice_amount,
+                "airfare": airfare,
+                "hotel": hotel,
+                "rental_car": rental_car,
+                "gas": gas,
+                "mileage": mileage_dollars,
+                "net_amount": net_amount,
+            }
+        )
+
+        totals["invoice_amount"] += invoice_amount
+        totals["airfare"] += airfare
+        totals["hotel"] += hotel
+        totals["rental_car"] += rental_car
+        totals["gas"] += gas
+        totals["mileage"] += mileage_dollars
+        totals["net_amount"] += net_amount
+
+    context = {
+        "years": years,
+        "selected_year": selected_year,
+        "rows": rows,
+        "totals": totals,
+        "mileage_rate": mileage_rate,
+        "current_page": "reports",
+    }
+    return render(request, "money/reports/travel_summary.html", context)
