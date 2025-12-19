@@ -715,7 +715,6 @@ def build_travel_summary_context(request: HttpRequest, selected_year: int) -> di
 
     # Branding (logo URL must be absolute for WeasyPrint)
     brand_name = getattr(request, "brand_name", None) or "Airborne Images"
-    logo_url = request.build_absolute_uri(static("images/logo.png"))  # adjust if needed
 
     return {
         "rows": rows,
@@ -724,7 +723,6 @@ def build_travel_summary_context(request: HttpRequest, selected_year: int) -> di
         "counts": counts,
         "invoice_count": invoices.count(),
         "brand_name": brand_name,
-        "logo_url": logo_url,
         "selected_year": selected_year,
     }
 
