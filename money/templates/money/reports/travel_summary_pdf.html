@@ -25,13 +25,18 @@
 
 <body>
   <div class="header">
-    <div class="brand">
-      <img class="logo" src="{{ logo_url }}" alt="Logo">
-      <div>
-        <h1>{{ brand_name }} – Travel Summary</h1>
-        <div class="muted">Year: {{ selected_year }}</div>
-      </div>
+    <div style="text-align: center; margin-bottom: 12px;">
+      {% if BRAND_LOGO_URL %}
+        <img src="{{ BRAND_LOGO_URL }}"
+            alt="{{ BRAND_PROFILE.name|default:'Brand Logo' }}"
+            style="max-height: 90px; width: auto;">
+      {% elif BRAND_PROFILE %}
+        <strong style="font-size: 18px;">
+          {{ BRAND_PROFILE.name }}
+        </strong>
+      {% endif %}
     </div>
+
     <div class="meta">
       Generated: {% now "M j, Y g:i A" %}<br>
       Invoices: {{ invoice_count }}

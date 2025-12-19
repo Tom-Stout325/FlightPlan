@@ -121,6 +121,8 @@ def documents(request):
     return render(request, 'documents/drone_portal.html', context)
 
 
+
+
 @login_required
 def incident_reporting_system(request):
     query = request.GET.get('q', '').strip()
@@ -137,6 +139,8 @@ def incident_reporting_system(request):
         'current_page': 'incidents',
     }
     return render(request, 'documents/incident_reporting_system.html', context)
+
+
 
 
 @login_required
