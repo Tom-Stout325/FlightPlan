@@ -29,7 +29,6 @@ from .views.invoices import (
     export_invoices_csv,
     export_invoices_pdf,
     send_invoice_email,
-    invoice_summary,
     InvoiceV2ListView,
     InvoiceV2DetailView,
     InvoiceV2UpdateView,
@@ -57,6 +56,8 @@ from .views.reports import (
     travel_expense_analysis,
     travel_expense_analysis_pdf,
     travel_summary,
+    travel_summary_pdf_preview,
+    travel_summary_pdf_download,
 )
 
 from .views.taxes import (
@@ -184,8 +185,9 @@ urlpatterns = [
     path("form-4797/pdf/", form_4797_pdf, name="form_4797_pdf"),
     path("receipts/", receipts_list, name="receipts_list"),
     path("receipts/<int:pk>/", receipt_detail, name="receipt_detail"),
-    path("reports/invoices/", invoice_summary, name="invoice_summary"),
     path("reports/travel-summary/", travel_summary, name="travel_summary"),
+    path("reports/travel-summary/pdf/", travel_summary_pdf_preview, name="travel_summary_pdf_preview"),
+    path("reports/travel-summary/pdf/download/", travel_summary_pdf_download, name="travel_summary_pdf_download"),
     
     path("taxes/schedule-c/", schedule_c_worksheet, name="schedule_c_worksheet",),
     path("taxes/schedule-c/pdf/<int:year>/", schedule_c_pdf_view, name="schedule_c_pdf",),

@@ -26,6 +26,6 @@ ENABLED_REPORTS = [
     "travel_expense_analysis",
     "schedule_c",
     "receipts",
-    "invoice_summary",
+    "travel_summary",
     "travel_expenses",
 ]

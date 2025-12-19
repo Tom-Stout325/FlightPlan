@@ -8,9 +8,18 @@
   <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
     <div>
       <h2 class="text-primary mb-1">Travel Summary</h2>
-      <div class="text-muted small">
-        Mileage rate: ${{ mileage_rate|floatformat:2 }}
+      <div class="d-flex gap-2">
+
+        <a class="btn btn-outline-primary btn-sm"
+          href="{% url 'money:travel_summary_pdf_preview' %}?year={{ selected_year }}">
+          <i class="fa-solid fa-file-pdf me-1"></i> PDF Preview
+        </a>
+        <a class="btn btn-primary btn-sm"
+          href="{% url 'money:travel_summary_pdf_download' %}?year={{ selected_year }}">
+          <i class="fa-solid fa-download me-1"></i> Download PDF
+        </a>
       </div>
+
     </div>
 
     <form method="get" class="card shadow-sm border-0" style="min-width: 220px;">
@@ -33,8 +42,8 @@
           <th>Event</th>
           <th class="text-end" style="width: 12%;">Invoice Amount</th>
           <th class="text-end" style="width: 10%;">Airfare</th>
-          <th class="text-end" style="width: 10%;">Hotel</th>
-          <th class="text-end" style="width: 10%;">Rental Car</th>
+          <th class="text-end" style="width: 10%;">Hotels</th>
+          <th class="text-end" style="width: 10%;">Car Rental</th>
           <th class="text-end" style="width: 10%;">Gas</th>
           <th class="text-end" style="width: 10%;">Mileage</th>
           <th class="text-end" style="width: 12%;">Net Amount</th>
@@ -57,23 +66,16 @@
             </td>
 
             <td class="small">
-              {% if r.invoice.event %}
-                {{ r.invoice.event }}
-              {% else %}
-                —
-              {% endif %}
+              {% if r.invoice.event %}{{ r.invoice.event }}{% else %}—{% endif %}
             </td>
 
             <td class="text-end">${{ r.invoice_amount|floatformat:2|intcomma }}</td>
             <td class="text-end">${{ r.airfare|floatformat:2|intcomma }}</td>
-            <td class="text-end">${{ r.hotel|floatformat:2|intcomma }}</td>
-            <td class="text-end">${{ r.rental_car|floatformat:2|intcomma }}</td>
-            <td class="text-end">${{ r.gas|floatformat:2|intcomma }}</td>
+            <td class="text-end">${{ r.hotels|floatformat:2|intcomma }}</td>
+            <td class="text-end">${{ r.car_rental|floatformat:2|intcomma }}</td>
+            <td class="text-end">${{ r.fuel|floatformat:2|intcomma }}</td>
             <td class="text-end">${{ r.mileage|floatformat:2|intcomma }}</td>
-
-            <td class="text-end fw-semibold">
-              ${{ r.net_amount|floatformat:2|intcomma }}
-            </td>
+            <td class="text-end fw-semibold">${{ r.net_amount|floatformat:2|intcomma }}</td>
           </tr>
         {% empty %}
           <tr>
@@ -89,11 +91,22 @@
           <td colspan="2" class="text-end">Totals:</td>
           <td class="text-end">${{ totals.invoice_amount|default_if_none:0|floatformat:2|intcomma }}</td>
           <td class="text-end">${{ totals.airfare|default_if_none:0|floatformat:2|intcomma }}</td>
-          <td class="text-end">${{ totals.hotel|default_if_none:0|floatformat:2|intcomma }}</td>
-          <td class="text-end">${{ totals.rental_car|default_if_none:0|floatformat:2|intcomma }}</td>
-          <td class="text-end">${{ totals.gas|default_if_none:0|floatformat:2|intcomma }}</td>
+          <td class="text-end">${{ totals.hotels|default_if_none:0|floatformat:2|intcomma }}</td>
+          <td class="text-end">${{ totals.car_rental|default_if_none:0|floatformat:2|intcomma }}</td>
+          <td class="text-end">${{ totals.fuel|default_if_none:0|floatformat:2|intcomma }}</td>
           <td class="text-end">${{ totals.mileage|default_if_none:0|floatformat:2|intcomma }}</td>
           <td class="text-end">${{ totals.net_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+        </tr>
+
+        <tr class="fw-normal">
+          <td colspan="2" class="text-end text-muted">Average (per invoice):</td>
+          <td class="text-end text-muted">${{ averages.invoice_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+          <td class="text-end text-muted">${{ averages.airfare|default_if_none:0|floatformat:2|intcomma }}</td>
+          <td class="text-end text-muted">${{ averages.hotels|default_if_none:0|floatformat:2|intcomma }}</td>
+          <td class="text-end text-muted">${{ averages.car_rental|default_if_none:0|floatformat:2|intcomma }}</td>
+          <td class="text-end text-muted">${{ averages.fuel|default_if_none:0|floatformat:2|intcomma }}</td>
+          <td class="text-end text-muted">${{ averages.mileage|default_if_none:0|floatformat:2|intcomma }}</td>
+          <td class="text-end text-muted">${{ averages.net_amount|default_if_none:0|floatformat:2|intcomma }}</td>
         </tr>
       </tfoot>
     </table>
@@ -102,5 +115,6 @@
 
 <style>
   tfoot tr { background:#f8f9fa; border-top:2px solid #dee2e6; }
+  tfoot tr + tr { border-top: 1px solid #dee2e6; }
 </style>
 {% endblock %}

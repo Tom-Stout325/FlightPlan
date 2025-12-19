@@ -22,5 +22,5 @@ ENABLED_REPORTS = [
     "form_4797",
     "category_summary",
     "schedule_c",
-    "invoice_summary",
+    "travel_summary",
 ]

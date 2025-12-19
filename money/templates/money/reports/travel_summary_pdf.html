@@ -1,0 +1,99 @@
+{% load humanize %}
+
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Travel Summary {{ selected_year }}</title>
+  <style>
+    @page { size: Letter; margin: 18mm 14mm; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-size: 11px; color:#111; }
+    .header { display:flex; align-items:center; justify-content:space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #ddd; }
+    .brand { display:flex; align-items:center; gap: 10px; }
+    .logo { height: 38px; }
+    h1 { font-size: 16px; margin:0; }
+    .meta { text-align:right; font-size: 10px; color:#555; }
+    table { width:100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { padding: 6px 6px; border-bottom: 1px solid #e6e6e6; }
+    th { text-align:left; background:#f3f4f6; font-weight: 700; }
+    td.num, th.num { text-align:right; }
+    tfoot td { background:#fafafa; border-top: 2px solid #d9d9d9; font-weight: 700; }
+    tfoot tr.avg td { font-weight: 400; color:#555; border-top: 1px solid #d9d9d9; }
+    .muted { color:#666; }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <div class="brand">
+      <img class="logo" src="{{ logo_url }}" alt="Logo">
+      <div>
+        <h1>{{ brand_name }} – Travel Summary</h1>
+        <div class="muted">Year: {{ selected_year }}</div>
+      </div>
+    </div>
+    <div class="meta">
+      Generated: {% now "M j, Y g:i A" %}<br>
+      Invoices: {{ invoice_count }}
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 12%;">Invoice #</th>
+        <th>Event</th>
+        <th class="num" style="width: 13%;">Invoice Amount</th>
+        <th class="num" style="width: 12%;">Airfare</th>
+        <th class="num" style="width: 12%;">Hotels</th>
+        <th class="num" style="width: 12%;">Car Rental</th>
+        <th class="num" style="width: 12%;">Gas</th>
+        <th class="num" style="width: 13%;">Net Amount</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for r in rows %}
+        <tr>
+          <td>{{ r.invoice.invoice_number|default:"—" }}</td>
+          <td>{% if r.invoice.event %}{{ r.invoice.event }}{% else %}—{% endif %}</td>
+          <td class="num">${{ r.invoice_amount|floatformat:2|intcomma }}</td>
+          <td class="num">${{ r.airfare|floatformat:2|intcomma }}</td>
+          <td class="num">${{ r.hotels|floatformat:2|intcomma }}</td>
+          <td class="num">${{ r.car_rental|floatformat:2|intcomma }}</td>
+          <td class="num">${{ r.fuel|floatformat:2|intcomma }}</td>
+          <td class="num">${{ r.net_amount|floatformat:2|intcomma }}</td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="8" class="muted" style="padding: 14px; text-align:center;">
+            No invoices for {{ selected_year }}.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+
+    <tfoot>
+      <tr>
+        <td colspan="2" class="num">Totals:</td>
+        <td class="num">${{ totals.invoice_amount|floatformat:2|intcomma }}</td>
+        <td class="num">${{ totals.airfare|floatformat:2|intcomma }}</td>
+        <td class="num">${{ totals.hotels|floatformat:2|intcomma }}</td>
+        <td class="num">${{ totals.car_rental|floatformat:2|intcomma }}</td>
+        <td class="num">${{ totals.fuel|floatformat:2|intcomma }}</td>
+        <td class="num">${{ totals.net_amount|floatformat:2|intcomma }}</td>
+      </tr>
+
+      <tr class="avg">
+        <td colspan="2" class="num">Average (only where present):</td>
+        <td class="num">${{ averages.invoice_amount|floatformat:2|intcomma }}</td>
+        <td class="num">${{ averages.airfare|floatformat:2|intcomma }}</td>
+        <td class="num">${{ averages.hotels|floatformat:2|intcomma }}</td>
+        <td class="num">${{ averages.car_rental|floatformat:2|intcomma }}</td>
+        <td class="num">${{ averages.fuel|floatformat:2|intcomma }}</td>
+        <td class="num">${{ averages.net_amount|floatformat:2|intcomma }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</body>
+</html>
