@@ -1,5 +1,4 @@
 {% extends "index.html" %}
-{% load static %}
 {% load humanize %}
 
 {% block title %}Travel Summary{% endblock %}
@@ -46,7 +45,6 @@
           <th class="text-end" style="width: 10%;">Hotels</th>
           <th class="text-end" style="width: 10%;">Car Rental</th>
           <th class="text-end" style="width: 10%;">Gas</th>
-          <th class="text-end" style="width: 10%;">Mileage</th>
           <th class="text-end" style="width: 12%;">Net Amount</th>
         </tr>
       </thead>
@@ -75,7 +73,6 @@
             <td class="text-end">${{ r.hotels|floatformat:2|intcomma }}</td>
             <td class="text-end">${{ r.car_rental|floatformat:2|intcomma }}</td>
             <td class="text-end">${{ r.fuel|floatformat:2|intcomma }}</td>
-            <td class="text-end">${{ r.mileage|floatformat:2|intcomma }}</td>
             <td class="text-end fw-semibold">${{ r.net_amount|floatformat:2|intcomma }}</td>
           </tr>
         {% empty %}
@@ -95,7 +92,6 @@
           <td class="text-end">${{ totals.hotels|default_if_none:0|floatformat:2|intcomma }}</td>
           <td class="text-end">${{ totals.car_rental|default_if_none:0|floatformat:2|intcomma }}</td>
           <td class="text-end">${{ totals.fuel|default_if_none:0|floatformat:2|intcomma }}</td>
-          <td class="text-end">${{ totals.mileage|default_if_none:0|floatformat:2|intcomma }}</td>
           <td class="text-end">${{ totals.net_amount|default_if_none:0|floatformat:2|intcomma }}</td>
         </tr>
 
@@ -106,7 +102,6 @@
           <td class="text-end text-muted">${{ averages.hotels|default_if_none:0|floatformat:2|intcomma }}</td>
           <td class="text-end text-muted">${{ averages.car_rental|default_if_none:0|floatformat:2|intcomma }}</td>
           <td class="text-end text-muted">${{ averages.fuel|default_if_none:0|floatformat:2|intcomma }}</td>
-          <td class="text-end text-muted">${{ averages.mileage|default_if_none:0|floatformat:2|intcomma }}</td>
           <td class="text-end text-muted">${{ averages.net_amount|default_if_none:0|floatformat:2|intcomma }}</td>
         </tr>
       </tfoot>

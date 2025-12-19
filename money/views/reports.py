@@ -24,8 +24,6 @@ from ..models import *
 from money.models import (
             Invoice, 
             Transaction, 
-            MileageRate, 
-            Miles,
 )
 
 
@@ -469,16 +467,7 @@ def travel_summary(request: HttpRequest) -> HttpResponse:
         .filter(date__year=selected_year)
         .select_related("sub_cat__category", "event")
     )
-    miles_expr = ExpressionWrapper(
-        Coalesce(F("total"), F("end") - F("begin"), Value(0)),
-        output_field=DecimalField(max_digits=12, decimal_places=1),
-    )
-    amount_expr = ExpressionWrapper(
-        F("miles") * Value(mileage_rate),
-        output_field=DecimalField(max_digits=12, decimal_places=2),
-    )
 
-    # --- Exact slugs ----------------------------------------------------
     SLUG_AIRFARE = "airfare"
     SLUG_HOTELS = "hotels"
     SLUG_CAR_RENTAL = "car-rental"
@@ -495,14 +484,13 @@ def travel_summary(request: HttpRequest) -> HttpResponse:
         "net_amount": Decimal("0.00"),
     }
 
-    # Per-column “included” counters (denominator for each average)
     counts = {
-        "invoice_amount": 0,  # typically all invoices (if amount > 0)
+        "invoice_amount": 0,  
         "airfare": 0,
         "hotels": 0,
         "car_rental": 0,
         "fuel": 0,
-        "net_amount": 0,  # if you want “net average” only where net != 0
+        "net_amount": 0, 
     }
 
     def q2(x: Decimal) -> Decimal:
@@ -534,7 +522,7 @@ def travel_summary(request: HttpRequest) -> HttpResponse:
 
 
         invoice_amount = inv.amount or Decimal("0.00")
-        travel_total = airfare + hotels + car_rental + fuel + mileage_dollars
+        travel_total = airfare + hotels + car_rental + fuel
         net_amount = invoice_amount - travel_total
 
         rows.append(
@@ -549,7 +537,6 @@ def travel_summary(request: HttpRequest) -> HttpResponse:
             }
         )
 
-        # Totals
         totals["invoice_amount"] += invoice_amount
         totals["airfare"] += airfare
         totals["hotels"] += hotels
@@ -557,7 +544,6 @@ def travel_summary(request: HttpRequest) -> HttpResponse:
         totals["fuel"] += fuel
         totals["net_amount"] += net_amount
 
-        # Counts (only if included)
         if invoice_amount != 0:
             counts["invoice_amount"] += 1
         if airfare > 0:
@@ -591,7 +577,7 @@ def travel_summary(request: HttpRequest) -> HttpResponse:
         "rows": rows,
         "totals": totals,
         "averages": averages,
-        "counts": counts,  # optional (handy if you want to show “n=” in template)
+        "counts": counts, 
         "invoice_count": invoices.count(),
         "current_page": "reports",
     }
@@ -621,8 +607,6 @@ def build_travel_summary_context(request: HttpRequest, selected_year: int) -> di
         .filter(date__year=selected_year)
         .select_related("sub_cat__category", "event")
     )
-
-    # Exact slugs (per your note)
     SLUG_AIRFARE = "airfare"
     SLUG_HOTELS = "hotels"
     SLUG_CAR_RENTAL = "car-rental"
@@ -638,7 +622,6 @@ def build_travel_summary_context(request: HttpRequest, selected_year: int) -> di
         "net_amount": Decimal("0.00"),
     }
 
-    # “included” counters (avg only where column > 0)
     counts = {k: 0 for k in totals.keys()}
 
     for inv in invoices:
@@ -713,7 +696,6 @@ def build_travel_summary_context(request: HttpRequest, selected_year: int) -> di
         "net_amount": avg(totals["net_amount"], counts["net_amount"]),
     }
 
-    # Branding (logo URL must be absolute for WeasyPrint)
     brand_name = getattr(request, "brand_name", None) or "Airborne Images"
 
     return {
@@ -765,7 +747,6 @@ def travel_summary(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def travel_summary_pdf_preview(request: HttpRequest) -> HttpResponse:
-    # year handling matches the HTML
     selected_year = request.GET.get("year")
     try:
         selected_year = int(selected_year) if selected_year else now().year
