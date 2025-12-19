@@ -828,7 +828,6 @@ def invoice_summary(request: HttpRequest) -> HttpResponse:
         .filter(date__year=selected_year, user=request.user, mileage_type="Taxable")
     )
 
-    # Expressions reused per-invoice
     miles_expr = ExpressionWrapper(
         Coalesce(F("total"), F("end") - F("begin"), Value(0)),
         output_field=DecimalField(max_digits=12, decimal_places=1),
@@ -838,8 +837,15 @@ def invoice_summary(request: HttpRequest) -> HttpResponse:
         output_field=DecimalField(max_digits=12, decimal_places=2),
     )
 
-    # --- Build per-invoice rows -----------------------------------------
+    # --- Build per-invoice rows + running totals ------------------------
     rows = []
+
+    totals = {
+        "invoice_amount": Decimal("0.00"),
+        "total_expenses": Decimal("0.00"),
+        "net_income": Decimal("0.00"),
+        "taxable_income": Decimal("0.00"),
+    }
 
     for inv in invoices:
         inv_txns = year_txns.filter(event=inv.event, invoice_number=inv.invoice_number)
@@ -848,7 +854,6 @@ def invoice_summary(request: HttpRequest) -> HttpResponse:
         total_expenses = Decimal("0.00")
         deductible_expenses = Decimal("0.00")
 
-        # Same tax logic as other views
         for t in inv_txns:
             if t.trans_type == Transaction.INCOME:
                 total_income += t.amount
@@ -862,17 +867,13 @@ def invoice_summary(request: HttpRequest) -> HttpResponse:
                     and t.sub_cat.slug == "fuel"
                     and t.transport_type == "personal_vehicle"
                 ):
-                    # personal vehicle fuel: non-deductible, still in total_expenses
                     continue
                 else:
                     deductible_expenses += t.amount
 
         has_income_transaction = total_income > 0
-
-        # Effective income baseline (fall back to invoice.amount)
         effective_income = total_income or (inv.amount or Decimal("0.00"))
 
-        # Invoice-specific mileage
         inv_mileage_qs = (
             base_mileage
             .filter(invoice_number=inv.invoice_number)
@@ -887,7 +888,6 @@ def invoice_summary(request: HttpRequest) -> HttpResponse:
         total_mileage_miles = mtotals["total_miles"] or Decimal("0.0")
         mileage_dollars = mtotals["mileage_dollars"] or Decimal("0.00")
 
-        # Net & taxable income
         net_income = effective_income - total_expenses
         taxable_income = effective_income - deductible_expenses - mileage_dollars
         total_cost = total_expenses + mileage_dollars
@@ -907,15 +907,17 @@ def invoice_summary(request: HttpRequest) -> HttpResponse:
             }
         )
 
-    # --- Totals across all invoices for the year (optional, but handy) --
-    total_amount = invoices.aggregate(
-        total=Coalesce(Sum("amount"), Decimal("0.00"))
-    )["total"]
+        # Running totals for footer
+        totals["invoice_amount"] += (inv.amount or Decimal("0.00"))
+        totals["total_expenses"] += (total_expenses or Decimal("0.00"))
+        totals["net_income"] += (net_income or Decimal("0.00"))
+        totals["taxable_income"] += (taxable_income or Decimal("0.00"))
 
+    # --- These can stay if you use them elsewhere on the page -----------
+    total_amount = invoices.aggregate(total=Coalesce(Sum("amount"), Decimal("0.00")))["total"]
     paid_amount = invoices.filter(status__iexact="Paid").aggregate(
         total=Coalesce(Sum("amount"), Decimal("0.00"))
     )["total"]
-
     unpaid_amount = (total_amount or Decimal("0.00")) - (paid_amount or Decimal("0.00"))
 
     context = {
@@ -923,6 +925,7 @@ def invoice_summary(request: HttpRequest) -> HttpResponse:
         "selected_year": selected_year,
         "invoices": invoices,
         "rows": rows,
+        "totals": totals,  # ✅ add this
         "mileage_rate": mileage_rate,
         "total_amount": total_amount,
         "paid_amount": paid_amount,
@@ -930,6 +933,7 @@ def invoice_summary(request: HttpRequest) -> HttpResponse:
         "current_page": "reports",
     }
     return render(request, "money/reports/invoice_summary.html", context)
+
 
 
 
