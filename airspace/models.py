@@ -296,19 +296,33 @@ class WaiverPlanning(models.Model):
         if hasattr(self, "update_decimal_coords"):
             self.update_decimal_coords()
 
-
-
         # -------------------------------------------------
         # Airport FK + distance (keeps legacy nearest_airport)
         # -------------------------------------------------
         try:
-            from airspace.models import Airport
-            from airspace.utils import haversine_nm
+            # Airport is defined in this same models.py, so do NOT import airspace.models
+            # Also avoid importing app utilities here; keep this block self-contained.
+            from decimal import Decimal
+            from math import radians, sin, cos, sqrt, atan2
+
+            NM_PER_KM = Decimal("0.539956803")
+            EARTH_RADIUS_KM = Decimal("6371.0088")
+
+            def haversine_nm(lat1, lon1, lat2, lon2) -> Decimal:
+                phi1 = radians(float(lat1))
+                phi2 = radians(float(lat2))
+                dphi = radians(float(lat2 - lat1))
+                dlambda = radians(float(lon2 - lon1))
+                a = sin(dphi / 2) ** 2 + cos(phi1) * cos(phi2) * sin(dlambda / 2) ** 2
+                c = 2 * atan2(sqrt(a), sqrt(1 - a))
+                km = Decimal(str(float(EARTH_RADIUS_KM) * c))
+                return (km * NM_PER_KM).quantize(Decimal("0.01"))
 
             # If FK not set, try to map from legacy ICAO char field
             if not self.nearest_airport_ref_id:
                 code = (getattr(self, "nearest_airport", "") or "").strip().upper()
                 if code:
+                    # use Airport directly (no self-import)
                     self.nearest_airport_ref = Airport.objects.filter(icao=code).first()
 
             # Only compute distance when we have enough data
@@ -335,7 +349,6 @@ class WaiverPlanning(models.Model):
             pass
 
         super().save(*args, **kwargs)
-
 
     def __str__(self) -> str:
         return f"{self.operation_title} ({self.user})"
