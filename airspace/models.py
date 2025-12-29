@@ -394,11 +394,6 @@ class WaiverApplication(models.Model):
 #               C O N O P S
 #------------------------------------
 
-# airspace/models.py
-
-from django.db import models
-from django.utils import timezone
-
 
 class ConopsSection(models.Model):
     """

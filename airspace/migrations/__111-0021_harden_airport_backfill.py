@@ -10,20 +10,12 @@ from django.db import migrations
 NM_PER_KM = Decimal("0.539956803")
 EARTH_RADIUS_KM = Decimal("6371.0088")
 
-# Finds a 4-letter ICAO token like KIND, KPHX, EGLL, etc.
 ICAO_RE = re.compile(r"\b([A-Z]{4})\b")
 
 
 def normalize_icao(value: str | None) -> str:
     """
-    Normalize a user/legacy nearest_airport string into an ICAO code when possible.
-
-    Supports:
-      - 'KIND'
-      - 'KIND – Indianapolis Intl'
-      - 'Indianapolis Intl (KIND)'
-      - 'Nearest: KIND / IND'
-    Returns '' if nothing useful found.
+    Same normalizer as 0018; keeps behavior consistent.
     """
     s = (value or "").strip().upper()
     if not s:
@@ -33,10 +25,6 @@ def normalize_icao(value: str | None) -> str:
 
 
 def haversine_nm(lat1, lon1, lat2, lon2) -> Decimal:
-    """
-    Compute great-circle distance in nautical miles, rounded to 0.01 NM.
-    Inputs may be Decimal; trig uses float.
-    """
     phi1 = radians(float(lat1))
     phi2 = radians(float(lat2))
     dphi = radians(float(lat2 - lat1))
@@ -53,62 +41,64 @@ def forwards(apps, schema_editor):
     WaiverPlanning = apps.get_model("airspace", "WaiverPlanning")
     Airport = apps.get_model("airspace", "Airport")
 
-    # Select ONLY columns needed; avoids schema-drift failures.
+    # Only backfill rows still missing FK
     rows = (
         WaiverPlanning.objects
+        .filter(nearest_airport_ref_id__isnull=True)
         .exclude(nearest_airport__isnull=True)
         .exclude(nearest_airport="")
         .values_list(
             "id",
             "nearest_airport",
-            "nearest_airport_ref_id",
             "location_latitude",
             "location_longitude",
         )
         .iterator(chunk_size=2000)
     )
 
-    for wp_id, nearest_airport, nearest_ref_id, lat, lon in rows:
-        # Skip if FK already set
-        if nearest_ref_id:
-            continue
+    # Cache ICAO -> (id, lat, lon) to reduce DB hits
+    airport_cache: dict[str, tuple[int, Decimal | None, Decimal | None]] = {}
 
+    for wp_id, nearest_airport, lat, lon in rows:
         code = normalize_icao(nearest_airport)
         if not code:
             continue
 
-        airport = (
-            Airport.objects
-            .filter(icao=code)
-            .values_list("id", "latitude", "longitude")
-            .first()
-        )
-        if not airport:
-            continue
+        if code not in airport_cache:
+            airport = (
+                Airport.objects
+                .filter(icao=code, active=True)
+                .values_list("id", "latitude", "longitude")
+                .first()
+            )
+            if not airport:
+                airport_cache[code] = (0, None, None)  # sentinel for "not found"
+            else:
+                airport_cache[code] = airport
 
-        airport_id, a_lat, a_lon = airport
+        airport_id, a_lat, a_lon = airport_cache[code]
+        if not airport_id:
+            continue
 
         update_kwargs = {"nearest_airport_ref_id": airport_id}
 
-        # Compute distance only when we have both sets of coordinates
         if lat is not None and lon is not None and a_lat is not None and a_lon is not None:
             update_kwargs["distance_to_airport_nm"] = haversine_nm(lat, lon, a_lat, a_lon)
 
-        # Update without calling model.save() (avoid side effects during migrations)
         WaiverPlanning.objects.filter(id=wp_id).update(**update_kwargs)
 
 
 def backwards(apps, schema_editor):
     """
-    Conservative reset: clears FK + computed distance.
+    No-op on purpose.
+    This is a repair/hardening migration; reversing would be surprising.
     """
-    WaiverPlanning = apps.get_model("airspace", "WaiverPlanning")
-    WaiverPlanning.objects.update(nearest_airport_ref_id=None, distance_to_airport_nm=None)
+    pass
 
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("airspace", "0017_waiverplanning_distance_to_airport_nm_and_more"),
+        ("airspace", "0020_alter_waiverplanning_options"),
     ]
 
     operations = [

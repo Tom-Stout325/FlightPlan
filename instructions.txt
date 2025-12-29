@@ -71,6 +71,10 @@ Links:
 
 
 
+Production postgresql shell:
+heroku run -a flightplan-airborne -- python manage.py dbshell
+
+
 
 
 Get into local psql:
