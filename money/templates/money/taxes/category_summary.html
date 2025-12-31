@@ -16,11 +16,17 @@
         <div class="col-auto">
           <label for="year" class="form-label fw-bold">Select Year:</label>
         </div>
+
         <div class="col-auto">
           <select name="year" id="year" class="form-select" onchange="this.form.submit()">
-            <option value="">All Years</option>
-            {% for year in available_years %}
-              <option value="{{ year }}" {% if selected_year|slugify == year|slugify %}selected{% endif %}>{{ year }}</option>
+            <option value="all" {% if selected_year == "All" %}selected{% endif %}>
+              All Years
+            </option>
+
+            {% for y in available_years %}
+              <option value="{{ y }}" {% if selected_year|add:0 == y %}selected{% endif %}>
+                {{ y }}
+              </option>
             {% endfor %}
           </select>
         </div>
@@ -30,10 +36,10 @@
 
   <!-- Action Buttons -->
   <div class="text-center mb-4">
-    <a href="{% url 'money:category_summary_pdf' %}?year={{ selected_year }}&preview=1" target="_blank" class="btn btn-outline-secondary me-2">
+    <a href="{% url 'money:category_summary_pdf' %}?year={% if selected_year == 'All' %}all{% else %}{{ selected_year }}{% endif %}&preview=1" target="_blank" class="btn btn-outline-secondary me-2">
       <i class="fa-solid fa-eye"></i> Preview PDF
     </a>
-    <a href="{% url 'money:category_summary_pdf' %}?year={{ selected_year }}" class="btn btn-outline-danger">
+    <a href="{% url 'money:category_summary_pdf' %}?year={% if selected_year == 'All' %}all{% else %}{{ selected_year }}{% endif %}&preview=1" class="btn btn-outline-danger">
       <i class="fa-solid fa-file-pdf"></i> Download PDF
     </a>
   </div>

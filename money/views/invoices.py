@@ -47,7 +47,7 @@ from ..forms.invoices.invoices import (
 )
 from ..models import *
 
-from ..models import Client, ClientProfile
+from ..models import Client, CompanyProfile
 from money.models import Miles
 
 
@@ -152,7 +152,7 @@ def _today_in_profile_tz():
     return date.today()
 
 
-def _compute_due(issue_dt, client_profile: ClientProfile | None):
+def _compute_due(issue_dt, client_profile: CompanyProfile | None):
     net_days = 30
     if client_profile and isinstance(client_profile.default_net_days, int):
         net_days = max(0, client_profile.default_net_days)
@@ -170,7 +170,7 @@ class InvoiceCreateView(LoginRequiredMixin, CreateView):
 
     def get_initial(self):
         initial = super().get_initial()
-        profile = ClientProfile.get_active()
+        profile = CompanyProfile.get_active()
         issue_dt = _today_in_profile_tz()
         # Only set if the form doesn't already supply initial values
         initial.setdefault("date", issue_dt)
@@ -197,7 +197,7 @@ class InvoiceCreateView(LoginRequiredMixin, CreateView):
         try:
             with transaction.atomic():
                 invoice = form.save(commit=False)
-                profile = ClientProfile.get_active()
+                profile = CompanyProfile.get_active()
                 if not getattr(invoice, "date", None):
                     invoice.date = _today_in_profile_tz()
                 if not getattr(invoice, "due", None):
@@ -274,7 +274,7 @@ class InvoiceUpdateView(LoginRequiredMixin, UpdateView):
         try:
             with transaction.atomic():
                 invoice = form.save(commit=False)
-                profile = ClientProfile.get_active()
+                profile = CompanyProfile.get_active()
                 if not getattr(invoice, "date", None):
                     invoice.date = _today_in_profile_tz()
                 if not getattr(invoice, "due", None) and getattr(invoice, "date", None):
@@ -457,7 +457,7 @@ def invoice_review(request, pk):
 
     base_mileage = (
         Miles.objects
-        .filter(user=request.user, mileage_type="Taxable")
+        .filter(user=request.user, mileage_type="Business")
         .select_related("client", "event")
     )
 
@@ -612,7 +612,7 @@ def invoice_review_pdf(request, pk):
 
     base_mileage = (
         Miles.objects
-        .filter(invoice_number=invoice.invoice_number, user=request.user, mileage_type="Taxable")
+        .filter(invoice_number=invoice.invoice_number, user=request.user, mileage_type="Business")
         .select_related('client', 'event')
         .order_by('date')
     )
@@ -623,7 +623,7 @@ def invoice_review_pdf(request, pk):
     )
     amount_expr = Case(
         When(
-            mileage_type="Taxable",
+            mileage_type="Business",
             then=ExpressionWrapper(
                 F('miles') * Value(rate),
                 output_field=DecimalField(max_digits=12, decimal_places=2),
@@ -1083,7 +1083,7 @@ class InvoiceV2DetailView(LoginRequiredMixin, DetailView):
         base_mileage = Miles.objects.filter(
             invoice_v2=invoice,
             user=self.request.user,
-            mileage_type="Taxable",
+            mileage_type="Business",
         )
 
         miles_expr = ExpressionWrapper(
@@ -1209,7 +1209,7 @@ class InvoiceV2MarkPaidView(LoginRequiredMixin, View):
 class InvoiceV2IssueView(LoginRequiredMixin, View):
     """
     POST-only view to 'issue' an invoice:
-    - snapshots business details from the active ClientProfile
+    - snapshots business details from the active CompanyProfile
     - sets issued_at
     - generates a permanent PDF snapshot
     """
@@ -1228,7 +1228,7 @@ class InvoiceV2IssueView(LoginRequiredMixin, View):
             return redirect("money:invoice_v2_edit", pk=invoice.pk)
 
         # Get the active client profile for branding/snapshot
-        profile = ClientProfile.objects.filter(is_active=True).first()
+        profile = CompanyProfile.objects.filter(is_active=True).first()
         if not profile:
             messages.error(
                 request,
@@ -1356,8 +1356,8 @@ def invoice_v2_send_email(request, pk):
         messages.error(request, "This client does not have an email address.")
         return redirect("money:invoice_v2_detail", pk=invoice.pk)
 
-    # Brand info from active ClientProfile
-    brand_profile = ClientProfile.get_active()
+    # Brand info from active CompanyProfile
+    brand_profile = CompanyProfile.get_active()
     brand_name = brand_profile.name_for_display if brand_profile else "Invoice"
 
     # ---- PDF bytes: prefer stored snapshot, else generate now ----
@@ -1434,7 +1434,7 @@ def invoice_v2_review(request, pk):
     base_mileage = Miles.objects.filter(
         invoice_v2=invoice,
         user=request.user,
-        mileage_type="Taxable",
+        mileage_type="Business",
     ).select_related("client", "event")
 
     miles_expr = ExpressionWrapper(

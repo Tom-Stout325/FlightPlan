@@ -441,8 +441,11 @@ class ConopsSection(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ("application", "section_key")
+        constraints = [
+            models.UniqueConstraint(fields=["application", "section_key"], name="uniq_conopssection_app_sectionkey"),
+        ]
         ordering = ["id"]
+
 
     def __str__(self):
         return f"{self.application_id} – {self.title}"

@@ -3,13 +3,16 @@ from django.utils.safestring import mark_safe
 
 from .models import (
     Client,
-    ClientProfile,
+    CompanyProfile,
     Invoice,
     InvoiceItem,
     InvoiceV2,
     InvoiceItemV2,
     MileageRate,
     Miles,
+    Vehicle,
+    VehicleYear,
+    VehicleExpense,
     RecurringTransaction,
     Service,
     Team,
@@ -19,16 +22,51 @@ from .models import (
     Event,
 )
 
+
 # -----------------------------
 # Core money app admin classes
 # -----------------------------
 
 
+@admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
-    list_display = ["date", "category", "sub_cat", "transaction", "event", "invoice_number"]
-    list_filter = ("category", "sub_cat", "event", "date")
+    list_display = (
+        "date",
+        "trans_type",
+        "category",
+        "sub_cat",
+        "transaction",
+        "event",
+        "invoice_number",
+        "amount",
+        "deductible_amount_display",
+    )
+    list_filter = ("trans_type", "category", "sub_cat", "event", "date")
     search_fields = ("transaction", "invoice_number")
+    date_hierarchy = "date"
+    ordering = ("-date",)
 
+    @admin.display(description="Deductible")
+    def deductible_amount_display(self, obj):
+        return obj.deductible_amount
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """
+        Admin UX polish:
+        - If a category is selected (on add/edit), only show subcategories in that category.
+        """
+        if db_field.name == "sub_cat":
+            # Try to pull category from:
+            # 1) POST (when form submits/changes)
+            # 2) GET (when adding with params)
+            category_id = request.POST.get("category") or request.GET.get("category")
+
+            if category_id and str(category_id).isdigit():
+                kwargs["queryset"] = SubCategory.objects.filter(category_id=int(category_id)).order_by("sub_cat")
+            else:
+                kwargs["queryset"] = SubCategory.objects.all().order_by("category__category", "sub_cat")
+
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 class TeamAdmin(admin.ModelAdmin):
     list_display = ["name", "id"]
@@ -54,10 +92,11 @@ class CategoryAdmin(admin.ModelAdmin):
     search_fields = ("category",)
 
 
+@admin.register(SubCategory)
 class SubCategoryAdmin(admin.ModelAdmin):
-    list_display = ["sub_cat", "id", "category"]
-    list_filter = ("category",)
-    search_fields = ("sub_cat",)
+    list_display = ("sub_cat", "category", "include_in_tax_reports")
+    list_filter = ("include_in_tax_reports", "category")
+    search_fields = ("sub_cat", "slug")
 
 
 class RecurringTransactionAdmin(admin.ModelAdmin):
@@ -87,19 +126,16 @@ class EventAdmin(admin.ModelAdmin):
 
 
 # -----------------------------
-# ClientProfile admin (branding)
+# CompanyProfile admin (branding)
 # -----------------------------
 
-
-@admin.register(ClientProfile)
-class ClientProfileAdmin(admin.ModelAdmin):
+@admin.register(CompanyProfile)
+class CompanyProfileAdmin(admin.ModelAdmin):
     list_display = (
         "display_name_or_legal",
         "slug",
-        "city",
-        "state_province",
-        "postal_code",
         "is_active",
+        "vehicle_expense_method",
         "updated_at",
     )
     list_filter = ("is_active", "state_province", "city")
@@ -107,15 +143,13 @@ class ClientProfileAdmin(admin.ModelAdmin):
         "legal_name",
         "display_name",
         "slug",
-        "city",
-        "postal_code",
-        "support_email",
+        "vehicle_expense_method",
     )
     ordering = ("-is_active", "slug")
     actions = ("make_active",)
 
     readonly_fields = ("created_at", "updated_at", "logo_preview")
-    # Make slug read-only after first save (see get_readonly_fields)
+
     fieldsets = (
         ("Identity & Branding", {
             "fields": (
@@ -126,6 +160,7 @@ class ClientProfileAdmin(admin.ModelAdmin):
                 ("brand_color_primary", "brand_color_secondary"),
                 ("website",),
                 ("logo_preview",),
+                ("vehicle_expense_method",),
             )
         }),
         ("Address & Contact", {
@@ -151,7 +186,6 @@ class ClientProfileAdmin(admin.ModelAdmin):
                 ("default_footer_text",),
                 ("default_currency", "default_locale", "timezone"),
                 ("pdf_header_layout", "header_logo_max_width_px"),
-   
             )
         }),
         ("Status", {
@@ -161,19 +195,18 @@ class ClientProfileAdmin(admin.ModelAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         ro = list(super().get_readonly_fields(request, obj))
-        if obj:  # editing existing instance
-            ro.append("slug")  # enforce immutability in the admin too
+        if obj:
+            ro.append("slug")
         return ro
 
-    @admin.display(description="Client")
-    def display_name_or_legal(self, obj: ClientProfile):
+    @admin.display(description="Company")
+    def display_name_or_legal(self, obj: CompanyProfile):
         return obj.display_name or obj.legal_name
 
     @admin.display(description="Logo preview")
-    def logo_preview(self, obj: ClientProfile):
+    def logo_preview(self, obj: CompanyProfile):
         if not obj or not obj.logo:
             return "—"
-        # Keep it small to avoid bloating the change form
         return mark_safe(
             f'<img src="{obj.logo.url}" '
             f'style="max-width: 240px; height:auto; border:1px solid #ddd; '
@@ -182,44 +215,30 @@ class ClientProfileAdmin(admin.ModelAdmin):
 
     @admin.action(description="Mark selected as Active (enforce single active profile)")
     def make_active(self, request, queryset):
-        # Allow only one selection for clarity
         if queryset.count() != 1:
-            self.message_user(
-                request,
-                "Select exactly one profile to activate.",
-                level=messages.WARNING,
-            )
+            self.message_user(request, "Select exactly one profile to activate.", level=messages.WARNING)
             return
+
         active_obj = queryset.first()
-        # Deactivate others
-        ClientProfile.objects.exclude(pk=active_obj.pk).update(is_active=False)
-        # Activate target
+        CompanyProfile.objects.exclude(pk=active_obj.pk).update(is_active=False)
+
         active_obj.is_active = True
-        active_obj.full_clean()  # will run model.clean validations
+        active_obj.full_clean()
         active_obj.save(update_fields=["is_active", "updated_at"])
-        self.message_user(
-            request,
-            f"Activated: {active_obj}",
-            level=messages.SUCCESS,
-        )
+
+        self.message_user(request, f"Activated: {active_obj}", level=messages.SUCCESS)
 
     def save_model(self, request, obj, form, change):
-        # If this is being saved active=True, ensure all others become inactive
         super().save_model(request, obj, form, change)
         if obj.is_active:
-            ClientProfile.objects.exclude(pk=obj.pk).update(is_active=False)
+            CompanyProfile.objects.exclude(pk=obj.pk).update(is_active=False)
 
 
 # -----------------------------
 # InvoiceV2 + InvoiceItemV2 admin
 # -----------------------------
 
-
 class InvoiceItemV2Inline(admin.TabularInline):
-    """
-    Inline items for InvoiceV2.
-    User selects sub_cat; category is auto-derived in the model.
-    """
     model = InvoiceItemV2
     extra = 1
     fields = ("description", "qty", "price", "sub_cat", "line_total_display")
@@ -248,19 +267,12 @@ class InvoiceV2Admin(admin.ModelAdmin):
         "is_paid",
         "net_income_display",
     )
-    list_filter = (
-        "status",
-        "client",
-        "event",
-        "date",
-    )
+    list_filter = ("status", "client", "event", "date")
     search_fields = (
         "invoice_number",
         "client__business",
         "client__first",
         "client__last",
-        "event_name",
-        "location",
     )
     date_hierarchy = "date"
     ordering = ("-date", "invoice_number")
@@ -282,8 +294,6 @@ class InvoiceV2Admin(admin.ModelAdmin):
                 "invoice_number",
                 "client",
                 "event",
-                "event_name",
-                "location",
                 "service",
             )
         }),
@@ -338,12 +348,6 @@ class InvoiceV2Admin(admin.ModelAdmin):
 
     @admin.action(description="Mark selected as Paid (use SubCategory from items)")
     def mark_as_paid_from_items(self, request, queryset):
-        """
-        Mark selected invoices as Paid and create matching income Transactions.
-
-        Uses the SubCategory from the first invoice item to determine the
-        income category/subcategory for each invoice.
-        """
         success_count = 0
         skipped_count = 0
         error_count = 0
@@ -379,15 +383,7 @@ class InvoiceV2Admin(admin.ModelAdmin):
 
 @admin.register(InvoiceItemV2)
 class InvoiceItemV2Admin(admin.ModelAdmin):
-    list_display = (
-        "invoice",
-        "description",
-        "qty",
-        "price",
-        "line_total_display",
-        "sub_cat",
-        "category",
-    )
+    list_display = ("invoice", "description", "qty", "price", "line_total_display", "sub_cat", "category")
     list_filter = ("invoice__client", "sub_cat", "category")
     search_fields = ("description", "invoice__invoice_number")
 
@@ -395,6 +391,102 @@ class InvoiceItemV2Admin(admin.ModelAdmin):
         return obj.line_total
 
     line_total_display.short_description = "Line total"
+
+
+# -----------------------------
+# Mileage models
+# -----------------------------
+
+class VehicleYearInline(admin.TabularInline):
+    model = VehicleYear
+    extra = 0
+    fields = ("tax_year", "begin_mileage", "end_mileage")
+    ordering = ("-tax_year",)
+
+
+class VehicleExpenseInline(admin.TabularInline):
+    model = VehicleExpense
+    extra = 0
+    fields = ("date", "expense_type", "description", "vendor", "amount", "odometer", "is_tax_related")
+    ordering = ("-date",)
+    show_change_link = True
+
+
+@admin.register(Vehicle)
+class VehicleAdmin(admin.ModelAdmin):
+    list_display = ("name", "user", "year", "make", "model", "plate", "is_active", "placed_in_service_date", "placed_in_service_mileage")
+    list_filter = ("is_active", "year", "make")
+    search_fields = ("name", "plate", "vin", "make", "model")
+    inlines = [VehicleYearInline, VehicleExpenseInline]
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(user=request.user)
+
+
+@admin.register(VehicleYear)
+class VehicleYearAdmin(admin.ModelAdmin):
+    list_display = ("vehicle", "tax_year", "begin_mileage", "end_mileage")
+    list_filter = ("tax_year",)
+    search_fields = ("vehicle__name", "vehicle__plate", "vehicle__vin")
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request).select_related("vehicle", "vehicle__user")
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(vehicle__user=request.user)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if not request.user.is_superuser and db_field.name == "vehicle":
+            kwargs["queryset"] = Vehicle.objects.filter(user=request.user)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+@admin.register(VehicleExpense)
+class VehicleExpenseAdmin(admin.ModelAdmin):
+    list_display = ("date", "vehicle", "expense_type", "description", "vendor", "amount", "odometer", "is_tax_related")
+    list_filter = ("expense_type", "is_tax_related")
+    search_fields = ("vehicle__name", "description", "vendor", "vehicle__plate", "vehicle__vin")
+    date_hierarchy = "date"
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request).select_related("vehicle", "user")
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(user=request.user)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if not request.user.is_superuser and db_field.name == "vehicle":
+            kwargs["queryset"] = Vehicle.objects.filter(user=request.user)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+@admin.register(Miles)
+class MilesAdmin(admin.ModelAdmin):
+    list_display = ("date", "vehicle", "client", "event", "invoice_display", "begin", "end", "total", "mileage_type")
+    list_filter = ("mileage_type", "vehicle", "client")
+    search_fields = ("invoice_number", "event__title", "vehicle__name", "vehicle__plate")
+    date_hierarchy = "date"
+    ordering = ("-date",)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request).select_related("vehicle", "client", "event", "invoice_v2", "user")
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(user=request.user)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if not request.user.is_superuser and db_field.name == "vehicle":
+            kwargs["queryset"] = Vehicle.objects.filter(user=request.user, is_active=True)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    @admin.display(description="Invoice")
+    def invoice_display(self, obj):
+        if obj.invoice_v2:
+            return obj.invoice_v2.invoice_number
+        return obj.invoice_number or ""
 
 
 # -----------------------------
@@ -407,9 +499,6 @@ admin.site.register(MileageRate)
 admin.site.register(Service)
 admin.site.register(Team, TeamAdmin)
 admin.site.register(Category, CategoryAdmin)
-admin.site.register(SubCategory, SubCategoryAdmin)
-admin.site.register(Transaction, TransactionAdmin)
-admin.site.register(Miles)
 admin.site.register(RecurringTransaction, RecurringTransactionAdmin)
-admin.site.register(Invoice, InvoiceAdmin)  # legacy
+admin.site.register(Invoice, InvoiceAdmin)
 admin.site.register(Event, EventAdmin)

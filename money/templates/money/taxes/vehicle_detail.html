@@ -1,0 +1,122 @@
+{% extends "index.html" %}
+{% load humanize %}
+
+{% block title %}Vehicle: {{ vehicle.name }}{% endblock %}
+
+{% block content %}
+<div class="container my-4" style="max-width: 1000px;">
+
+  <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+    <div>
+      <h1 class="h5 mb-1">{{ vehicle.name }}</h1>
+      <div class="text-muted small">{{ vehicle.year }} {{ vehicle.make }} {{ vehicle.model }}{% if vehicle.plate %} • {{ vehicle.plate }}{% endif %}</div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <a href="{% url 'money:vehicle_list' %}" class="btn btn-outline-secondary btn-sm">← Vehicles</a>
+        <a href="{% url 'money:vehicle_edit' vehicle.pk %}" class="btn btn-outline-primary btn-sm">
+            <i class="fa-solid fa-pen-to-square"></i> Edit
+        </a>
+    </div>
+    </div>
+
+  <!-- Year selector -->
+  <form method="get" class="card shadow-sm mb-3">
+    <div class="card-body d-flex flex-column flex-md-row gap-2 align-items-md-end">
+      <div class="flex-grow-1">
+        <label class="form-label mb-1">Tax Year</label>
+        <select name="year" class="form-select" onchange="this.form.submit();">
+          {% for y in year_choices %}
+            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="text-muted small ms-md-2">
+        Rate: ${{ mileage_rate|floatformat:4 }}/mile
+      </div>
+    </div>
+  </form>
+
+  <!-- Totals -->
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-md-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small">Business Miles ({{ selected_year }})</div>
+          <div class="h4 mb-0">{{ taxable_miles|floatformat:1|intcomma }}</div>
+          <div class="text-muted small mt-2">Taxable Dollars</div>
+          <div class="h5 mb-0">${{ taxable_dollars|floatformat:2|intcomma }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-md-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small">Reimbursed Miles ({{ selected_year }})</div>
+          <div class="h4 mb-0">{{ reimbursed_miles|floatformat:1|intcomma }}</div>
+          <div class="text-muted small mt-2">Total Miles</div>
+          <div class="h5 mb-0">{{ total_miles|floatformat:1|intcomma }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-md-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small">VehicleYear Odometer</div>
+          {% if year_record %}
+            <div class="small">Begin: <strong>{{ year_record.begin_mileage|floatformat:1|intcomma }}</strong></div>
+            <div class="small">End: <strong>{{ year_record.end_mileage|floatformat:1|intcomma }}</strong></div>
+          {% else %}
+            <div class="text-muted small">No VehicleYear record for {{ selected_year }}.</div>
+          {% endif %}
+          <div class="text-muted small mt-2">Expenses (optional)</div>
+          <div class="h5 mb-0">${{ total_expenses|floatformat:2|intcomma }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Miles list (this vehicle/year) -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+      <strong>Mileage Entries – {{ selected_year }}</strong>
+      <a href="{% url 'money:mileage_create' %}" class="btn btn-sm btn-primary">Add Mileage</a>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-striped mb-0 align-middle">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th class="d-none d-md-table-cell">Client</th>
+              <th class="d-none d-md-table-cell">Invoice</th>
+              <th class="d-none d-md-table-cell">Event</th>
+              <th class="text-end">Miles</th>
+              <th class="text-end">Type</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in miles_qs %}
+              <tr>
+                <td>{{ m.date|date:"n/d/y" }}</td>
+                <td class="d-none d-md-table-cell">{{ m.client|default:"—" }}</td>
+                <td class="d-none d-md-table-cell">
+                  {% if m.invoice_v2 %}{{ m.invoice_v2.invoice_number }}{% else %}{{ m.invoice_number|default:"—" }}{% endif %}
+                </td>
+                <td class="d-none d-md-table-cell">{{ m.event|default:"—" }}</td>
+                <td class="text-end">{{ m.total|floatformat:1|intcomma }}</td>
+                <td class="text-end">{{ m.mileage_type }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="6" class="text-center py-4">No mileage entries for this vehicle in {{ selected_year }}.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

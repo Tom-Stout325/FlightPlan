@@ -1,7 +1,7 @@
-from .models import ClientProfile
+from .models import CompanyProfile
 
 def client_profile(request):
-    profile = ClientProfile.get_active()
+    profile = CompanyProfile.get_active()
     absolute_logo_url = None
     if profile and getattr(profile.logo, "url", None) and request:
         try:

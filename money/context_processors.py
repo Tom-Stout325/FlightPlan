@@ -1,8 +1,8 @@
-from .models import ClientProfile
+from .models import CompanyProfile
 import re
 
 def client_profile(request):
-    profile = ClientProfile.get_active()
+    profile = CompanyProfile.get_active()
 
     absolute_logo_url = None
     if (
@@ -32,4 +32,6 @@ def client_profile(request):
         "BRAND_PROFILE": profile,
         "BRAND_LOGO_URL": absolute_logo_url,
         "formatted_brand_phone": formatted_phone,
-    }
+         "vehicle_expense_method": getattr(profile, "vehicle_expense_method", "mileage"),
+}
+    

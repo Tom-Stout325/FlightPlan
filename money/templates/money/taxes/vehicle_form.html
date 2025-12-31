@@ -1,0 +1,174 @@
+{% extends "index.html" %}
+{% load humanize %}
+
+{% block title %}{% if mode == "edit" %}Edit Vehicle{% else %}Add Vehicle{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container my-4" style="max-width: 900px;">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h1 class="h4 mb-0">
+        {% if mode == "edit" %}
+          Edit Vehicle{% if vehicle %}: {{ vehicle.name }}{% endif %}
+        {% else %}
+          Add Vehicle
+        {% endif %}
+      </h1>
+      <div class="text-muted small">Track vehicles and yearly odometer readings for IRS mileage logs.</div>
+    </div>
+
+    <a href="{% url 'money:mileage_log' %}" class="btn btn-outline-secondary btn-sm">
+      ← Back to Mileage Log
+    </a>
+  </div>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    <!-- Vehicle card -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-light">
+        <strong>Vehicle Details</strong>
+      </div>
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="row g-3">
+          <div class="col-12 col-md-6">
+            <label class="form-label">Name</label>
+            {{ form.name }}
+            {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-12 col-md-3">
+            <label class="form-label">Vehicle Year</label>
+            {{ form.year }}
+            {% if form.year.errors %}<div class="text-danger small">{{ form.year.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-12 col-md-3">
+            <div class="form-check mt-4 pt-2">
+              {{ form.is_active }}
+              <label class="form-check-label">Active</label>
+            </div>
+            {% if form.is_active.errors %}<div class="text-danger small">{{ form.is_active.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">Make</label>
+            {{ form.make }}
+            {% if form.make.errors %}<div class="text-danger small">{{ form.make.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">Model</label>
+            {{ form.model }}
+            {% if form.model.errors %}<div class="text-danger small">{{ form.model.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">Placed in Service Date</label>
+            {{ form.placed_in_service_date }}
+            {% if form.placed_in_service_date.errors %}<div class="text-danger small">{{ form.placed_in_service_date.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">Placed in Service Mileage</label>
+            {{ form.placed_in_service_mileage }}
+            {% if form.placed_in_service_mileage.errors %}<div class="text-danger small">{{ form.placed_in_service_mileage.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Plate</label>
+            {{ form.plate }}
+            {% if form.plate.errors %}<div class="text-danger small">{{ form.plate.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-12 col-md-8">
+            <label class="form-label">VIN</label>
+            {{ form.vin }}
+            <div class="form-text">Optional. Helpful for identifying the vehicle across years.</div>
+            {% if form.vin.errors %}<div class="text-danger small">{{ form.vin.errors }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VehicleYear card -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <strong>Yearly Odometer Records</strong>
+        <span class="text-muted small">Add your Year Begin / Year End mileage here.</span>
+      </div>
+
+        <div class="card-body">
+          {{ year_formset.management_form }}
+
+          {% if year_formset.non_form_errors %}
+            <div class="alert alert-danger">{{ year_formset.non_form_errors }}</div>
+          {% endif %}
+
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead>
+                <tr>
+                  <th style="min-width: 120px;">Tax Year</th>
+                  <th style="min-width: 160px;">Begin Mileage</th>
+                  <th style="min-width: 160px;">End Mileage</th>
+                  <th style="width: 1%;">Delete</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for yf in year_formset %}
+                  <tr>
+                    <td>
+                      {{ yf.tax_year }}
+                      {% if yf.tax_year.errors %}<div class="text-danger small">{{ yf.tax_year.errors }}</div>{% endif %}
+                    </td>
+                    <td>
+                      {{ yf.begin_mileage }}
+                      {% if yf.begin_mileage.errors %}<div class="text-danger small">{{ yf.begin_mileage.errors }}</div>{% endif %}
+                    </td>
+                    <td>
+                      {{ yf.end_mileage }}
+                      {% if yf.end_mileage.errors %}<div class="text-danger small">{{ yf.end_mileage.errors }}</div>{% endif %}
+                    </td>
+                    <td class="text-center">
+                      {% if yf.instance.pk %}
+                        <div class="form-check d-inline-block">
+                          {{ yf.DELETE }}
+                        </div>
+                      {% else %}
+                        <span class="text-muted small">—</span>
+                      {% endif %}
+                    </td>
+                    {{ yf.id }}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+
+        <div class="text-muted small">
+          Tip: add one row per year you plan to report mileage for.
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex flex-column flex-sm-row gap-2 justify-content-end">
+      <a href="{% url 'money:mileage_log' %}" class="btn btn-outline-secondary">
+        Cancel
+      </a>
+      <button type="submit" class="btn btn-primary">
+        {% if mode == "edit" %}Save Changes{% else %}Create Vehicle{% endif %}
+      </button>
+    </div>
+
+  </form>
+</div>
+{% endblock %}

@@ -59,7 +59,8 @@
               <div class="col-md-6 col-lg-3">
                 <label class="form-label">Year</label>
                 <select name="year" class="form-select">
-                  <option value="">All Years</option>
+                  <option value="all" {% if selected_year == "All" %}selected{% endif %}>All Years</option>
+
                   {% for y in years %}
                     <option value="{{ y }}" {% if selected_year == y|stringformat:"s" %}selected{% endif %}>{{ y }}</option>
                   {% endfor %}

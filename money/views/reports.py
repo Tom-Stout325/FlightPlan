@@ -27,6 +27,10 @@ from money.models import (
 )
 
 
+def get_selected_year(request):
+    year_param = request.GET.get("year")
+    current_year = timezone.localdate().year
+    return int(year_param) if year_param and year_param.isdigit() else current_year
 
 
 REPORT_CARDS = [
@@ -102,7 +106,7 @@ REPORT_CARDS = [
         "bg_color": "#eaf3fb",
         "text_class": "text-primary",
     },
-        {
+    {
         "key": "travel_expenses",
         "title": "Travel Expenses",
         "subtitle": "Analyze receipts travel expenses for events.",
@@ -111,6 +115,16 @@ REPORT_CARDS = [
         "bg_color": "#eaf3fb",
         "text_class": "text-primary",
     },
+    {
+        "key": "tax_reports",
+        "title": "Tax Reports",
+        "subtitle": "Tax-filtered view (excludes sub-categories not marked for tax).",
+        "url_name": "money:tax_category_summary",
+        "icon": "fa-solid fa-receipt",
+        "bg_color": "#f6f1ff",
+        "text_class": "text-primary",
+},
+
 ]
 
 
@@ -250,6 +264,8 @@ def nhra_summary_report(request):
 
 
 
+
+
 @login_required
 def travel_expense_analysis(request):
     current_year = now().year
@@ -367,6 +383,7 @@ def nhra_summary_report_pdf(request):
         'event__name', 'sub_cat__sub_cat', 'date__year'
     ).annotate(total=Sum('amount')).order_by('event__name', 'sub_cat__sub_cat', 'date__year')
     result = defaultdict(lambda: defaultdict(lambda: {y: 0 for y in years}))
+
     for item in summary_data:
         event = item['event__name'] or 'Unspecified'
         subcategory = item['sub_cat__sub_cat']
@@ -434,154 +451,6 @@ def _matches_subcat(t: Transaction, slug_candidates=None, name_candidates=None) 
 
 
 
-
-
-
-@login_required
-def travel_summary(request: HttpRequest) -> HttpResponse:
-    # --- Year selection -------------------------------------------------
-    all_years_qs = (
-        Invoice.objects
-        .exclude(date__isnull=True)
-        .values_list("date__year", flat=True)
-        .distinct()
-        .order_by("-date__year")
-    )
-    years = list(all_years_qs) or [now().year]
-
-    selected_year = request.GET.get("year")
-    try:
-        selected_year = int(selected_year) if selected_year else years[0]
-    except (TypeError, ValueError):
-        selected_year = years[0]
-
-    invoices = (
-        Invoice.objects
-        .select_related("event", "client", "service")
-        .filter(date__year=selected_year)
-        .order_by("date", "invoice_number")
-    )
-
-    year_txns = (
-        Transaction.objects
-        .filter(date__year=selected_year)
-        .select_related("sub_cat__category", "event")
-    )
-
-    SLUG_AIRFARE = "airfare"
-    SLUG_HOTELS = "hotels"
-    SLUG_CAR_RENTAL = "car-rental"
-    SLUG_FUEL = "fuel"
-
-    rows = []
-
-    totals = {
-        "invoice_amount": Decimal("0.00"),
-        "airfare": Decimal("0.00"),
-        "hotels": Decimal("0.00"),
-        "car_rental": Decimal("0.00"),
-        "fuel": Decimal("0.00"),
-        "net_amount": Decimal("0.00"),
-    }
-
-    counts = {
-        "invoice_amount": 0,  
-        "airfare": 0,
-        "hotels": 0,
-        "car_rental": 0,
-        "fuel": 0,
-        "net_amount": 0, 
-    }
-
-    def q2(x: Decimal) -> Decimal:
-        return (x or Decimal("0.00")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-    for inv in invoices:
-        inv_txns = year_txns.filter(event=inv.event, invoice_number=inv.invoice_number)
-
-        airfare = Decimal("0.00")
-        hotels = Decimal("0.00")
-        car_rental = Decimal("0.00")
-        fuel = Decimal("0.00")
-
-        for t in inv_txns:
-            if t.trans_type != Transaction.EXPENSE or not t.sub_cat:
-                continue
-
-            slug = (t.sub_cat.slug or "").strip().lower()
-            amt = t.amount or Decimal("0.00")
-
-            if slug == SLUG_AIRFARE:
-                airfare += amt
-            elif slug == SLUG_HOTELS:
-                hotels += amt
-            elif slug == SLUG_CAR_RENTAL:
-                car_rental += amt
-            elif slug == SLUG_FUEL:
-                fuel += amt
-
-
-        invoice_amount = inv.amount or Decimal("0.00")
-        travel_total = airfare + hotels + car_rental + fuel
-        net_amount = invoice_amount - travel_total
-
-        rows.append(
-            {
-                "invoice": inv,
-                "invoice_amount": invoice_amount,
-                "airfare": airfare,
-                "hotels": hotels,
-                "car_rental": car_rental,
-                "fuel": fuel,
-                "net_amount": net_amount,
-            }
-        )
-
-        totals["invoice_amount"] += invoice_amount
-        totals["airfare"] += airfare
-        totals["hotels"] += hotels
-        totals["car_rental"] += car_rental
-        totals["fuel"] += fuel
-        totals["net_amount"] += net_amount
-
-        if invoice_amount != 0:
-            counts["invoice_amount"] += 1
-        if airfare > 0:
-            counts["airfare"] += 1
-        if hotels > 0:
-            counts["hotels"] += 1
-        if car_rental > 0:
-            counts["car_rental"] += 1
-        if fuel > 0:
-            counts["fuel"] += 1
-        if net_amount != 0:
-            counts["net_amount"] += 1
-
-    def avg(total: Decimal, denom: int) -> Decimal:
-        if not denom:
-            return Decimal("0.00")
-        return q2(total / Decimal(denom))
-
-    averages = {
-        "invoice_amount": avg(totals["invoice_amount"], counts["invoice_amount"]),
-        "airfare": avg(totals["airfare"], counts["airfare"]),
-        "hotels": avg(totals["hotels"], counts["hotels"]),
-        "car_rental": avg(totals["car_rental"], counts["car_rental"]),
-        "fuel": avg(totals["fuel"], counts["fuel"]),
-        "net_amount": avg(totals["net_amount"], counts["net_amount"]),
-    }
-
-    context = {
-        "years": years,
-        "selected_year": selected_year,
-        "rows": rows,
-        "totals": totals,
-        "averages": averages,
-        "counts": counts, 
-        "invoice_count": invoices.count(),
-        "current_page": "reports",
-    }
-    return render(request, "money/reports/travel_summary.html", context)
 
 
 

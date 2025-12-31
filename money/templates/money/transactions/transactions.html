@@ -81,7 +81,8 @@
 
         <div class="col-12 col-md-3">
           <select name="year" class="form-select">
-            <option value="">All Years</option>
+            <option value="all" {% if selected_year == "All" %}selected{% endif %}>All Years</option>
+
             {% for year in years %}
               <option value="{{ year }}" {% if selected_year == year %}selected{% endif %}>
                 {{ year }}

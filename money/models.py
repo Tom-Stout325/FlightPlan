@@ -1,27 +1,15 @@
-from django.db import models
-
-# Create your models here.
-from django.core.validators import MinValueValidator
-from django.contrib.auth.models import User
-from datetime import timedelta, date
 from decimal import Decimal
-from django.conf import settings
-from django.utils.text import slugify
-from django import forms
-from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
-from django.utils import timezone
-from django.apps import apps
-from django.db.models.functions import Cast
 
-from django.db.models import (
-    F,
-    Sum,
-    DecimalField,
-    ExpressionWrapper,
-    Q,
-    IntegerField
-)
+from django.apps import apps
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, RegexValidator
+from django.db import models
+from django.db.models import DecimalField, ExpressionWrapper, F, IntegerField, Q, Sum
+from django.db.models.functions import Cast
+from django.utils import timezone
+from django.utils.text import slugify
+from django.contrib.auth.models import User
 
 try:
     from django.contrib.postgres.indexes import GinIndex
@@ -33,6 +21,11 @@ except ImportError:
 
 
 
+
+from django.db import models
+from django.utils.text import slugify
+from django.db.models import Q
+
 class Category(models.Model):
     INCOME = "Income"
     EXPENSE = "Expense"
@@ -41,12 +34,36 @@ class Category(models.Model):
         (INCOME, "Income"),
         (EXPENSE, "Expense"),
     ]
+
     category = models.CharField(max_length=500, blank=True, null=True)
-    schedule_c_line = models.CharField(max_length=10, blank=True, null=True, help_text="Enter Schedule C line number (e.g., '8', '9', '27a')")
-    category_type = models.CharField(max_length=10, choices=CATEGORY_TYPE_CHOICES, default=EXPENSE,help_text="Default accounting nature for this category.",)
+    schedule_c_line = models.CharField(
+        max_length=10, blank=True, null=True,
+        help_text="Enter Schedule C line number (e.g., '8', '9', '27a')"
+    )
+    category_type = models.CharField(
+        max_length=10,
+        choices=CATEGORY_TYPE_CHOICES,
+        default=EXPENSE,
+        help_text="Default accounting nature for this category.",
+    )
+
+    slug = models.SlugField(max_length=255, blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        if not self.slug and self.category:
+            self.slug = slugify(self.category)[:255]
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name_plural = "Categories"
+        ordering = ["category"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["slug"],
+                condition=Q(slug__isnull=False),
+                name="money_category_slug_unique_not_null",
+            )
+        ]
 
     def __str__(self):
         return self.category or "Unnamed Category"
@@ -59,7 +76,8 @@ class SubCategory(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, null=True, blank=True, related_name='subcategories')
     slug = models.SlugField(max_length=100, unique=True, blank=True)
     schedule_c_line = models.CharField(max_length=10, blank=True, null=True, help_text="Enter Schedule C line number.")
-
+    include_in_tax_reports = models.BooleanField(default=True, help_text="If unchecked, this sub-category is excluded from tax-related reports.")
+    
     class Meta:
         verbose_name_plural = "Sub Categories"
         ordering = ['sub_cat']
@@ -74,10 +92,10 @@ class SubCategory(models.Model):
 
     @property
     def category_type(self):
-        # Fallback to Expense if something is misconfigured
         if self.category and hasattr(self.category, "category_type"):
             return self.category.category_type
         return Category.EXPENSE
+
 
 
 
@@ -101,6 +119,8 @@ class Client(models.Model):
     
     def __str__(self):
         return self.business
+    
+    
     
 
 class Event(models.Model):
@@ -127,6 +147,8 @@ class Event(models.Model):
 
     def __str__(self):
         return self.title
+    
+    
 
 
 class Service(models.Model):
@@ -134,8 +156,6 @@ class Service(models.Model):
     
     def __str__(self):
         return self.service
-
-
 
 
 
@@ -157,10 +177,7 @@ class InvoiceItem(models.Model):
     
     
     
-    
-    
 class Invoice(models.Model):
-    # ------- existing core fields -------
     invoice_number = models.CharField(max_length=25, blank=True, null=True)
     client         = models.ForeignKey('Client', on_delete=models.PROTECT, related_name='invoices')
     event_name     = models.CharField(max_length=500, blank=True, null=True)
@@ -179,11 +196,9 @@ class Invoice(models.Model):
     ]
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Unpaid')
 
-    # Optional Postgres search vector (kept from your original)
     if SearchVectorField:
         search_vector = SearchVectorField(null=True, blank=True)
 
-    # ------- NEW: immutable "From" snapshot (captured at create/issue time) -------
     from_name   = models.CharField(max_length=255, blank=True)
     from_address = models.TextField(blank=True)                 # multiline postal block
     from_phone  = models.CharField(max_length=50, blank=True)
@@ -191,11 +206,9 @@ class Invoice(models.Model):
     from_website = models.URLField(blank=True)
     from_tax_id = models.CharField(max_length=64, blank=True)
 
-    # Render/branding hints captured with the snapshot
     from_logo_url                    = models.URLField(blank=True)
     from_header_logo_max_width_px    = models.PositiveIntegerField(default=320)
 
-    # Policy defaults captured at issue time
     from_terms       = models.CharField(max_length=100, blank=True)   # e.g., "Net 30"
     from_net_days    = models.PositiveIntegerField(default=30)
     from_footer_text = models.TextField(blank=True)
@@ -264,7 +277,7 @@ class Invoice(models.Model):
 
     def snapshot_from_profile(self, profile, absolute_logo_url: str | None = None, overwrite: bool = False):
         """
-        Copy active ClientProfile details into this invoice's snapshot fields.
+        Copy active CompanyProfile details into this invoice's snapshot fields.
         Set overwrite=True ONLY if you explicitly want to replace an existing snapshot.
         """
         if not profile:
@@ -300,10 +313,6 @@ class Invoice(models.Model):
         self.from_locale = profile.default_locale or "en_US"
         self.from_timezone = profile.timezone or "America/Indiana/Indianapolis"
 
-
-
-    
-    
     
 class Transaction(models.Model):
     TRANSPORT_CHOICES = [
@@ -354,7 +363,7 @@ class Transaction(models.Model):
 
 
 
-
+# ================================================================  M I L E S
 
 
 class MileageRate(models.Model):
@@ -369,8 +378,10 @@ class MileageRate(models.Model):
         verbose_name = "Mileage Rate"
         verbose_name_plural = "Mileage Rates"
         constraints = [
-            models.UniqueConstraint(fields=["user", "year"], name="uniq_mileage_rate_user_year")
+            models.UniqueConstraint(fields=["user", "year"], name="uniq_mileage_rate_user_year"),
+            models.UniqueConstraint(fields=["year"], condition=Q(user__isnull=True), name="uniq_mileage_rate_global_year"),
         ]
+
         ordering = ["-year"]
 
     def __str__(self):
@@ -380,83 +391,31 @@ class MileageRate(models.Model):
     
     
     
-    
-    
-    
-
 class Miles(models.Model):
     MILEAGE_TYPE_CHOICES = [
-        ("Taxable", "Taxable"),
+        ("Business", "Business"),
+        ("Commuting", "Commuting"),
+        ("Other", "Other"),
         ("Reimbursed", "Reimbursed"),
     ]
 
-    user   = models.ForeignKey(User, on_delete=models.CASCADE)
-    date   = models.DateField()
-
-    begin  = models.DecimalField(
-        max_digits=10,
-        decimal_places=1,
-        null=True,
-        validators=[MinValueValidator(0)],
-    )
-    end    = models.DecimalField(
-        max_digits=10,
-        decimal_places=1,
-        null=True,
-        validators=[MinValueValidator(0)],
-    )
-    total  = models.DecimalField(
-        max_digits=10,
-        decimal_places=1,
-        null=True,
-        editable=False,
-    )
-
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    date = models.DateField()
+    begin = models.DecimalField(max_digits=10, decimal_places=1, null=True, validators=[MinValueValidator(0)])
+    end = models.DecimalField(max_digits=10, decimal_places=1, null=True, validators=[MinValueValidator(0)])
+    total = models.DecimalField(max_digits=10, decimal_places=1, null=True, editable=False)
     client = models.ForeignKey("Client", on_delete=models.PROTECT)
-    event  = models.ForeignKey(
-        "Event",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        help_text="Event this mileage was associated with (for event-level cost analysis).",
-    )
-
-    # 🔹 NEW: formal link to Invoice V2
-    invoice_v2 = models.ForeignKey(
-        "InvoiceV2",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="mileage_entries",
-        help_text="If set, this mileage entry is tied to an Invoice V2.",
-    )
-
-    # Legacy / denormalized string for older reports
-    invoice_number = models.CharField(
-        max_length=255,
-        null=True,
-        blank=True,
-        db_index=True,
-        help_text="Legacy invoice number string. For new entries, usually mirrors InvoiceV2.invoice_number.",
-    )
-
-    vehicle = models.CharField(
-        max_length=255,
-        blank=False,
-        null=True,
-        default="Lead Foot",
-    )
-
-    mileage_type = models.CharField(
-        max_length=20,
-        choices=MILEAGE_TYPE_CHOICES,
-        default="Taxable",
-    )
+    event = models.ForeignKey("Event", on_delete=models.SET_NULL, null=True, blank=True, help_text="Event this mileage was associated with (for event-level cost analysis).")
+    invoice_v2 = models.ForeignKey("InvoiceV2", on_delete=models.SET_NULL, null=True, blank=True, related_name="mileage_entries", help_text="If set, this mileage entry is tied to an Invoice V2.")
+    invoice_number = models.CharField(max_length=255, null=True, blank=True, db_index=True, help_text="Legacy invoice number string. For new entries, usually mirrors InvoiceV2.invoice_number.")
+    vehicle = models.ForeignKey("Vehicle", on_delete=models.PROTECT)
+    mileage_type = models.CharField(max_length=20, choices=MILEAGE_TYPE_CHOICES, default="Business")
 
     class Meta:
         indexes = [
             models.Index(fields=["user", "date"]),
             models.Index(fields=["mileage_type"]),
+            models.Index(fields=["vehicle"]),
         ]
         verbose_name_plural = "Miles"
         ordering = ["-date"]
@@ -466,6 +425,93 @@ class Miles(models.Model):
         return f"{label} – {self.client} ({self.date})"
 
 
+
+
+class Vehicle(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    name = models.CharField(max_length=255)
+    placed_in_service_date = models.DateField()
+    placed_in_service_mileage = models.DecimalField(max_digits=10, decimal_places=1, validators=[MinValueValidator(0)])
+    year = models.PositiveIntegerField()
+    make = models.CharField(max_length=100)
+    model = models.CharField(max_length=100)
+    plate = models.CharField(max_length=20, blank=True, null=True)
+    vin = models.CharField(max_length=17, blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["vin"]),
+        ]
+        ordering = ["-is_active", "name"]
+
+    def __str__(self):
+        return self.name
+
+
+
+class VehicleYear(models.Model):
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name="year_records")
+    tax_year = models.PositiveIntegerField()
+    begin_mileage = models.DecimalField(max_digits=10, decimal_places=1, validators=[MinValueValidator(0)])
+    end_mileage = models.DecimalField(max_digits=10, decimal_places=1, validators=[MinValueValidator(0)])
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["vehicle", "tax_year"], name="uniq_vehicle_year"),
+        ]
+        indexes = [
+            models.Index(fields=["tax_year"]),
+        ]
+        ordering = ["-tax_year"]
+
+
+    def __str__(self):
+        return f"{self.vehicle} – {self.tax_year}"
+
+
+
+
+class VehicleExpense(models.Model):
+    EXPENSE_TYPE_CHOICES = [
+        ("Maintenance", "Maintenance"),
+        ("Repair", "Repair"),
+        ("Tires", "Tires"),
+        ("Fuel", "Fuel"),
+        ("Insurance", "Insurance"),
+        ("Registration", "Registration"),
+        ("Citation", "Citation"),
+        ("Equipment", "Equipment"),
+        ("Other", "Other"),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.PROTECT, related_name="expenses")
+    date = models.DateField()
+    expense_type = models.CharField(max_length=30, choices=EXPENSE_TYPE_CHOICES, default="Other")
+    description = models.CharField(max_length=255)
+    vendor = models.CharField(max_length=255, null=True, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
+    odometer = models.DecimalField(max_digits=10, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
+    notes = models.TextField(null=True, blank=True)
+    receipt = models.FileField(upload_to="vehicle/receipts/", null=True, blank=True)
+    is_tax_related = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "date"]),
+            models.Index(fields=["vehicle", "date"]),
+            models.Index(fields=["expense_type"]),
+        ]
+        ordering = ["-date"]
+
+    def __str__(self):
+        return f"{self.vehicle} – {self.expense_type} ({self.date})"
+
+
+
+# =========================================================
 
 
 
@@ -550,131 +596,80 @@ PDF_HEADER_LAYOUT_CHOICES = [
     ("inline-right", "Inline (address left, logo right)"),
 ]
 
-class ClientProfile(models.Model):
-    """
-    Per-deployment brand & 'From' identity. Exactly one may be active.
-    """
-    # Identity & branding
-    slug = models.SlugField(
-        unique=True,
-        help_text="Short identifier for this client (e.g., 'airborne-images', 'skyguy')."
-    )
-    legal_name = models.CharField(
-        max_length=255,
-        help_text="Registered legal name used on invoices."
-    )
-    display_name = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Public/trade name; falls back to legal name if blank."
-    )
+class CompanyProfile(models.Model):
+    VEHICLE_EXPENSE_METHOD_MILEAGE = "mileage"
+    VEHICLE_EXPENSE_METHOD_ACTUAL = "actual"
+    VEHICLE_EXPENSE_METHOD_CHOICES = [
+        (VEHICLE_EXPENSE_METHOD_MILEAGE, "Standard mileage"),
+        (VEHICLE_EXPENSE_METHOD_ACTUAL, "Actual vehicle expenses"),
+    ]
 
-    logo = models.ImageField(
-        upload_to=logo_upload_path,
-        validators=[validate_image_extension_no_svg],
-        help_text="Primary logo used in invoice header."
-    )
-    logo_light = models.ImageField(
-        upload_to=logo_upload_path, blank=True, null=True,
-        validators=[validate_image_extension_no_svg],
-        help_text="Optional light-mode logo variation."
-    )
-    logo_dark = models.ImageField(
-        upload_to=logo_upload_path, blank=True, null=True,
-        validators=[validate_image_extension_no_svg],
-        help_text="Optional dark-mode logo variation."
-    )
-    logo_alt_text = models.CharField(
-        max_length=255, blank=True,
-        help_text="Accessible alt text for the logo image."
-    )
+    slug                    = models.SlugField(unique=True, help_text="Short identifier for this client (e.g., 'airborne-images', 'skyguy').")
+    legal_name              = models.CharField(max_length=255, help_text="Registered legal name used on invoices.")
+    display_name            = models.CharField(max_length=255, blank=True, help_text="Public/trade name; falls back to legal name if blank.")
 
-    brand_color_primary = models.CharField(
-        max_length=7, blank=True, validators=[HEX_COLOR_VALIDATOR],
-        help_text="Primary brand color (hex), e.g., #0055FF."
-    )
-    brand_color_secondary = models.CharField(
-        max_length=7, blank=True, validators=[HEX_COLOR_VALIDATOR],
-        help_text="Secondary brand color (hex), optional."
-    )
-    website = models.URLField(blank=True)
+    logo                    = models.ImageField(upload_to=logo_upload_path, validators=[validate_image_extension_no_svg], help_text="Primary logo used in invoice header.")
+    logo_light              = models.ImageField(upload_to=logo_upload_path, blank=True, null=True, validators=[validate_image_extension_no_svg], help_text="Optional light-mode logo variation.")
+    logo_dark               = models.ImageField(upload_to=logo_upload_path, blank=True, null=True, validators=[validate_image_extension_no_svg], help_text="Optional dark-mode logo variation.")
+    logo_alt_text           = models.CharField(max_length=255, blank=True, help_text="Accessible alt text for the logo image.")
+    brand_color_primary     = models.CharField(max_length=7, blank=True, validators=[HEX_COLOR_VALIDATOR], help_text="Primary brand color (hex), e.g., #0055FF.")
+    brand_color_secondary   = models.CharField(max_length=7, blank=True, validators=[HEX_COLOR_VALIDATOR], help_text="Secondary brand color (hex), optional.")
+    website                 = models.URLField(blank=True)
 
     # Address & contact (postal identity)
-    address_line1 = models.CharField(max_length=255)
-    address_line2 = models.CharField(max_length=255, blank=True)
-    city = models.CharField(max_length=100)
-    state_province = models.CharField(max_length=100)
-    postal_code = models.CharField(max_length=20)
-    country = models.CharField(max_length=100, default="United States")
-
-    main_phone = models.CharField(max_length=50, blank=True)
-    support_email = models.EmailField(blank=True)
-    invoice_reply_to_email = models.EmailField(blank=True)
+    address_line1           = models.CharField(max_length=255)
+    address_line2           = models.CharField(max_length=255, blank=True)
+    city                    = models.CharField(max_length=100)
+    state_province          = models.CharField(max_length=100)
+    postal_code             = models.CharField(max_length=20)
+    country                 = models.CharField(max_length=100, default="United States")
+    main_phone              = models.CharField(max_length=50, blank=True)
+    support_email           = models.EmailField(blank=True)
+    invoice_reply_to_email  = models.EmailField(blank=True)
 
     # Billing contact (for AR / invoice reply-to)
-    billing_contact_name = models.CharField(max_length=255, blank=True)
-    billing_contact_email = models.EmailField(blank=True)
+    billing_contact_name    = models.CharField(max_length=255, blank=True)
+    billing_contact_email   = models.EmailField(blank=True)
 
     # Tax
-    tax_id_ein = models.CharField(
-        max_length=64, blank=True,
-        help_text="EIN / Tax ID as displayed on invoices (do not include sensitive PII)."
-    )
+    tax_id_ein              = models.CharField(max_length=64, blank=True, help_text="EIN / Tax ID as displayed on invoices (do not include sensitive PII).")
+    vehicle_expense_method  = models.CharField(max_length=20, choices=VEHICLE_EXPENSE_METHOD_CHOICES, default=VEHICLE_EXPENSE_METHOD_MILEAGE, help_text="Tax reporting method for vehicle costs.",)
 
     # Payments & remittance
-    pay_to_name = models.CharField(
-        max_length=255, blank=True,
-        help_text="Name checks should be made payable to (defaults to legal_name if blank)."
-    )
-    remittance_address = models.TextField(
-        blank=True,
-        help_text="If different from primary address. Multiline allowed."
-    )
+    pay_to_name             = models.CharField(max_length=255, blank=True, help_text="Name checks should be made payable to (defaults to legal_name if blank).")
+    remittance_address      = models.TextField( blank=True, help_text="If different from primary address. Multiline allowed.")
 
     # Defaults for invoice creation
-    default_terms = models.CharField(
-        max_length=100, blank=True, help_text='e.g., "Net 30".'
-    )
-    default_net_days = models.PositiveIntegerField(default=30)
-    default_late_fee_policy = models.CharField(
-        max_length=255, blank=True,
-        help_text='Short line like "1.5% per month after 30 days".'
-    )
-    default_footer_text = models.TextField(
-        blank=True,
-        help_text="Footer / legal disclaimers displayed on invoices."
-    )
+    default_terms           = models.CharField( max_length=100, blank=True, help_text='e.g., "Net 30".')
+    default_net_days        = models.PositiveIntegerField(default=30)
+    default_late_fee_policy = models.CharField(max_length=255, blank=True, help_text='Short line like "1.5% per month after 30 days".')
+    default_footer_text     = models.TextField( blank=True, help_text="Footer / legal disclaimers displayed on invoices.")
 
     # Rendering / formatting hints
-    pdf_header_layout = models.CharField(
-        max_length=20, choices=PDF_HEADER_LAYOUT_CHOICES, default="inline-left"
-    )
-    header_logo_max_width_px = models.PositiveIntegerField(
-        default=320,
-        help_text="Render hint for PDF header logo max width."
-    )
-    default_currency = models.CharField(max_length=3, default="USD")
-    default_locale = models.CharField(max_length=10, default="en_US")
-    timezone = models.CharField(max_length=64, default="America/Indiana/Indianapolis")
+    pdf_header_layout        = models.CharField(max_length=20, choices=PDF_HEADER_LAYOUT_CHOICES, default="inline-left")
+    header_logo_max_width_px = models.PositiveIntegerField( default=320, help_text="Render hint for PDF header logo max width.")
+    default_currency         = models.CharField(max_length=3, default="USD")
+    default_locale           = models.CharField(max_length=10, default="en_US")
+    timezone                 = models.CharField(max_length=64, default="America/Indiana/Indianapolis")
 
     # Activation & metadata
-    is_active = models.BooleanField(
-        default=False,
-        help_text="Only one active profile allowed per deployment."
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    is_active                = models.BooleanField( default=False, help_text="Only one active profile allowed per deployment.")
+    created_at               = models.DateTimeField(auto_now_add=True)
+    updated_at               = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [
-            # Enforce at most one active profile
             models.UniqueConstraint(
                 fields=["is_active"],
                 condition=Q(is_active=True),
-                name="unique_active_client_profile",
+                name="unique_active_company_profile",
             ),
         ]
         ordering = ["-is_active", "slug"]
+
+    @classmethod
+    def get_active(cls):
+        return cls.objects.filter(is_active=True).first()
 
     def __str__(self):
         return f"{self.display_name or self.legal_name} ({self.slug})"
@@ -696,9 +691,6 @@ class ClientProfile(models.Model):
             lines.append(self.country)
         return lines
 
-    @classmethod
-    def get_active(cls):
-        return cls.objects.filter(is_active=True).first()
 
     def clean(self):
         missing = []

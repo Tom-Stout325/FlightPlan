@@ -2,220 +2,465 @@
 {% load crispy_forms_tags %}
 
 <style>
-  .drop-zone {
-    border: 2px dashed #ccc;
-    padding: 20px;
-    text-align: center;
-    cursor: pointer;
-    background-color: #f9f9f9;
-    transition: background-color 0.3s;
+  /* Mobile-first form layout */
+  .equip-form-card {
+    max-width: 980px;
+    margin: 0 auto;
   }
 
-  .drop-zone:hover {
-    background-color: #f1f1f1;
+  .section-title {
+    font-size: .9rem;
+    letter-spacing: .02em;
+    text-transform: uppercase;
   }
 
   .form-section {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .drop-zone {
+    border: 2px dashed #cfd4da;
+    border-radius: .75rem;
+    padding: 16px;
+    text-align: center;
+    cursor: pointer;
+    background-color: #f8f9fa;
+    transition: background-color .2s ease, border-color .2s ease;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: .25rem;
+  }
+
+  .drop-zone:hover {
+    background-color: #f1f3f5;
+    border-color: #adb5bd;
+  }
+
+  .drop-zone.is-dragover {
+    background-color: #e9f2ff;
+    border-color: #0d6efd;
   }
 
   .preview-img {
     max-height: 180px;
+    width: 100%;
+    object-fit: contain;
+  }
+
+  /* Make checkboxes align nicely on mobile */
+  .form-check-inline {
+    margin-right: 1rem;
+  }
+
+  /* Hide drone-only sections when not Drone */
+  .d-none-important {
+    display: none !important;
+  }
+  .fa-circle-info {
+  cursor: pointer;
+  font-size: 0.9rem;
   }
 </style>
 
-<div class="container mt-4">
-  <form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-    <div class="row">
-      {% for field in form.visible_fields %}
-        {% if field.name not in 'faa_certificate receipt active deducted_full_cost' %}
-          <div class="col-md-4 mb-3">
-            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
-            {{ field }}
+<div class="container mt-3 mt-md-4">
+  <div class="card shadow-sm border-0 equip-form-card">
+    <div class="card-body p-3 p-md-4">
+
+      <form method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+
+        <!-- Header -->
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-2 mb-3">
+          <div>
+            <h1 class="h5 mb-1">Equipment</h1>
+            <div class="text-muted small">Add or update your business equipment and tax tracking fields.</div>
           </div>
-        {% endif %}
-      {% endfor %}
-    </div>
-
-    <div class="row">
-      <div class="col-md-6 mb-3 d-flex align-items-center">
-        <label class="me-2">{{ form.deducted_full_cost.label_tag }}</label>
-        {{ form.deducted_full_cost }}
-      </div>
-      <div class="col-md-6 mb-3 d-flex align-items-center">
-        <label class="me-2">{{ form.active.label_tag }}</label>
-        {{ form.active }}
-      </div>
-    </div>
-
-    <div class="row">
-      <!-- FAA Certificate -->
-      <div class="col-md-6 mb-4">
-        <label for="id_faa_certificate" class="form-label">FAA Certificate</label>
-        <div class="drop-zone" id="faa-drop-zone">
-          <p><i class="fas fa-upload fa-lg text-primary"></i></p>
-          <p>Drag & drop or click to upload FAA Certificate (PDF/Image)</p>
-          <input type="file" name="faa_certificate" id="id_faa_certificate" accept=".pdf,.jpg,.jpeg,.png" hidden>
+          <div class="d-flex gap-2 w-100 w-md-auto">
+            <button type="submit" class="btn btn-success w-100 w-md-auto">
+              <i class="fas fa-save"></i> Save
+            </button>
+          </div>
         </div>
-        {% if form.instance.faa_certificate %}
-          <div id="faa-preview" class="mt-2 text-center small text-muted">
-            {% if form.instance.faa_certificate.url|slice:"-4:" == ".pdf" %}
-              <a href="{{ form.instance.faa_certificate.url }}" target="_blank">
-                <i class="fas fa-file-pdf"></i> View PDF
-              </a>
-            {% else %}
-              <img src="{{ form.instance.faa_certificate.url }}" class="img-fluid rounded border mt-2 preview-img">
-            {% endif %}
+
+        <!-- Errors (top) -->
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {{ form.non_field_errors }}
           </div>
         {% endif %}
-      </div>
 
-      <!-- Receipt -->
-      <div class="col-md-6 mb-4">
-        <label for="id_receipt" class="form-label">Receipt</label>
-        <div class="drop-zone" id="receipt-drop-zone">
-          <p><i class="fas fa-upload fa-lg text-primary"></i></p>
-          <p>Drag & drop or click to upload Receipt (PDF/Image)</p>
-          <input type="file" name="receipt" id="id_receipt" accept=".pdf,.jpg,.jpeg,.png" hidden>
+        <!-- =======================
+             Core Details
+             ======================= -->
+        <div class="form-section">
+          <div class="section-title text-muted mb-2">Core</div>
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label for="{{ form.equipment_type.id_for_label }}" class="form-label">{{ form.equipment_type.label }}</label>
+              {{ form.equipment_type }}
+              {% if form.equipment_type.errors %}<div class="text-danger small">{{ form.equipment_type.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12 col-md-8">
+              <label for="{{ form.name.id_for_label }}" class="form-label">{{ form.name.label }}</label>
+              {{ form.name }}
+              <div id="drone-name-helper" class="form-text text-muted small"></div>
+              {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label for="{{ form.brand.id_for_label }}" class="form-label">{{ form.brand.label }}</label>
+              {{ form.brand }}
+              {% if form.brand.errors %}<div class="text-danger small">{{ form.brand.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label for="{{ form.model.id_for_label }}" class="form-label">{{ form.model.label }}</label>
+              {{ form.model }}
+              {% if form.model.errors %}<div class="text-danger small">{{ form.model.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label for="{{ form.serial_number.id_for_label }}" class="form-label">{{ form.serial_number.label }}</label>
+              {{ form.serial_number }}
+              {% if form.serial_number.errors %}<div class="text-danger small">{{ form.serial_number.errors }}</div>{% endif %}
+            </div>
+          </div>
         </div>
-        {% if form.instance.receipt %}
-          <div id="receipt-preview" class="mt-2 text-center small text-muted">
-            {% if form.instance.receipt.url|slice:"-4:" == ".pdf" %}
-              <a href="{{ form.instance.receipt.url }}" target="_blank">
-                <i class="fas fa-file-pdf"></i> View PDF
-              </a>
-            {% else %}
-              <img src="{{ form.instance.receipt.url }}" class="img-fluid rounded border mt-2 preview-img">
-            {% endif %}
-          </div>
-        {% endif %}
-      </div>
-    </div>
 
-    <div class="text-end">
-      <button type="submit" class="btn btn-success">
-        <i class="fas fa-save"></i> Save Equipment
-      </button>
+        <!-- =======================
+             Tax / Depreciation
+             ======================= -->
+        <div class="form-section">
+          <div class="section-title text-muted mb-2">Tax & Depreciation</div>
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label for="{{ form.property_type.id_for_label }}" class="form-label">
+                {{ form.property_type.label }}
+                <i
+                  class="fas fa-circle-info text-muted ms-1"
+                  data-bs-toggle="tooltip"
+                  data-bs-placement="top"
+                  title="Tax classification for this asset. Most equipment, drones, vehicles, and trailers are Section 1245 business property used for Form 4797 reporting."
+                ></i>
+              </label>
+
+              {{ form.property_type }}
+              {% if form.property_type.errors %}<div class="text-danger small">{{ form.property_type.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label for="{{ form.placed_in_service_date.id_for_label }}" class="form-label">{{ form.placed_in_service_date.label }}</label>
+              {{ form.placed_in_service_date }}
+              {% if form.placed_in_service_date.errors %}<div class="text-danger small">{{ form.placed_in_service_date.errors }}</div>{% endif %}
+              <div class="form-text small text-muted">Usually equals purchase date unless you bought it earlier than you first used it for work.</div>
+            </div>
+
+            <div class="col-12 col-md-4">
+            <label for="{{ form.depreciation_method.id_for_label }}" class="form-label">
+              {{ form.depreciation_method.label }}
+              <i
+                class="fas fa-circle-info text-muted ms-1"
+                data-bs-toggle="tooltip"
+                data-bs-placement="top"
+                title="MACRS: IRS-standard accelerated depreciation with larger deductions in early years. Most business equipment uses this. Straight-Line: Even depreciation each year over the asset’s useful life."
+              ></i>
+          </label>
+
+              {{ form.depreciation_method }}
+              {% if form.depreciation_method.errors %}<div class="text-danger small">{{ form.depreciation_method.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label for="{{ form.useful_life_years.id_for_label }}" class="form-label">
+                {{ form.useful_life_years.label }}
+                <i
+                  class="fas fa-circle-info text-muted ms-1"
+                  data-bs-toggle="tooltip"
+                  data-bs-placement="top"
+                  title="Optional planning value. Useful life in years if depreciated over time. Leave blank if using Section 179 or bonus depreciation."
+                ></i>
+              </label>
+
+              {{ form.useful_life_years }}
+              {% if form.useful_life_years.errors %}<div class="text-danger small">{{ form.useful_life_years.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12 col-md-4">
+            <label for="{{ form.business_use_percent.id_for_label }}" class="form-label">
+              {{ form.business_use_percent.label }}
+              <i
+                class="fas fa-circle-info text-muted ms-1"
+                data-bs-toggle="tooltip"
+                data-bs-placement="top"
+                title="Percentage of business use for this asset. Use 100 for fully business equipment. Mixed-use assets (like a camper) may be less."
+              ></i>
+            </label>
+
+              {{ form.business_use_percent }}
+              {% if form.business_use_percent.errors %}<div class="text-danger small">{{ form.business_use_percent.errors }}</div>{% endif %}
+              <div class="form-text small text-muted">For mixed-use assets (like a camper). Use 100 for fully business.</div>
+            </div>
+
+            <div class="col-12 col-md-4 d-flex align-items-end">
+              <div class="form-check">
+                {{ form.deducted_full_cost }}
+                <label class="form-check-label ms-1" for="{{ form.deducted_full_cost.id_for_label }}">
+                  {{ form.deducted_full_cost.label }}
+                </label>
+              </div>
+              {% if form.deducted_full_cost.errors %}<div class="text-danger small">{{ form.deducted_full_cost.errors }}</div>{% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- =======================
+             Purchase / Sale
+             ======================= -->
+        <div class="form-section">
+          <div class="section-title text-muted mb-2">Purchase & Sale</div>
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label for="{{ form.purchase_date.id_for_label }}" class="form-label">{{ form.purchase_date.label }}</label>
+              {{ form.purchase_date }}
+              {% if form.purchase_date.errors %}<div class="text-danger small">{{ form.purchase_date.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label for="{{ form.purchase_cost.id_for_label }}" class="form-label">{{ form.purchase_cost.label }}</label>
+              {{ form.purchase_cost }}
+              {% if form.purchase_cost.errors %}<div class="text-danger small">{{ form.purchase_cost.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label for="{{ form.date_sold.id_for_label }}" class="form-label">{{ form.date_sold.label }}</label>
+              {{ form.date_sold }}
+              {% if form.date_sold.errors %}<div class="text-danger small">{{ form.date_sold.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12 col-md-4">
+              <label for="{{ form.sale_price.id_for_label }}" class="form-label">{{ form.sale_price.label }}</label>
+              {{ form.sale_price }}
+              {% if form.sale_price.errors %}<div class="text-danger small">{{ form.sale_price.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12">
+              <label for="{{ form.notes.id_for_label }}" class="form-label">{{ form.notes.label }}</label>
+              {{ form.notes }}
+              {% if form.notes.errors %}<div class="text-danger small">{{ form.notes.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12 d-flex flex-column flex-sm-row gap-3">
+              <div class="form-check">
+                {{ form.active }}
+                <label class="form-check-label ms-1" for="{{ form.active.id_for_label }}">
+                  {{ form.active.label }}
+                </label>
+              </div>
+              {% if form.active.errors %}<div class="text-danger small">{{ form.active.errors }}</div>{% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- =======================
+             Drone-only (FAA + Profile)
+             ======================= -->
+        <div class="form-section" id="drone-only-section">
+          <div class="section-title text-muted mb-2">Drone-only</div>
+
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label for="{{ form.faa_number.id_for_label }}" class="form-label">{{ form.faa_number.label }}</label>
+              {{ form.faa_number }}
+              {% if form.faa_number.errors %}<div class="text-danger small">{{ form.faa_number.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12 col-md-8">
+              <label for="{{ form.drone_safety_profile.id_for_label }}" class="form-label">{{ form.drone_safety_profile.label }}</label>
+              {{ form.drone_safety_profile }}
+              {% if form.drone_safety_profile.errors %}<div class="text-danger small">{{ form.drone_safety_profile.errors }}</div>{% endif %}
+              <div class="form-text small text-muted">If set, safety features can auto-fill your waiver application.</div>
+            </div>
+          </div>
+
+          <!-- Files row -->
+          <div class="row g-3 mt-1">
+            <!-- FAA Certificate upload -->
+            <div class="col-12 col-md-6">
+              <label class="form-label">FAA Certificate</label>
+              <div class="drop-zone" id="faa-drop-zone" role="button" aria-label="Upload FAA Certificate">
+                <div><i class="fas fa-upload fa-lg text-primary"></i></div>
+                <div class="small">Drag & drop or click to upload (PDF/JPG/PNG)</div>
+                <input type="file" name="faa_certificate" id="id_faa_certificate" accept=".pdf,.jpg,.jpeg,.png" hidden>
+              </div>
+
+              {% if form.instance.faa_certificate %}
+                <div class="mt-2 text-center small text-muted">
+                  {% if form.instance.faa_certificate.url|slice:"-4:" == ".pdf" %}
+                    <a href="{{ form.instance.faa_certificate.url }}" target="_blank" rel="noopener">
+                      <i class="fas fa-file-pdf"></i> View current PDF
+                    </a>
+                  {% else %}
+                    <img src="{{ form.instance.faa_certificate.url }}" class="img-fluid rounded border mt-2 preview-img" alt="FAA certificate preview">
+                  {% endif %}
+                </div>
+              {% endif %}
+              {% if form.faa_certificate.errors %}<div class="text-danger small">{{ form.faa_certificate.errors }}</div>{% endif %}
+            </div>
+
+            <!-- Receipt upload -->
+            <div class="col-12 col-md-6">
+              <label class="form-label">Receipt</label>
+              <div class="drop-zone" id="receipt-drop-zone" role="button" aria-label="Upload Receipt">
+                <div><i class="fas fa-upload fa-lg text-primary"></i></div>
+                <div class="small">Drag & drop or click to upload (PDF/JPG/PNG)</div>
+                <input type="file" name="receipt" id="id_receipt" accept=".pdf,.jpg,.jpeg,.png" hidden>
+              </div>
+
+              {% if form.instance.receipt %}
+                <div class="mt-2 text-center small text-muted">
+                  {% if form.instance.receipt.url|slice:"-4:" == ".pdf" %}
+                    <a href="{{ form.instance.receipt.url }}" target="_blank" rel="noopener">
+                      <i class="fas fa-file-pdf"></i> View current PDF
+                    </a>
+                  {% else %}
+                    <img src="{{ form.instance.receipt.url }}" class="img-fluid rounded border mt-2 preview-img" alt="Receipt preview">
+                  {% endif %}
+                </div>
+              {% endif %}
+              {% if form.receipt.errors %}<div class="text-danger small">{{ form.receipt.errors }}</div>{% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer actions -->
+        <div class="d-grid d-md-flex justify-content-md-end gap-2 mt-4">
+          <button type="submit" class="btn btn-success btn-lg w-100 w-md-auto">
+            <i class="fas fa-save"></i> Save Equipment
+          </button>
+        </div>
+      </form>
+
     </div>
-  </form>
+  </div>
 </div>
-
-<form method="post" novalidate>
-  {% csrf_token %}
-
-  <!-- your usual form rendering -->
-  <!-- Example: -->
-  <div class="mb-3">
-    <label for="id_equipment_type" class="form-label">Equipment Type</label>
-    {{ form.equipment_type }}
-  </div>
-
-  <div class="mb-3">
-    <label for="id_name" class="form-label">Equipment Name</label>
-    {{ form.name }}
-    <div id="drone-name-helper" class="form-text text-muted small"></div>
-  </div>
-
-  <!-- Hidden FK field (if not rendered via form already) -->
-  <input type="hidden" id="id_drone_safety_profile" name="drone_safety_profile">
-
-  <button type="submit" class="btn btn-primary w-100">Save Equipment</button>
-</form>
 
 <script>
   (function () {
+    // -----------------------------
+    // Hide drone-only section unless equipment_type == "Drone"
+    // -----------------------------
     const equipmentTypeField = document.getElementById("id_equipment_type");
+    const droneOnlySection = document.getElementById("drone-only-section");
+
+    function toggleDroneOnly() {
+      if (!equipmentTypeField || !droneOnlySection) return;
+      const isDrone = equipmentTypeField.value === "Drone";
+      droneOnlySection.classList.toggle("d-none-important", !isDrone);
+    }
+
+    if (equipmentTypeField) {
+      equipmentTypeField.addEventListener("change", toggleDroneOnly);
+      toggleDroneOnly();
+    }
+
+    // -----------------------------
+    // Drone profile suggest on blur
+    // (only if the endpoint exists in this project)
+    // -----------------------------
     const nameField = document.getElementById("id_name");
     const safetyProfileField = document.getElementById("id_drone_safety_profile");
     const helper = document.getElementById("drone-name-helper");
 
-    if (!equipmentTypeField || !nameField || !safetyProfileField) {
-      return;
-    }
-
     async function checkDroneName() {
+      if (!equipmentTypeField || !nameField || !helper) return;
+
       const type = equipmentTypeField.value;
       if (type !== "Drone") {
         helper.textContent = "";
-        safetyProfileField.value = "";
         return;
       }
 
-      const name = nameField.value.trim();
-      if (!name) {
-        return;
-      }
-
+      const name = (nameField.value || "").trim();
+      if (!name) return;
 
       const brandField = document.getElementById("id_brand");
-      const brand = brandField ? brandField.value : "";
+      const brand = brandField ? (brandField.value || "") : "";
 
-      const params = new URLSearchParams({
-        name: name,
-        brand: brand,
-      });
+      const params = new URLSearchParams({ name, brand });
 
       try {
         const response = await fetch("{% url 'equipment:drone_profile_suggest' %}?" + params.toString(), {
-          headers: {
-            "X-Requested-With": "XMLHttpRequest",
-          },
+          headers: { "X-Requested-With": "XMLHttpRequest" },
         });
 
-        if (!response.ok) {
-          console.error("Drone suggest API error", response.status);
-          return;
-        }
+        if (!response.ok) return;
 
         const data = await response.json();
         if (!data.found) {
-          helper.textContent = "Your drone is not in our database. You’ll need to enter safety features manually in the waiver form.";
-          safetyProfileField.value = "";
+          helper.textContent = "Not found in database. You can continue — safety features may need manual entry in waivers.";
           return;
         }
 
-        const msg = `Is this the correct drone: "${data.full_display_name}"?`;
-        const ok = window.confirm(msg);
-
+        const ok = window.confirm(`Is this the correct drone: "${data.full_display_name}"?`);
         if (ok) {
-          // Lock in our canonical name + FK
           nameField.value = data.full_display_name;
-          safetyProfileField.value = data.id;
+          if (safetyProfileField) safetyProfileField.value = data.id;
           helper.textContent = "Matched known drone profile. Safety features will be available in waiver planning.";
         } else {
-          helper.textContent = "Your drone is not in our database. You’ll need to enter safety features manually in the waiver form.";
-          safetyProfileField.value = "";
+          if (safetyProfileField) safetyProfileField.value = "";
+          helper.textContent = "No problem — continue with your custom name.";
         }
       } catch (err) {
         console.error("Error calling drone suggest API", err);
       }
     }
 
-    // Run this when the name field loses focus
-    nameField.addEventListener("blur", checkDroneName);
+    if (nameField) {
+      nameField.addEventListener("blur", checkDroneName);
+    }
+
+    // -----------------------------
+    // Drag & drop upload zones
+    // -----------------------------
+    function wireDropZone(zoneId, inputId) {
+      const zone = document.getElementById(zoneId);
+      const input = document.getElementById(inputId);
+      if (!zone || !input) return;
+
+      zone.addEventListener("click", () => input.click());
+
+      zone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        zone.classList.add("is-dragover");
+      });
+
+      zone.addEventListener("dragleave", () => {
+        zone.classList.remove("is-dragover");
+      });
+
+      zone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        zone.classList.remove("is-dragover");
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+          input.files = e.dataTransfer.files;
+        }
+      });
+    }
+
+    wireDropZone("faa-drop-zone", "id_faa_certificate");
+    wireDropZone("receipt-drop-zone", "id_receipt");
   })();
 </script>
-
 <script>
-  document.querySelectorAll('.drop-zone').forEach(zone => {
-    const input = zone.querySelector('input');
-
-    zone.addEventListener('click', () => input.click());
-
-    zone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      zone.classList.add('bg-light');
-    });
-
-    zone.addEventListener('dragleave', () => {
-      zone.classList.remove('bg-light');
-    });
-
-    zone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      zone.classList.remove('bg-light');
-      input.files = e.dataTransfer.files;
+  document.addEventListener("DOMContentLoaded", function () {
+    const tooltipTriggerList = [].slice.call(
+      document.querySelectorAll('[data-bs-toggle="tooltip"]')
+    );
+    tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+      new bootstrap.Tooltip(tooltipTriggerEl);
     });
   });
 </script>

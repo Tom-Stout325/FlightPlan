@@ -81,20 +81,23 @@
         </div>
       </a>
     </div>
-
     <div class="col">
-      <a href="{% url 'money:event_list' %}" class="text-decoration-none">
-        <div class="card shadow-sm h-100 border-secondary hover-scale">
+      <a href="{% url 'money:vehicle_list' %}" class="text-decoration-none">
+        <div class="card shadow-sm h-100 border-info hover-scale">
           <div class="card-body d-flex flex-column text-center">
-            <h5 class="card-title text-secondary">🔑 Events</h5>
-            <p class="card-text mb-3">Tag and filter your transactions efficiently.</p>
+            <h5 class="card-title text-info">🚙 Vehicles</h5>
+            <p class="card-text mb-3">
+              Manage vehicles and yearly odometer records.
+            </p>
             <div class="mt-auto">
-              <span class="btn btn-secondary w-100">Manage Events</span>
+              <span class="btn btn-info w-100">Manage Vehicles</span>
             </div>
           </div>
         </div>
       </a>
     </div>
+
+
 
     <div class="col">
       <a href="{% url 'money:recurring_transaction_list' %}" class="text-decoration-none">
@@ -123,7 +126,19 @@
         </div>
       </a>
     </div>
-  </div>
+    <div class="col">
+      <a href="{% url 'money:event_list' %}" class="text-decoration-none">
+        <div class="card shadow-sm h-100 border-secondary hover-scale">
+          <div class="card-body d-flex flex-column text-center">
+            <h5 class="card-title text-secondary">🔑 Events</h5>
+            <p class="card-text mb-3">Tag and filter your transactions efficiently.</p>
+            <div class="mt-auto">
+              <span class="btn btn-secondary w-100">Manage Events</span>
+            </div>
+          </div>
+        </div>
+      </a>
+    </div>
 </div>
 
 <style>

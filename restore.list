@@ -1,0 +1,418 @@
+;
+; Archive created at 2025-12-31 05:42:30 EST
+;     dbname: d29kfm8sf3vvp6
+;     TOC Entries: 408
+;     Compression: gzip
+;     Dump Version: 1.16-0
+;     Format: CUSTOM
+;     Integer: 4 bytes
+;     Offset: 8 bytes
+;     Dumped from database version: 17.5
+;     Dumped by pg_dump version: 17.6
+;
+;
+; Selected TOC Entries:
+;
+6; 2615 14061769 SCHEMA - public ud7u6s9otqner
+310; 1259 1266428757 TABLE public airspace_airport ud7u6s9otqner
+309; 1259 1266428756 SEQUENCE public airspace_airport_id_seq ud7u6s9otqner
+308; 1259 1266428738 TABLE public airspace_conopssection ud7u6s9otqner
+307; 1259 1266428737 SEQUENCE public airspace_conopssection_id_seq ud7u6s9otqner
+306; 1259 1266428710 TABLE public airspace_waiverapplication ud7u6s9otqner
+305; 1259 1266428709 SEQUENCE public airspace_waiverapplication_id_seq ud7u6s9otqner
+304; 1259 1266428608 TABLE public airspace_waiverplanning ud7u6s9otqner
+303; 1259 1266428607 SEQUENCE public airspace_waiverplanning_id_seq ud7u6s9otqner
+237; 1259 15328577 TABLE public app_pilotprofile ud7u6s9otqner
+236; 1259 15328576 SEQUENCE public app_pilotprofile_id_seq ud7u6s9otqner
+239; 1259 15328585 TABLE public app_training ud7u6s9otqner
+238; 1259 15328584 SEQUENCE public app_training_id_seq ud7u6s9otqner
+225; 1259 15328469 TABLE public auth_group ud7u6s9otqner
+224; 1259 15328468 SEQUENCE public auth_group_id_seq ud7u6s9otqner
+227; 1259 15328477 TABLE public auth_group_permissions ud7u6s9otqner
+226; 1259 15328476 SEQUENCE public auth_group_permissions_id_seq ud7u6s9otqner
+223; 1259 15328463 TABLE public auth_permission ud7u6s9otqner
+222; 1259 15328462 SEQUENCE public auth_permission_id_seq ud7u6s9otqner
+229; 1259 15328483 TABLE public auth_user ud7u6s9otqner
+231; 1259 15328491 TABLE public auth_user_groups ud7u6s9otqner
+230; 1259 15328490 SEQUENCE public auth_user_groups_id_seq ud7u6s9otqner
+228; 1259 15328482 SEQUENCE public auth_user_id_seq ud7u6s9otqner
+233; 1259 15328497 TABLE public auth_user_user_permissions ud7u6s9otqner
+232; 1259 15328496 SEQUENCE public auth_user_user_permissions_id_seq ud7u6s9otqner
+241; 1259 15328602 TABLE public backup_base ud7u6s9otqner
+240; 1259 15328601 SEQUENCE public backup_base_id_seq ud7u6s9otqner
+235; 1259 15328556 TABLE public django_admin_log ud7u6s9otqner
+234; 1259 15328555 SEQUENCE public django_admin_log_id_seq ud7u6s9otqner
+221; 1259 15328455 TABLE public django_content_type ud7u6s9otqner
+220; 1259 15328454 SEQUENCE public django_content_type_id_seq ud7u6s9otqner
+219; 1259 15328446 TABLE public django_migrations ud7u6s9otqner
+218; 1259 15328445 SEQUENCE public django_migrations_id_seq ud7u6s9otqner
+242; 1259 15328931 TABLE public django_session ud7u6s9otqner
+244; 1259 15328943 TABLE public django_site ud7u6s9otqner
+243; 1259 15328942 SEQUENCE public django_site_id_seq ud7u6s9otqner
+285; 1259 1260660832 TABLE public documents_droneincidentreport ud7u6s9otqner
+284; 1259 1260660831 SEQUENCE public documents_droneincidentreport_id_seq ud7u6s9otqner
+287; 1259 1260660840 TABLE public documents_generaldocument ud7u6s9otqner
+286; 1259 1260660839 SEQUENCE public documents_generaldocument_id_seq ud7u6s9otqner
+289; 1259 1260660848 TABLE public documents_sopdocument ud7u6s9otqner
+288; 1259 1260660847 SEQUENCE public documents_sopdocument_id_seq ud7u6s9otqner
+302; 1259 1261489916 TABLE public equipment_dronesafetyprofile ud7u6s9otqner
+301; 1259 1261489915 SEQUENCE public equipment_dronesafetyprofile_id_seq ud7u6s9otqner
+290; 1259 1260660855 TABLE public equipment_equipment ud7u6s9otqner
+292; 1259 1260660863 TABLE public flightlogs_flightlog ud7u6s9otqner
+291; 1259 1260660862 SEQUENCE public flightlogs_flightlog_id_seq ud7u6s9otqner
+246; 1259 15342613 TABLE public flightplan_droneincidentreport ud7u6s9otqner
+245; 1259 15342612 SEQUENCE public flightplan_droneincidentreport_id_seq ud7u6s9otqner
+247; 1259 15342620 TABLE public flightplan_equipment ud7u6s9otqner
+249; 1259 15342628 TABLE public flightplan_flightlog ud7u6s9otqner
+248; 1259 15342627 SEQUENCE public flightplan_flightlog_id_seq ud7u6s9otqner
+251; 1259 15342636 TABLE public flightplan_generaldocument ud7u6s9otqner
+250; 1259 15342635 SEQUENCE public flightplan_generaldocument_id_seq ud7u6s9otqner
+281; 1259 1120154382 TABLE public flightplan_opsplan ud7u6s9otqner
+280; 1259 1120154349 SEQUENCE public flightplan_opsplan_id_seq ud7u6s9otqner
+253; 1259 15342644 TABLE public flightplan_sopdocument ud7u6s9otqner
+252; 1259 15342643 SEQUENCE public flightplan_sopdocument_id_seq ud7u6s9otqner
+255; 1259 15342652 TABLE public money_category ud7u6s9otqner
+254; 1259 15342651 SEQUENCE public money_category_id_seq ud7u6s9otqner
+257; 1259 15342660 TABLE public money_client ud7u6s9otqner
+256; 1259 15342659 SEQUENCE public money_client_id_seq ud7u6s9otqner
+283; 1259 1248107584 TABLE public money_clientprofile ud7u6s9otqner
+282; 1259 1248107583 SEQUENCE public money_clientprofile_id_seq ud7u6s9otqner
+259; 1259 15342668 TABLE public money_event ud7u6s9otqner
+258; 1259 15342667 SEQUENCE public money_event_id_seq ud7u6s9otqner
+261; 1259 15342678 TABLE public money_invoice ud7u6s9otqner
+260; 1259 15342677 SEQUENCE public money_invoice_id_seq ud7u6s9otqner
+279; 1259 15342764 TABLE public money_invoiceitem ud7u6s9otqner
+278; 1259 15342763 SEQUENCE public money_invoiceitem_id_seq ud7u6s9otqner
+296; 1259 1260660882 TABLE public money_invoiceitemv2 ud7u6s9otqner
+295; 1259 1260660881 SEQUENCE public money_invoiceitemv2_id_seq ud7u6s9otqner
+294; 1259 1260660871 TABLE public money_invoicev2 ud7u6s9otqner
+293; 1259 1260660870 SEQUENCE public money_invoicev2_id_seq ud7u6s9otqner
+263; 1259 15342686 TABLE public money_mileagerate ud7u6s9otqner
+262; 1259 15342685 SEQUENCE public money_mileagerate_id_seq ud7u6s9otqner
+277; 1259 15342756 TABLE public money_miles ud7u6s9otqner
+276; 1259 15342755 SEQUENCE public money_miles_id_seq ud7u6s9otqner
+275; 1259 15342750 TABLE public money_receipt ud7u6s9otqner
+274; 1259 15342749 SEQUENCE public money_receipt_id_seq ud7u6s9otqner
+265; 1259 15342694 TABLE public money_recurringtransaction ud7u6s9otqner
+264; 1259 15342693 SEQUENCE public money_recurringtransaction_id_seq ud7u6s9otqner
+267; 1259 15342702 TABLE public money_service ud7u6s9otqner
+266; 1259 15342701 SEQUENCE public money_service_id_seq ud7u6s9otqner
+269; 1259 15342712 TABLE public money_subcategory ud7u6s9otqner
+268; 1259 15342711 SEQUENCE public money_subcategory_id_seq ud7u6s9otqner
+271; 1259 15342722 TABLE public money_team ud7u6s9otqner
+270; 1259 15342721 SEQUENCE public money_team_id_seq ud7u6s9otqner
+273; 1259 15342729 TABLE public money_transaction ud7u6s9otqner
+272; 1259 15342728 SEQUENCE public money_transaction_id_seq ud7u6s9otqner
+298; 1259 1260662394 TABLE public pilot_pilotprofile ud7u6s9otqner
+297; 1259 1260662393 SEQUENCE public pilot_pilotprofile_id_seq ud7u6s9otqner
+300; 1259 1260662402 TABLE public pilot_training ud7u6s9otqner
+299; 1259 1260662401 SEQUENCE public pilot_training_id_seq ud7u6s9otqner
+4916; 0 1266428757 TABLE DATA public airspace_airport ud7u6s9otqner
+4914; 0 1266428738 TABLE DATA public airspace_conopssection ud7u6s9otqner
+4912; 0 1266428710 TABLE DATA public airspace_waiverapplication ud7u6s9otqner
+4910; 0 1266428608 TABLE DATA public airspace_waiverplanning ud7u6s9otqner
+4843; 0 15328577 TABLE DATA public app_pilotprofile ud7u6s9otqner
+4845; 0 15328585 TABLE DATA public app_training ud7u6s9otqner
+4831; 0 15328469 TABLE DATA public auth_group ud7u6s9otqner
+4833; 0 15328477 TABLE DATA public auth_group_permissions ud7u6s9otqner
+4829; 0 15328463 TABLE DATA public auth_permission ud7u6s9otqner
+4835; 0 15328483 TABLE DATA public auth_user ud7u6s9otqner
+4837; 0 15328491 TABLE DATA public auth_user_groups ud7u6s9otqner
+4839; 0 15328497 TABLE DATA public auth_user_user_permissions ud7u6s9otqner
+4847; 0 15328602 TABLE DATA public backup_base ud7u6s9otqner
+4841; 0 15328556 TABLE DATA public django_admin_log ud7u6s9otqner
+4827; 0 15328455 TABLE DATA public django_content_type ud7u6s9otqner
+4825; 0 15328446 TABLE DATA public django_migrations ud7u6s9otqner
+4848; 0 15328931 TABLE DATA public django_session ud7u6s9otqner
+4850; 0 15328943 TABLE DATA public django_site ud7u6s9otqner
+4891; 0 1260660832 TABLE DATA public documents_droneincidentreport ud7u6s9otqner
+4893; 0 1260660840 TABLE DATA public documents_generaldocument ud7u6s9otqner
+4895; 0 1260660848 TABLE DATA public documents_sopdocument ud7u6s9otqner
+4908; 0 1261489916 TABLE DATA public equipment_dronesafetyprofile ud7u6s9otqner
+4896; 0 1260660855 TABLE DATA public equipment_equipment ud7u6s9otqner
+4898; 0 1260660863 TABLE DATA public flightlogs_flightlog ud7u6s9otqner
+4852; 0 15342613 TABLE DATA public flightplan_droneincidentreport ud7u6s9otqner
+4853; 0 15342620 TABLE DATA public flightplan_equipment ud7u6s9otqner
+4855; 0 15342628 TABLE DATA public flightplan_flightlog ud7u6s9otqner
+4857; 0 15342636 TABLE DATA public flightplan_generaldocument ud7u6s9otqner
+4887; 0 1120154382 TABLE DATA public flightplan_opsplan ud7u6s9otqner
+4859; 0 15342644 TABLE DATA public flightplan_sopdocument ud7u6s9otqner
+4861; 0 15342652 TABLE DATA public money_category ud7u6s9otqner
+4863; 0 15342660 TABLE DATA public money_client ud7u6s9otqner
+4889; 0 1248107584 TABLE DATA public money_clientprofile ud7u6s9otqner
+4865; 0 15342668 TABLE DATA public money_event ud7u6s9otqner
+4867; 0 15342678 TABLE DATA public money_invoice ud7u6s9otqner
+4885; 0 15342764 TABLE DATA public money_invoiceitem ud7u6s9otqner
+4902; 0 1260660882 TABLE DATA public money_invoiceitemv2 ud7u6s9otqner
+4900; 0 1260660871 TABLE DATA public money_invoicev2 ud7u6s9otqner
+4869; 0 15342686 TABLE DATA public money_mileagerate ud7u6s9otqner
+4883; 0 15342756 TABLE DATA public money_miles ud7u6s9otqner
+4881; 0 15342750 TABLE DATA public money_receipt ud7u6s9otqner
+4871; 0 15342694 TABLE DATA public money_recurringtransaction ud7u6s9otqner
+4873; 0 15342702 TABLE DATA public money_service ud7u6s9otqner
+4875; 0 15342712 TABLE DATA public money_subcategory ud7u6s9otqner
+4877; 0 15342722 TABLE DATA public money_team ud7u6s9otqner
+4879; 0 15342729 TABLE DATA public money_transaction ud7u6s9otqner
+4904; 0 1260662394 TABLE DATA public pilot_pilotprofile ud7u6s9otqner
+4906; 0 1260662402 TABLE DATA public pilot_training ud7u6s9otqner
+4924; 0 0 SEQUENCE SET public airspace_airport_id_seq ud7u6s9otqner
+4925; 0 0 SEQUENCE SET public airspace_conopssection_id_seq ud7u6s9otqner
+4926; 0 0 SEQUENCE SET public airspace_waiverapplication_id_seq ud7u6s9otqner
+4927; 0 0 SEQUENCE SET public airspace_waiverplanning_id_seq ud7u6s9otqner
+4928; 0 0 SEQUENCE SET public app_pilotprofile_id_seq ud7u6s9otqner
+4929; 0 0 SEQUENCE SET public app_training_id_seq ud7u6s9otqner
+4930; 0 0 SEQUENCE SET public auth_group_id_seq ud7u6s9otqner
+4931; 0 0 SEQUENCE SET public auth_group_permissions_id_seq ud7u6s9otqner
+4932; 0 0 SEQUENCE SET public auth_permission_id_seq ud7u6s9otqner
+4933; 0 0 SEQUENCE SET public auth_user_groups_id_seq ud7u6s9otqner
+4934; 0 0 SEQUENCE SET public auth_user_id_seq ud7u6s9otqner
+4935; 0 0 SEQUENCE SET public auth_user_user_permissions_id_seq ud7u6s9otqner
+4936; 0 0 SEQUENCE SET public backup_base_id_seq ud7u6s9otqner
+4937; 0 0 SEQUENCE SET public django_admin_log_id_seq ud7u6s9otqner
+4938; 0 0 SEQUENCE SET public django_content_type_id_seq ud7u6s9otqner
+4939; 0 0 SEQUENCE SET public django_migrations_id_seq ud7u6s9otqner
+4940; 0 0 SEQUENCE SET public django_site_id_seq ud7u6s9otqner
+4941; 0 0 SEQUENCE SET public documents_droneincidentreport_id_seq ud7u6s9otqner
+4942; 0 0 SEQUENCE SET public documents_generaldocument_id_seq ud7u6s9otqner
+4943; 0 0 SEQUENCE SET public documents_sopdocument_id_seq ud7u6s9otqner
+4944; 0 0 SEQUENCE SET public equipment_dronesafetyprofile_id_seq ud7u6s9otqner
+4945; 0 0 SEQUENCE SET public flightlogs_flightlog_id_seq ud7u6s9otqner
+4946; 0 0 SEQUENCE SET public flightplan_droneincidentreport_id_seq ud7u6s9otqner
+4947; 0 0 SEQUENCE SET public flightplan_flightlog_id_seq ud7u6s9otqner
+4948; 0 0 SEQUENCE SET public flightplan_generaldocument_id_seq ud7u6s9otqner
+4949; 0 0 SEQUENCE SET public flightplan_opsplan_id_seq ud7u6s9otqner
+4950; 0 0 SEQUENCE SET public flightplan_sopdocument_id_seq ud7u6s9otqner
+4951; 0 0 SEQUENCE SET public money_category_id_seq ud7u6s9otqner
+4952; 0 0 SEQUENCE SET public money_client_id_seq ud7u6s9otqner
+4953; 0 0 SEQUENCE SET public money_clientprofile_id_seq ud7u6s9otqner
+4954; 0 0 SEQUENCE SET public money_event_id_seq ud7u6s9otqner
+4955; 0 0 SEQUENCE SET public money_invoice_id_seq ud7u6s9otqner
+4956; 0 0 SEQUENCE SET public money_invoiceitem_id_seq ud7u6s9otqner
+4957; 0 0 SEQUENCE SET public money_invoiceitemv2_id_seq ud7u6s9otqner
+4958; 0 0 SEQUENCE SET public money_invoicev2_id_seq ud7u6s9otqner
+4959; 0 0 SEQUENCE SET public money_mileagerate_id_seq ud7u6s9otqner
+4960; 0 0 SEQUENCE SET public money_miles_id_seq ud7u6s9otqner
+4961; 0 0 SEQUENCE SET public money_receipt_id_seq ud7u6s9otqner
+4962; 0 0 SEQUENCE SET public money_recurringtransaction_id_seq ud7u6s9otqner
+4963; 0 0 SEQUENCE SET public money_service_id_seq ud7u6s9otqner
+4964; 0 0 SEQUENCE SET public money_subcategory_id_seq ud7u6s9otqner
+4965; 0 0 SEQUENCE SET public money_team_id_seq ud7u6s9otqner
+4966; 0 0 SEQUENCE SET public money_transaction_id_seq ud7u6s9otqner
+4967; 0 0 SEQUENCE SET public pilot_pilotprofile_id_seq ud7u6s9otqner
+4968; 0 0 SEQUENCE SET public pilot_training_id_seq ud7u6s9otqner
+4619; 2606 1266428765 CONSTRAINT public airspace_airport airspace_airport_icao_key ud7u6s9otqner
+4621; 2606 1266428763 CONSTRAINT public airspace_airport airspace_airport_pkey ud7u6s9otqner
+4612; 2606 1266428746 CONSTRAINT public airspace_conopssection airspace_conopssection_application_id_section_key_f83538c8_uniq ud7u6s9otqner
+4614; 2606 1266428744 CONSTRAINT public airspace_conopssection airspace_conopssection_pkey ud7u6s9otqner
+4607; 2606 1266428716 CONSTRAINT public airspace_waiverapplication airspace_waiverapplication_pkey ud7u6s9otqner
+4604; 2606 1266428616 CONSTRAINT public airspace_waiverplanning airspace_waiverplanning_pkey ud7u6s9otqner
+4440; 2606 15328581 CONSTRAINT public app_pilotprofile app_pilotprofile_pkey ud7u6s9otqner
+4442; 2606 15328583 CONSTRAINT public app_pilotprofile app_pilotprofile_user_id_key ud7u6s9otqner
+4445; 2606 15328589 CONSTRAINT public app_training app_training_pkey ud7u6s9otqner
+4409; 2606 15328613 CONSTRAINT public auth_group auth_group_name_key ud7u6s9otqner
+4414; 2606 15328512 CONSTRAINT public auth_group_permissions auth_group_permissions_group_id_permission_id_0cd325b0_uniq ud7u6s9otqner
+4417; 2606 15328481 CONSTRAINT public auth_group_permissions auth_group_permissions_pkey ud7u6s9otqner
+4411; 2606 15328473 CONSTRAINT public auth_group auth_group_pkey ud7u6s9otqner
+4404; 2606 15328503 CONSTRAINT public auth_permission auth_permission_content_type_id_codename_01ab375a_uniq ud7u6s9otqner
+4406; 2606 15328467 CONSTRAINT public auth_permission auth_permission_pkey ud7u6s9otqner
+4425; 2606 15328495 CONSTRAINT public auth_user_groups auth_user_groups_pkey ud7u6s9otqner
+4428; 2606 15328527 CONSTRAINT public auth_user_groups auth_user_groups_user_id_group_id_94350c0c_uniq ud7u6s9otqner
+4419; 2606 15328487 CONSTRAINT public auth_user auth_user_pkey ud7u6s9otqner
+4431; 2606 15328501 CONSTRAINT public auth_user_user_permissions auth_user_user_permissions_pkey ud7u6s9otqner
+4434; 2606 15328541 CONSTRAINT public auth_user_user_permissions auth_user_user_permissions_user_id_permission_id_14a6b632_uniq ud7u6s9otqner
+4422; 2606 15328608 CONSTRAINT public auth_user auth_user_username_key ud7u6s9otqner
+4447; 2606 15328606 CONSTRAINT public backup_base backup_base_pkey ud7u6s9otqner
+4437; 2606 15328563 CONSTRAINT public django_admin_log django_admin_log_pkey ud7u6s9otqner
+4399; 2606 15328461 CONSTRAINT public django_content_type django_content_type_app_label_model_76bd3d3b_uniq ud7u6s9otqner
+4401; 2606 15328459 CONSTRAINT public django_content_type django_content_type_pkey ud7u6s9otqner
+4397; 2606 15328453 CONSTRAINT public django_migrations django_migrations_pkey ud7u6s9otqner
+4450; 2606 15328938 CONSTRAINT public django_session django_session_pkey ud7u6s9otqner
+4454; 2606 15328949 CONSTRAINT public django_site django_site_domain_a2e37b91_uniq ud7u6s9otqner
+4456; 2606 15328947 CONSTRAINT public django_site django_site_pkey ud7u6s9otqner
+4559; 2606 1260660838 CONSTRAINT public documents_droneincidentreport documents_droneincidentreport_pkey ud7u6s9otqner
+4561; 2606 1260660846 CONSTRAINT public documents_generaldocument documents_generaldocument_pkey ud7u6s9otqner
+4563; 2606 1260660854 CONSTRAINT public documents_sopdocument documents_sopdocument_pkey ud7u6s9otqner
+4592; 2606 1261489927 CONSTRAINT public equipment_dronesafetyprofile equipment_dronesafetyprofile_brand_model_name_2814da47_uniq ud7u6s9otqner
+4595; 2606 1261489925 CONSTRAINT public equipment_dronesafetyprofile equipment_dronesafetyprofile_full_display_name_key ud7u6s9otqner
+4597; 2606 1261489923 CONSTRAINT public equipment_dronesafetyprofile equipment_dronesafetyprofile_pkey ud7u6s9otqner
+4565; 2606 1260660861 CONSTRAINT public equipment_equipment equipment_equipment_pkey ud7u6s9otqner
+4567; 2606 1260660869 CONSTRAINT public flightlogs_flightlog flightlogs_flightlog_pkey ud7u6s9otqner
+4458; 2606 15342619 CONSTRAINT public flightplan_droneincidentreport flightplan_droneincidentreport_pkey ud7u6s9otqner
+4461; 2606 15342626 CONSTRAINT public flightplan_equipment flightplan_equipment_pkey ud7u6s9otqner
+4463; 2606 15342634 CONSTRAINT public flightplan_flightlog flightplan_flightlog_pkey ud7u6s9otqner
+4465; 2606 15342642 CONSTRAINT public flightplan_generaldocument flightplan_generaldocument_pkey ud7u6s9otqner
+4548; 2606 1120154511 CONSTRAINT public flightplan_opsplan flightplan_opsplan_pkey ud7u6s9otqner
+4467; 2606 15342650 CONSTRAINT public flightplan_sopdocument flightplan_sopdocument_pkey ud7u6s9otqner
+4469; 2606 15342658 CONSTRAINT public money_category money_category_pkey ud7u6s9otqner
+4471; 2606 15342666 CONSTRAINT public money_client money_client_pkey ud7u6s9otqner
+4553; 2606 1248107592 CONSTRAINT public money_clientprofile money_clientprofile_pkey ud7u6s9otqner
+4556; 2606 1248107594 CONSTRAINT public money_clientprofile money_clientprofile_slug_key ud7u6s9otqner
+4473; 2606 15342674 CONSTRAINT public money_event money_event_pkey ud7u6s9otqner
+4476; 2606 15342676 CONSTRAINT public money_event money_event_slug_key ud7u6s9otqner
+4480; 2606 15342684 CONSTRAINT public money_invoice money_invoice_pkey ud7u6s9otqner
+4536; 2606 15342770 CONSTRAINT public money_invoiceitem money_invoiceitem_pkey ud7u6s9otqner
+4582; 2606 1260660886 CONSTRAINT public money_invoiceitemv2 money_invoiceitemv2_pkey ud7u6s9otqner
+4575; 2606 1260660880 CONSTRAINT public money_invoicev2 money_invoicev2_pkey ud7u6s9otqner
+4483; 2606 15342690 CONSTRAINT public money_mileagerate money_mileagerate_pkey ud7u6s9otqner
+4531; 2606 15342762 CONSTRAINT public money_miles money_miles_pkey ud7u6s9otqner
+4522; 2606 15342754 CONSTRAINT public money_receipt money_receipt_pkey ud7u6s9otqner
+4492; 2606 15342700 CONSTRAINT public money_recurringtransaction money_recurringtransaction_pkey ud7u6s9otqner
+4497; 2606 15342708 CONSTRAINT public money_service money_service_pkey ud7u6s9otqner
+4500; 2606 15342718 CONSTRAINT public money_subcategory money_subcategory_pkey ud7u6s9otqner
+4503; 2606 15342720 CONSTRAINT public money_subcategory money_subcategory_slug_key ud7u6s9otqner
+4505; 2606 15342726 CONSTRAINT public money_team money_team_pkey ud7u6s9otqner
+4515; 2606 15342733 CONSTRAINT public money_transaction money_transaction_pkey ud7u6s9otqner
+4585; 2606 1260662398 CONSTRAINT public pilot_pilotprofile pilot_pilotprofile_pkey ud7u6s9otqner
+4587; 2606 1260662400 CONSTRAINT public pilot_pilotprofile pilot_pilotprofile_user_id_key ud7u6s9otqner
+4590; 2606 1260662406 CONSTRAINT public pilot_training pilot_training_pkey ud7u6s9otqner
+4487; 2606 1265073918 CONSTRAINT public money_mileagerate uniq_mileage_rate_user_year ud7u6s9otqner
+4551; 2606 1120154557 CONSTRAINT public flightplan_opsplan uniq_opsplan_event_year ud7u6s9otqner
+4617; 1259 1266428766 INDEX public airspace_airport_icao_d7656959_like ud7u6s9otqner
+4610; 1259 1266428754 INDEX public airspace_conopssection_application_id_4d555b11 ud7u6s9otqner
+4615; 1259 1266428752 INDEX public airspace_conopssection_section_key_e3bb0fda ud7u6s9otqner
+4616; 1259 1266428753 INDEX public airspace_conopssection_section_key_e3bb0fda_like ud7u6s9otqner
+4608; 1259 1266428728 INDEX public airspace_waiverapplication_planning_id_32e694d9 ud7u6s9otqner
+4609; 1259 1266428729 INDEX public airspace_waiverapplication_user_id_203f4051 ud7u6s9otqner
+4598; 1259 1266428637 INDEX public airspace_waiverplanning_aircraft_id_a0e08080 ud7u6s9otqner
+4599; 1259 1266428708 INDEX public airspace_waiverplanning_mv_waiver_document_id_0d7b0748 ud7u6s9otqner
+4600; 1259 1266428772 INDEX public airspace_waiverplanning_nearest_airport_ref_id_6c98b128 ud7u6s9otqner
+4601; 1259 1266428638 INDEX public airspace_waiverplanning_oop_waiver_document_id_81d10998 ud7u6s9otqner
+4602; 1259 1266428639 INDEX public airspace_waiverplanning_pilot_profile_id_7a8c3a5a ud7u6s9otqner
+4605; 1259 1266428640 INDEX public airspace_waiverplanning_user_id_c9bb7ea9 ud7u6s9otqner
+4443; 1259 15328600 INDEX public app_training_pilot_id_7b575026 ud7u6s9otqner
+4407; 1259 15328614 INDEX public auth_group_name_a6ea08ec_like ud7u6s9otqner
+4412; 1259 15328523 INDEX public auth_group_permissions_group_id_b120cbf9 ud7u6s9otqner
+4415; 1259 15328524 INDEX public auth_group_permissions_permission_id_84c5c92e ud7u6s9otqner
+4402; 1259 15328509 INDEX public auth_permission_content_type_id_2f476e4b ud7u6s9otqner
+4423; 1259 15328539 INDEX public auth_user_groups_group_id_97559544 ud7u6s9otqner
+4426; 1259 15328538 INDEX public auth_user_groups_user_id_6a12ed8b ud7u6s9otqner
+4429; 1259 15328553 INDEX public auth_user_user_permissions_permission_id_1fbb5f2c ud7u6s9otqner
+4432; 1259 15328552 INDEX public auth_user_user_permissions_user_id_a95ead1b ud7u6s9otqner
+4420; 1259 15328609 INDEX public auth_user_username_6821ab7c_like ud7u6s9otqner
+4435; 1259 15328574 INDEX public django_admin_log_content_type_id_c4bce8eb ud7u6s9otqner
+4438; 1259 15328575 INDEX public django_admin_log_user_id_c564eba6 ud7u6s9otqner
+4448; 1259 15328940 INDEX public django_session_expire_date_a5c62663 ud7u6s9otqner
+4451; 1259 15328939 INDEX public django_session_session_key_c0390e0f_like ud7u6s9otqner
+4452; 1259 15328950 INDEX public django_site_domain_a2e37b91_like ud7u6s9otqner
+4593; 1259 1261489928 INDEX public equipment_dronesafetyprofile_full_display_name_2160e416_like ud7u6s9otqner
+4537; 1259 1240234760 INDEX public flightplan__approve_461ace_idx ud7u6s9otqner
+4538; 1259 1120154937 INDEX public flightplan__event_i_3b45e0_idx ud7u6s9otqner
+4539; 1259 1120154845 INDEX public flightplan__event_i_472452_idx ud7u6s9otqner
+4540; 1259 1120155007 INDEX public flightplan__status_fde9fe_idx ud7u6s9otqner
+4541; 1259 1120155091 INDEX public flightplan__updated_246d03_idx ud7u6s9otqner
+4459; 1259 1261623708 INDEX public flightplan_equipment_drone_safety_profile_id_81c5dad2 ud7u6s9otqner
+4542; 1259 1240234761 INDEX public flightplan_opsplan_approval_token_6fc13b57 ud7u6s9otqner
+4543; 1259 1240234762 INDEX public flightplan_opsplan_approval_token_6fc13b57_like ud7u6s9otqner
+4544; 1259 1120154716 INDEX public flightplan_opsplan_client_id_bc8404fc ud7u6s9otqner
+4545; 1259 1120154748 INDEX public flightplan_opsplan_created_by_id_13a9cb65 ud7u6s9otqner
+4546; 1259 1120154795 INDEX public flightplan_opsplan_event_id_ca081c08 ud7u6s9otqner
+4549; 1259 1120154815 INDEX public flightplan_opsplan_updated_by_id_1627db40 ud7u6s9otqner
+4554; 1259 1248107596 INDEX public money_clientprofile_slug_234a0a82_like ud7u6s9otqner
+4474; 1259 15342787 INDEX public money_event_slug_7420fd89_like ud7u6s9otqner
+4568; 1259 1260660888 INDEX public money_invoi_client__a190eb_idx ud7u6s9otqner
+4569; 1259 1260660889 INDEX public money_invoi_event_i_e8d0c8_idx ud7u6s9otqner
+4570; 1259 1260660887 INDEX public money_invoi_invoice_f06be6_idx ud7u6s9otqner
+4571; 1259 1260660890 INDEX public money_invoi_status_98844a_idx ud7u6s9otqner
+4477; 1259 15342798 INDEX public money_invoice_client_id_8b640943 ud7u6s9otqner
+4478; 1259 15342799 INDEX public money_invoice_event_id_1bd422b0 ud7u6s9otqner
+4481; 1259 15342900 INDEX public money_invoice_service_id_a57dcad3 ud7u6s9otqner
+4534; 1259 15342899 INDEX public money_invoiceitem_invoice_id_1ae14154 ud7u6s9otqner
+4579; 1259 1260660925 INDEX public money_invoiceitemv2_category_id_fdeabf60 ud7u6s9otqner
+4580; 1259 1260660926 INDEX public money_invoiceitemv2_invoice_id_ae0b03bb ud7u6s9otqner
+4583; 1259 1260660927 INDEX public money_invoiceitemv2_sub_cat_id_f736b9b5 ud7u6s9otqner
+4572; 1259 1260660907 INDEX public money_invoicev2_client_id_40def76c ud7u6s9otqner
+4573; 1259 1260660908 INDEX public money_invoicev2_event_id_47904941 ud7u6s9otqner
+4576; 1259 1260660934 INDEX public money_invoicev2_sent_by_id_42758597 ud7u6s9otqner
+4577; 1259 1260660909 INDEX public money_invoicev2_service_id_0905ab1b ud7u6s9otqner
+4484; 1259 1265073919 INDEX public money_mileagerate_user_id_88fc9219 ud7u6s9otqner
+4485; 1259 1265073920 INDEX public money_mileagerate_year_83351770 ud7u6s9otqner
+4524; 1259 33519640 INDEX public money_miles_client_id_idx2 ud7u6s9otqner
+4525; 1259 33519641 INDEX public money_miles_event_id_idx2 ud7u6s9otqner
+4526; 1259 33519643 INDEX public money_miles_invoice_number_70b35eaf ud7u6s9otqner
+4527; 1259 33519644 INDEX public money_miles_invoice_number_70b35eaf_like ud7u6s9otqner
+4528; 1259 1260660940 INDEX public money_miles_invoice_v2_id_bf563c9b ud7u6s9otqner
+4529; 1259 15342784 INDEX public money_miles_mileage_8e62c1_idx ud7u6s9otqner
+4532; 1259 15342783 INDEX public money_miles_user_id_1f690c_idx ud7u6s9otqner
+4533; 1259 15342893 INDEX public money_miles_user_id_27747ec2 ud7u6s9otqner
+4520; 1259 15342874 INDEX public money_receipt_event_id_eec1e850 ud7u6s9otqner
+4523; 1259 15342875 INDEX public money_receipt_transaction_id_c83b888d ud7u6s9otqner
+4488; 1259 15342782 INDEX public money_recur_user_id_7ced44_idx ud7u6s9otqner
+4489; 1259 15342810 INDEX public money_recurringtransaction_category_id_d5661c6c ud7u6s9otqner
+4490; 1259 15342811 INDEX public money_recurringtransaction_event_id_df322605 ud7u6s9otqner
+4493; 1259 15342861 INDEX public money_recurringtransaction_sub_cat_id_e1553ae1 ud7u6s9otqner
+4494; 1259 15342862 INDEX public money_recurringtransaction_team_id_cf1ccb43 ud7u6s9otqner
+4495; 1259 15342863 INDEX public money_recurringtransaction_user_id_1e1c1ab0 ud7u6s9otqner
+4498; 1259 15342818 INDEX public money_subcategory_category_id_b377e113 ud7u6s9otqner
+4501; 1259 15342817 INDEX public money_subcategory_slug_691ae16e_like ud7u6s9otqner
+4506; 1259 15342779 INDEX public money_trans_categor_3538f4_idx ud7u6s9otqner
+4507; 1259 15342776 INDEX public money_trans_date_fbbc99_idx ud7u6s9otqner
+4508; 1259 15342778 INDEX public money_trans_event_i_f9d321_idx ud7u6s9otqner
+4509; 1259 15342910 INDEX public money_trans_invoice_d1f344_idx ud7u6s9otqner
+4510; 1259 15342780 INDEX public money_trans_sub_cat_c36845_idx ud7u6s9otqner
+4511; 1259 15342777 INDEX public money_trans_user_id_476296_idx ud7u6s9otqner
+4512; 1259 15342854 INDEX public money_transaction_category_id_4b2b6ccf ud7u6s9otqner
+4513; 1259 15342855 INDEX public money_transaction_event_id_e099b4a4 ud7u6s9otqner
+4516; 1259 15342857 INDEX public money_transaction_recurring_template_id_63463d4e ud7u6s9otqner
+4517; 1259 15342858 INDEX public money_transaction_sub_cat_id_331f3926 ud7u6s9otqner
+4518; 1259 15342859 INDEX public money_transaction_team_id_2c05977e ud7u6s9otqner
+4519; 1259 15342860 INDEX public money_transaction_user_id_a7452b27 ud7u6s9otqner
+4588; 1259 1260662417 INDEX public pilot_training_pilot_id_074facb4 ud7u6s9otqner
+4578; 1259 1260660928 INDEX public uniq_invoicev2_number ud7u6s9otqner
+4557; 1259 1248107595 INDEX public unique_active_client_profile ud7u6s9otqner
+4678; 2606 1266428747 FK CONSTRAINT public airspace_conopssection airspace_conopssecti_application_id_4d555b11_fk_airspace_ ud7u6s9otqner
+4676; 2606 1266428717 FK CONSTRAINT public airspace_waiverapplication airspace_waiverappli_planning_id_32e694d9_fk_airspace_ ud7u6s9otqner
+4677; 2606 1266428722 FK CONSTRAINT public airspace_waiverapplication airspace_waiverapplication_user_id_203f4051_fk_auth_user_id ud7u6s9otqner
+4670; 2606 1266428617 FK CONSTRAINT public airspace_waiverplanning airspace_waiverplann_aircraft_id_a0e08080_fk_flightpla ud7u6s9otqner
+4671; 2606 1266428701 FK CONSTRAINT public airspace_waiverplanning airspace_waiverplann_mv_waiver_document_i_0d7b0748_fk_flightpla ud7u6s9otqner
+4672; 2606 1266428767 FK CONSTRAINT public airspace_waiverplanning airspace_waiverplann_nearest_airport_ref__6c98b128_fk_airspace_ ud7u6s9otqner
+4673; 2606 1266428622 FK CONSTRAINT public airspace_waiverplanning airspace_waiverplann_oop_waiver_document__81d10998_fk_flightpla ud7u6s9otqner
+4674; 2606 1266428627 FK CONSTRAINT public airspace_waiverplanning airspace_waiverplann_pilot_profile_id_7a8c3a5a_fk_app_pilot ud7u6s9otqner
+4675; 2606 1266428632 FK CONSTRAINT public airspace_waiverplanning airspace_waiverplanning_user_id_c9bb7ea9_fk_auth_user_id ud7u6s9otqner
+4631; 2606 15328590 FK CONSTRAINT public app_pilotprofile app_pilotprofile_user_id_83d67819_fk_auth_user_id ud7u6s9otqner
+4632; 2606 15328595 FK CONSTRAINT public app_training app_training_pilot_id_7b575026_fk_app_pilotprofile_id ud7u6s9otqner
+4623; 2606 15328518 FK CONSTRAINT public auth_group_permissions auth_group_permissio_permission_id_84c5c92e_fk_auth_perm ud7u6s9otqner
+4624; 2606 15328513 FK CONSTRAINT public auth_group_permissions auth_group_permissions_group_id_b120cbf9_fk_auth_group_id ud7u6s9otqner
+4622; 2606 15328504 FK CONSTRAINT public auth_permission auth_permission_content_type_id_2f476e4b_fk_django_co ud7u6s9otqner
+4625; 2606 15328533 FK CONSTRAINT public auth_user_groups auth_user_groups_group_id_97559544_fk_auth_group_id ud7u6s9otqner
+4626; 2606 15328528 FK CONSTRAINT public auth_user_groups auth_user_groups_user_id_6a12ed8b_fk_auth_user_id ud7u6s9otqner
+4627; 2606 15328547 FK CONSTRAINT public auth_user_user_permissions auth_user_user_permi_permission_id_1fbb5f2c_fk_auth_perm ud7u6s9otqner
+4628; 2606 15328542 FK CONSTRAINT public auth_user_user_permissions auth_user_user_permissions_user_id_a95ead1b_fk_auth_user_id ud7u6s9otqner
+4629; 2606 15328564 FK CONSTRAINT public django_admin_log django_admin_log_content_type_id_c4bce8eb_fk_django_co ud7u6s9otqner
+4630; 2606 15328569 FK CONSTRAINT public django_admin_log django_admin_log_user_id_c564eba6_fk_auth_user_id ud7u6s9otqner
+4633; 2606 1261623703 FK CONSTRAINT public flightplan_equipment flightplan_equipment_drone_safety_profile_81c5dad2_fk_equipment ud7u6s9otqner
+4657; 2606 1120154558 FK CONSTRAINT public flightplan_opsplan flightplan_opsplan_client_id_bc8404fc_fk_money_client_id ud7u6s9otqner
+4658; 2606 1120154682 FK CONSTRAINT public flightplan_opsplan flightplan_opsplan_created_by_id_13a9cb65_fk_auth_user_id ud7u6s9otqner
+4659; 2606 1120154706 FK CONSTRAINT public flightplan_opsplan flightplan_opsplan_event_id_ca081c08_fk_money_event_id ud7u6s9otqner
+4660; 2606 1120154711 FK CONSTRAINT public flightplan_opsplan flightplan_opsplan_updated_by_id_1627db40_fk_auth_user_id ud7u6s9otqner
+4634; 2606 15342788 FK CONSTRAINT public money_invoice money_invoice_client_id_8b640943_fk_money_client_id ud7u6s9otqner
+4635; 2606 15342793 FK CONSTRAINT public money_invoice money_invoice_event_id_1bd422b0_fk_money_event_id ud7u6s9otqner
+4636; 2606 15342771 FK CONSTRAINT public money_invoice money_invoice_service_id_a57dcad3_fk_money_service_id ud7u6s9otqner
+4656; 2606 15342894 FK CONSTRAINT public money_invoiceitem money_invoiceitem_invoice_id_1ae14154_fk_money_invoice_id ud7u6s9otqner
+4665; 2606 1260660910 FK CONSTRAINT public money_invoiceitemv2 money_invoiceitemv2_category_id_fdeabf60_fk_money_category_id ud7u6s9otqner
+4666; 2606 1260660915 FK CONSTRAINT public money_invoiceitemv2 money_invoiceitemv2_invoice_id_ae0b03bb_fk_money_invoicev2_id ud7u6s9otqner
+4667; 2606 1260660920 FK CONSTRAINT public money_invoiceitemv2 money_invoiceitemv2_sub_cat_id_f736b9b5_fk_money_subcategory_id ud7u6s9otqner
+4661; 2606 1260660892 FK CONSTRAINT public money_invoicev2 money_invoicev2_client_id_40def76c_fk_money_client_id ud7u6s9otqner
+4662; 2606 1260660897 FK CONSTRAINT public money_invoicev2 money_invoicev2_event_id_47904941_fk_money_event_id ud7u6s9otqner
+4663; 2606 1260660929 FK CONSTRAINT public money_invoicev2 money_invoicev2_sent_by_id_42758597_fk_auth_user_id ud7u6s9otqner
+4664; 2606 1260660902 FK CONSTRAINT public money_invoicev2 money_invoicev2_service_id_0905ab1b_fk_money_service_id ud7u6s9otqner
+4637; 2606 1265073906 FK CONSTRAINT public money_mileagerate money_mileagerate_user_id_88fc9219_fk_auth_user_id ud7u6s9otqner
+4652; 2606 33519630 FK CONSTRAINT public money_miles money_miles_client_id_fk ud7u6s9otqner
+4653; 2606 33519635 FK CONSTRAINT public money_miles money_miles_event_id_fk ud7u6s9otqner
+4654; 2606 1260660935 FK CONSTRAINT public money_miles money_miles_invoice_v2_id_bf563c9b_fk_money_invoicev2_id ud7u6s9otqner
+4655; 2606 15342886 FK CONSTRAINT public money_miles money_miles_user_id_27747ec2_fk_auth_user_id ud7u6s9otqner
+4650; 2606 15342864 FK CONSTRAINT public money_receipt money_receipt_event_id_eec1e850_fk_money_event_id ud7u6s9otqner
+4651; 2606 15342869 FK CONSTRAINT public money_receipt money_receipt_transaction_id_c83b888d_fk_money_transaction_id ud7u6s9otqner
+4638; 2606 35017352 FK CONSTRAINT public money_recurringtransaction money_recurringtrans_category_id_d5661c6c_fk_money_cat ud7u6s9otqner
+4639; 2606 15342734 FK CONSTRAINT public money_recurringtransaction money_recurringtrans_sub_cat_id_e1553ae1_fk_money_sub ud7u6s9otqner
+4640; 2606 15342805 FK CONSTRAINT public money_recurringtransaction money_recurringtransaction_event_id_df322605_fk_money_event_id ud7u6s9otqner
+4641; 2606 15342739 FK CONSTRAINT public money_recurringtransaction money_recurringtransaction_team_id_cf1ccb43_fk_money_team_id ud7u6s9otqner
+4642; 2606 15342744 FK CONSTRAINT public money_recurringtransaction money_recurringtransaction_user_id_1e1c1ab0_fk_auth_user_id ud7u6s9otqner
+4643; 2606 15342812 FK CONSTRAINT public money_subcategory money_subcategory_category_id_b377e113_fk_money_category_id ud7u6s9otqner
+4644; 2606 15342819 FK CONSTRAINT public money_transaction money_transaction_category_id_4b2b6ccf_fk_money_category_id ud7u6s9otqner
+4645; 2606 15342824 FK CONSTRAINT public money_transaction money_transaction_event_id_e099b4a4_fk_money_event_id ud7u6s9otqner
+4646; 2606 15342834 FK CONSTRAINT public money_transaction money_transaction_recurring_template_i_63463d4e_fk_money_rec ud7u6s9otqner
+4647; 2606 15342839 FK CONSTRAINT public money_transaction money_transaction_sub_cat_id_331f3926_fk_money_subcategory_id ud7u6s9otqner
+4648; 2606 15342844 FK CONSTRAINT public money_transaction money_transaction_team_id_2c05977e_fk_money_team_id ud7u6s9otqner
+4649; 2606 15342849 FK CONSTRAINT public money_transaction money_transaction_user_id_a7452b27_fk_auth_user_id ud7u6s9otqner
+4668; 2606 1260662407 FK CONSTRAINT public pilot_pilotprofile pilot_pilotprofile_user_id_8d808c7e_fk_auth_user_id ud7u6s9otqner
+4669; 2606 1260662412 FK CONSTRAINT public pilot_training pilot_training_pilot_id_074facb4_fk_pilot_pilotprofile_id ud7u6s9otqner

@@ -1,0 +1,167 @@
+{% load static %}
+{% load humanize %}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Mileage Report</title>
+</head>
+
+<style>
+  /* Register footer as running element */
+#pdf-footer {
+  position: running(footer);
+  font-size: 9pt;
+  color: #666;
+}
+
+/* Place footer at bottom of every page */
+@page {
+  size: Letter;
+  margin: 0.6in;
+
+  @bottom-center {
+    content: element(footer);
+  }
+}
+@page {
+  @bottom-center {
+    content: element(footer);
+    border-top: 1px solid #ddd;
+    padding-top: 4px;
+  }
+}
+
+</style>
+<body>
+    <div class="col" style="flex: 1; text-align: center;">
+      {% if BRAND_LOGO_URL %}
+        <img src="{{ BRAND_LOGO_URL }}"
+            alt="{{ BRAND_PROFILE.name|default:'Brand Logo' }}"
+            style="max-height: 120px; width: auto;">
+    
+          </strong>
+          <h1>Mileage Report</h1>
+          <div class="muted">
+            Tax Year: <strong>{{ selected_year }}</strong>
+          </div>
+      {% endif %}
+    </div>
+
+  <div style="height: 10px;"></div>
+
+  <div class="row">
+    <div class="box w50">
+      <h2>Summary</h2>
+      <table>
+        <tr><td class="muted">Mileage Rate</td><td class="num">${{ mileage_rate|floatformat:4 }}</td></tr>
+        <tr><td class="muted">Business Miles</td><td class="num">{{ taxable_miles|floatformat:1|intcomma }}</td></tr>
+        <tr><td class="muted"><strong>Estimated Deduction</strong></td><td class="num"><strong>${{ taxable_dollars|floatformat:2|intcomma }}</strong></td></tr>
+      </table>
+    </div>
+
+
+  </div>
+
+  <h2>Detailed Log</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Vehicle</th>
+        <th>Business Purpose</th>
+        <th>Invoice #</th>
+        <th class="num">Odo Start</th>
+        <th class="num">Odo End</th>
+        <th class="num">Miles</th>
+
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in entries_irs %}
+        <tr>
+          <td>{{ e.date|date:"m-d-Y" }}</td>
+          <td>{{ e.vehicle.name }}</td>
+          <td>
+            {% if e.event %}{{ e.event }}{% elif e.client %}{{ e.client }}{% else %}—{% endif %}
+            {% if e.client and e.event %}
+              <div class="muted" style="font-size: 9pt;">Client: {{ e.client }}</div>
+            {% endif %}
+          </td>
+
+          <td>
+            {% if e.invoice_v2 %}{{ e.invoice_v2.invoice_number }}
+            {% elif e.invoice_number %}{{ e.invoice_number }}
+            {% else %}—{% endif %}
+          </td>
+
+          <td class="num">{{ e.begin|floatformat:1|intcomma }}</td>
+          <td class="num">{{ e.end|floatformat:1|intcomma }}</td>
+          <td class="num">{{ e.miles|floatformat:1|intcomma }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="muted">No mileage entries found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+
+<div class="footer" id="pdf-footer">
+  {{ BRAND_PROFILE.name_for_display }}
+  {% if BRAND_PROFILE.website %} — {{ BRAND_PROFILE.website }}{% endif %}
+  {% if BRAND_PROFILE.support_email %} — {{ BRAND_PROFILE.support_email }}{% endif %}
+  {% if formatted_brand_phone %} — {{ formatted_brand_phone }}{% endif %}
+</div>
+
+
+  <div style="page-break-before: always;"></div>
+    <div class="col" style="flex: 1; text-align: center;">
+      {% if BRAND_LOGO_URL %}
+        <img src="{{ BRAND_LOGO_URL }}"
+            alt="{{ BRAND_PROFILE.name|default:'Brand Logo' }}"
+            style="max-height: 120px; width: auto;">
+    
+          </strong>
+          <h1>Mileage Report</h1>
+          <div class="muted">
+            Tax Year: <strong>{{ selected_year }}</strong>
+          </div>
+      {% endif %}
+    </div>
+
+<h2>Vehicles List ({{ selected_year }})</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Vehicle Name</th>
+      <th>Make</th>
+      <th>Model</th>
+      <th class="num">Odo Start</th>
+      <th class="num">Odo End</th>
+      <th class="num">Business Miles</th>
+      <th class="num">Commuting Miles</th>
+      <th class="num">Other Miles</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in vehicles_summary %}
+      <tr>
+        <td>{{ row.vehicle.name }}</td>
+        <td>{{ row.vehicle.make|default:"—" }}</td>
+        <td>{{ row.vehicle.model|default:"—" }}</td>
+        <td class="num">{% if row.odo_start is not None %}{{ row.odo_start|floatformat:1|intcomma }}{% else %}—{% endif %}</td>
+        <td class="num">{% if row.odo_end is not None %}{{ row.odo_end|floatformat:1|intcomma }}{% else %}—{% endif %}</td>
+        <td class="num">{{ row.business_miles|floatformat:1|intcomma }}</td>
+        <td class="num">{{ row.commuting_miles|floatformat:1|intcomma }}</td>
+        <td class="num">{{ row.other_miles|floatformat:1|intcomma }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="8" class="muted">No vehicles found for this year.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+</body>
+</html>

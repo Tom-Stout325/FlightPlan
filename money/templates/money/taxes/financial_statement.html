@@ -19,11 +19,9 @@
                 </div>
                 <div class="col-auto">
                     <select name="year" id="year" class="form-select" onchange="this.form.submit()">
-                        <option value="">All Years</option>
-                        {% for year in available_years %}
-                        <option value="{{ year }}" {% if selected_year|slugify == year|slugify %}selected{% endif %}>
-                            {{ year }}
-                        </option>
+                        <option value="all" {% if selected_year == "All" %}selected{% endif %}>All Years</option>
+                        {% for y in available_years %}
+                        <option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}</option>
                         {% endfor %}
                     </select>
                 </div>
