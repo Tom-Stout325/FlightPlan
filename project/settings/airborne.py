@@ -23,8 +23,10 @@ ENABLED_REPORTS = [
     "nhra_summary",
     "nhra_summary_report",
     "travel_expense_analysis",
-    "schedule_c",
     "receipts",
     "travel_summary",
     "travel_expenses",
+    "schedule_c",
+    "tax_financial_statement",
+    "tax_category_summary",
 ]

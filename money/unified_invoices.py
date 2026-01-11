@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -14,8 +16,9 @@ from money.models import InvoiceV2, Invoice
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, List
 from django.utils.functional import cached_property
+
 
 
 
@@ -79,21 +82,29 @@ class UnifiedInvoiceRow:
 # ----------------------------------------------------------------------
 # V2 invoices
 # ----------------------------------------------------------------------
-def load_v2_invoices(request) -> List[UnifiedInvoiceRow]:
+
+
+
+def load_v2_invoices(*, user, qs=None) -> List[UnifiedInvoiceRow]:
     """
-    Build rows for all InvoiceV2 objects (no filtering here; filters are
-    applied in the view).
+    Build rows for InvoiceV2 objects scoped to a single user.
+
+    Safe by default:
+    - Always filters through client__user=user (prevents cross-user leakage)
+    - Call sites should pass: load_v2_invoices(user=request.user)
     """
+    base = qs if qs is not None else InvoiceV2.objects.all()
+
     qs = (
-        InvoiceV2.objects
-        .select_related("client", "event")
-        .order_by("-date", "-pk")
+        base.select_related("client", "event", "service")
+            .filter(client__user=user)
+            .order_by("-date", "-pk")
     )
 
     rows: List[UnifiedInvoiceRow] = []
 
     for inv in qs:
-        # Client display
+        # --- Client display ---
         client_name = "—"
         client = getattr(inv, "client", None)
         if client is not None:
@@ -103,30 +114,23 @@ def load_v2_invoices(request) -> List[UnifiedInvoiceRow]:
                 or str(client)
             )
 
-  
-        event_name = None
+        # --- Event display ---
+        event_name: Optional[str]
         event = getattr(inv, "event", None)
         if event is not None:
             event_name = getattr(event, "title", None) or str(event)
         else:
             event_name = getattr(inv, "event_name", None)
 
-        # Dates / amounts
-        issue_date = (
-            getattr(inv, "date", None)
-            or getattr(inv, "issue_date", None)
-        )
-
-        total_amount = (
-            getattr(inv, "amount", None)
-            or getattr(inv, "total_amount", None)
-        )
+        # --- Dates / amounts ---
+        issue_date = getattr(inv, "date", None) or getattr(inv, "issue_date", None)
+        total_amount = getattr(inv, "amount", None) or getattr(inv, "total_amount", None)
 
         status = getattr(inv, "status", None)
         location = getattr(inv, "location", None)
         due_date = getattr(inv, "due", None)
 
-        # URLs
+        # --- URLs ---
         try:
             detail_url = reverse("money:invoice_v2_detail", args=[inv.pk])
         except NoReverseMatch:
@@ -152,15 +156,16 @@ def load_v2_invoices(request) -> List[UnifiedInvoiceRow]:
                 issue_date=issue_date,
                 total_amount=total_amount,
                 detail_url=detail_url,
-                review_url=review_url,   
+                review_url=review_url,
                 pdf_url=pdf_url,
                 status=status,
                 location=location or None,
                 due_date=due_date,
             )
         )
-
+    print("V2 invoices count:", qs.count(), "user:", user.id)
     return rows
+
 
 
 

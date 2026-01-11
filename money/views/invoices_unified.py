@@ -1,5 +1,7 @@
 # money/views/invoices_unified.py
 
+from __future__ import annotations
+
 from datetime import date
 
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -7,21 +9,20 @@ from django.core.paginator import Paginator
 from django.shortcuts import render
 from django.views import View
 
-from ..models import InvoiceV2, Client
+from ..models import Client, InvoiceV2
 from ..unified_invoices import (
-    load_v2_invoices,
-    load_legacy_model_invoices,
     load_legacy_files,
+    load_legacy_model_invoices,
+    load_v2_invoices,
 )
 
 
 class InvoiceUnifiedListView(LoginRequiredMixin, View):
     """
-    Unified invoice list:
-
-    - InvoiceV2 records (new system)
-    - Legacy Invoice DB records
-    - Legacy PDF-only files
+    Unified invoice list (per-user):
+      - InvoiceV2 records (new system)
+      - Legacy Invoice DB records
+      - Legacy PDF-only files
     """
 
     template_name = "money/invoices/invoice_v2_list.html"
@@ -29,67 +30,55 @@ class InvoiceUnifiedListView(LoginRequiredMixin, View):
 
     def get(self, request, *args, **kwargs):
         # ------------------------------------------------------------------
-        # 1) Load ALL sources (V2 + legacy DB + legacy file PDFs)
+        # 1) Load ALL sources (ensure loaders are user-scoped)
         # ------------------------------------------------------------------
         rows = []
-        rows.extend(load_v2_invoices(request))
-        rows.extend(load_legacy_model_invoices(request))
-        rows.extend(load_legacy_files(request))
+        rows.extend(load_v2_invoices(user=request.user))
+        rows.extend(load_legacy_model_invoices(request))  # must scope internally
+        rows.extend(load_legacy_files(request))           # must scope internally
 
         # ------------------------------------------------------------------
         # 2) Filters from query params
         # ------------------------------------------------------------------
-        status = request.GET.get("status") or ""
-        year_str = request.GET.get("year") or ""
-        client_str = request.GET.get("client") or ""
+        status = (request.GET.get("status") or "").strip()
+        year_str = (request.GET.get("year") or "").strip()
+        client_str = (request.GET.get("client") or "").strip()
 
-        # Status filter (only if provided)
+        # Status filter (exact match)
         if status:
-            rows = [
-                r for r in rows
-                if (r.status == status)
-            ]
+            rows = [r for r in rows if (getattr(r, "status", "") == status)]
 
         # Year filter (by issue_date.year)
-        if year_str:
-            try:
-                year_val = int(year_str)
-            except ValueError:
-                year_val = None
+        year_val = None
+        if year_str.isdigit():
+            year_val = int(year_str)
 
-            if year_val:
-                rows = [
-                    r for r in rows
-                    if r.issue_date and r.issue_date.year == year_val
-                ]
+        if year_val:
+            rows = [
+                r for r in rows
+                if getattr(r, "issue_date", None) and r.issue_date.year == year_val
+            ]
 
-        # Client filter – using client_name as normalised display
-        if client_str:
-            try:
-                client_id = int(client_str)
-            except ValueError:
-                client_id = None
+        # Client filter
+        # IMPORTANT: client lookup must be user-scoped
+        target_name = None
+        if client_str.isdigit():
+            client_id = int(client_str)
+            client_obj = Client.objects.filter(user=request.user, pk=client_id).first()
+            if client_obj:
+                # Use the same display name your unified rows use for client_name
+                target_name = (client_obj.business or str(client_obj) or "").strip()
 
-            if client_id:
-                try:
-                    client_obj = Client.objects.get(pk=client_id)
-                    target_name = client_obj.business or str(client_obj)
-                except Client.DoesNotExist:
-                    target_name = None
-
-                if target_name:
-                    rows = [
-                        r for r in rows
-                        if r.client_name == target_name
-                    ]
+        if target_name:
+            rows = [r for r in rows if (getattr(r, "client_name", "").strip() == target_name)]
 
         # ------------------------------------------------------------------
         # 3) Sort rows: newest issue_date first, then by id
         # ------------------------------------------------------------------
         rows.sort(
             key=lambda r: (
-                r.issue_date or date.min,
-                r.id,
+                getattr(r, "issue_date", None) or date.min,
+                getattr(r, "id", 0) or 0,
             ),
             reverse=True,
         )
@@ -102,19 +91,18 @@ class InvoiceUnifiedListView(LoginRequiredMixin, View):
         page_obj = paginator.get_page(page_number)
 
         # ------------------------------------------------------------------
-        # 5) Build filter options for the UI
+        # 5) Build filter options for the UI (SCOPED)
         # ------------------------------------------------------------------
-        # Years from InvoiceV2 dates (to keep things simple)
         v2_years = (
             InvoiceV2.objects
+            .filter(user=request.user)
             .order_by()
             .values_list("date__year", flat=True)
             .distinct()
         )
-        years = sorted(set(y for y in v2_years if y))
+        years = sorted({y for y in v2_years if y})
 
-        # Clients from the Client model
-        clients = Client.objects.all().order_by("business")
+        clients = Client.objects.filter(user=request.user).order_by("business")
 
         context = {
             # data

@@ -1,0 +1,112 @@
+{% extends "index.html" %}
+{% load humanize %}
+
+{% block title %}Schedule C{% endblock %}
+
+{% block content %}
+<div class="container my-4" style="max-width: 1100px;">
+
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-3">
+    <div>
+      <h1 class="h4 mb-1">Schedule C</h1>
+      <p class="text-muted mb-0 small">
+        Totals are based on sub-categories mapped to Schedule C lines and marked “Include in tax reports”.
+      </p>
+    </div>
+
+    <form method="get" class="d-flex gap-2 align-items-center">
+      <label for="id_year" class="small text-muted mb-0">Year</label>
+      <select id="id_year" name="year" class="form-select form-select-sm" style="max-width: 140px;" onchange="this.form.submit()">
+        {% for y in years %}
+          <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+      <noscript>
+        <button class="btn btn-sm btn-primary" type="submit">Go</button>
+      </noscript>
+    </form>
+  </div>
+
+  <div class="card shadow-sm border-0 mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center">
+        <div class="text-muted small">Total deductible expenses</div>
+        <div class="h5 mb-0">${{ grand_total|floatformat:2|intcomma }}</div>
+      </div>
+      <div class="text-muted small mt-2">
+        Meals (sub-category slug <code>meals</code>) are counted at {{ meals_rate|floatformat:2 }} (50%).
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th style="width: 120px;">Line</th>
+              <th>Details</th>
+              <th class="text-end" style="width: 180px;">Deductible total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for line in lines %}
+              <tr>
+                <td class="fw-semibold">
+                  {{ line.line }}
+                  <span class="text-muted fw-normal ms-2">| {{ line.category_label }}</span>
+                </td>
+
+
+                <td>
+                  <details>
+                    <summary class="small text-muted">Show breakdown</summary>
+                    <div class="mt-2">
+                      <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                          <thead>
+                            <tr class="small text-muted">
+                              <th>Category</th>
+                              <th>Sub-category</th>
+                              <th class="text-end">Raw</th>
+                              <th class="text-end">Deductible</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {% for r in line.breakdown %}
+                              <tr class="small">
+                                <td>{{ r.category }}</td>
+                                <td>
+                                  {{ r.sub_cat }}
+                                  {% if r.sub_cat_slug == "meals" %}
+                                    <span class="badge bg-warning text-dark ms-1">Meals 50%</span>
+                                  {% endif %}
+                                </td>
+                                <td class="text-end">${{ r.raw_total|floatformat:2|intcomma }}</td>
+                                <td class="text-end">${{ r.deductible_total|floatformat:2|intcomma }}</td>
+                              </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </details>
+                </td>
+                <td class="text-end fw-semibold">${{ line.total|floatformat:2|intcomma }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="3" class="text-center text-muted py-4">
+                  No mapped tax sub-categories found for {{ selected_year }}.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

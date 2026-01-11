@@ -1,32 +1,124 @@
+# money/models.py
+
+from __future__ import annotations
+
 from decimal import Decimal
 
 from django.apps import apps
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator, RegexValidator
-from django.db import models
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
+from django.db import models, transaction
 from django.db.models import DecimalField, ExpressionWrapper, F, IntegerField, Q, Sum
 from django.db.models.functions import Cast
 from django.utils import timezone
 from django.utils.text import slugify
-from django.contrib.auth.models import User
 
 try:
     from django.contrib.postgres.indexes import GinIndex
     from django.contrib.postgres.search import SearchVectorField
-except ImportError:
+except ImportError:  # pragma: no cover
     GinIndex = None
     SearchVectorField = None
 
 
+# -----------------------------------------------------------------------------
+# Helpers / Validators
+# -----------------------------------------------------------------------------
+
+HEX_COLOR_VALIDATOR = RegexValidator(
+    regex=r"^#(?:[0-9a-fA-F]{3}){1,2}$",
+    message="Enter a valid hex color like #000000 or #fff.",
+)
 
 
+def validate_image_extension_no_svg(value):
+    """
+    Prevent SVG uploads for logos; allow common raster formats.
+    """
+    name = getattr(value, "name", "") or ""
+    ext = name.lower().rsplit(".", 1)[-1] if "." in name else ""
+    allowed = {"png", "jpg", "jpeg", "webp"}
+    if ext not in allowed:
+        raise ValidationError(
+            f"Unsupported logo file type '.{ext}'. Allowed: {', '.join(sorted(allowed))}."
+        )
 
-from django.db import models
-from django.utils.text import slugify
-from django.db.models import Q
 
-class Category(models.Model):
+def logo_upload_path(instance, filename):
+    # e.g., branding/airborne-images/logo.png
+    slug = instance.slug or "default"
+    return f"branding/{slug}/{filename}"
+
+
+def _safe_slug(value: str, max_len: int = 100) -> str:
+    return slugify(value or "")[:max_len]
+
+
+def _ownership_error():
+    # Keep message generic to avoid leaking existence of other users' objects
+    return "Invalid selection."
+
+
+def _is_blank(value) -> bool:
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+def _quantize_money(value: Decimal) -> Decimal:
+    return (value or Decimal("0.00")).quantize(Decimal("0.01"))
+
+
+class OwnedModelMixin(models.Model):
+    """
+    Common owner FK + helper methods.
+
+    View/Form queryset scoping is the FIRST line of defense.
+    This mixin is the SECOND line of defense against cross-user FK injection.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="%(class)ss",
+    )
+
+    class Meta:
+        abstract = True
+
+    def clean(self):
+        super().clean()
+        if not self.user_id:
+            raise ValidationError({"user": "Owner must be set."})
+
+    def _assert_owned_fk(self, field_name: str, obj) -> None:
+        """
+        Ensure related object belongs to the same user.
+
+        - Allows global/shared models (no user_id)
+        - Raises if self.user is not set
+        - Raises if ownership mismatch
+        """
+        if obj is None:
+            return
+
+        # Global/shared FK (no user_id on model)
+        if not hasattr(obj, "user_id"):
+            return
+
+        if not self.user_id:
+            raise ValidationError(
+                {field_name: "Owner must be set before validating related objects."}
+            )
+
+        if obj.user_id != self.user_id:
+            raise ValidationError({field_name: _ownership_error()})
+
+
+# -----------------------------------------------------------------------------
+# Core Taxonomy
+# -----------------------------------------------------------------------------
+
+class Category(OwnedModelMixin):
     INCOME = "Income"
     EXPENSE = "Expense"
 
@@ -37,8 +129,10 @@ class Category(models.Model):
 
     category = models.CharField(max_length=500, blank=True, null=True)
     schedule_c_line = models.CharField(
-        max_length=10, blank=True, null=True,
-        help_text="Enter Schedule C line number (e.g., '8', '9', '27a')"
+        max_length=10,
+        blank=True,
+        null=True,
+        help_text="Enter Schedule C line number (e.g., '8', '9', '27a')",
     )
     category_type = models.CharField(
         max_length=10,
@@ -46,49 +140,73 @@ class Category(models.Model):
         default=EXPENSE,
         help_text="Default accounting nature for this category.",
     )
-
     slug = models.SlugField(max_length=255, blank=True, null=True)
-
-    def save(self, *args, **kwargs):
-        if not self.slug and self.category:
-            self.slug = slugify(self.category)[:255]
-        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name_plural = "Categories"
         ordering = ["category"]
         constraints = [
             models.UniqueConstraint(
-                fields=["slug"],
+                fields=["user", "slug"],
                 condition=Q(slug__isnull=False),
-                name="money_category_slug_unique_not_null",
+                name="uniq_money_category_user_slug_not_null",
             )
+        ]
+        indexes = [
+            models.Index(fields=["user", "category_type"]),
+            models.Index(fields=["user", "category"]),
+            models.Index(fields=["user", "slug"]),
         ]
 
     def __str__(self):
         return self.category or "Unnamed Category"
 
+    def save(self, *args, **kwargs):
+        if _is_blank(self.slug) and self.category:
+            self.slug = _safe_slug(self.category, 255) or None
+        super().save(*args, **kwargs)
 
 
-
-class SubCategory(models.Model):
+class SubCategory(OwnedModelMixin):
     sub_cat = models.CharField(max_length=500, blank=True, null=True)
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, null=True, blank=True, related_name='subcategories')
-    slug = models.SlugField(max_length=100, unique=True, blank=True)
-    schedule_c_line = models.CharField(max_length=10, blank=True, null=True, help_text="Enter Schedule C line number.")
-    include_in_tax_reports = models.BooleanField(default=True, help_text="If unchecked, this sub-category is excluded from tax-related reports.")
-    
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="subcategories",
+    )
+    # IMPORTANT: allow NULL so multiple blank slugs don't violate uniqueness
+    slug = models.SlugField(max_length=100, blank=True, null=True)
+    schedule_c_line = models.CharField(
+        max_length=10,
+        blank=True,
+        null=True,
+        help_text="Enter Schedule C line number.",
+    )
+    include_in_tax_reports = models.BooleanField(
+        default=True,
+        help_text="If unchecked, this sub-category is excluded from tax-related reports.",
+    )
+
     class Meta:
         verbose_name_plural = "Sub Categories"
-        ordering = ['sub_cat']
+        ordering = ["sub_cat"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "slug"],
+                condition=Q(slug__isnull=False),
+                name="uniq_money_subcategory_user_slug_not_null",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["user", "sub_cat"]),
+            models.Index(fields=["user", "category"]),
+            models.Index(fields=["user", "slug"]),
+        ]
 
     def __str__(self):
         return f"{self.category} - {self.sub_cat or 'Unnamed SubCategory'}"
-
-    def save(self, *args, **kwargs):
-        if not self.slug and self.sub_cat:
-            self.slug = slugify(self.sub_cat)
-        super().save(*args, **kwargs)
 
     @property
     def category_type(self):
@@ -96,342 +214,292 @@ class SubCategory(models.Model):
             return self.category.category_type
         return Category.EXPENSE
 
-
-
-
-class Team(models.Model):
-    name = models.CharField(max_length=50, blank=True, null=True)
-   
-    def __str__(self):
-        return self.name
-    
-    
-    
-
-class Client(models.Model):
-    business  = models.CharField(max_length=500, blank=True, null=True)
-    first     = models.CharField(max_length=500, blank=True, null=True)
-    last      = models.CharField(max_length=500, blank=True, null=True)
-    street    = models.CharField(max_length=500, blank=True, null=True)
-    address2  = models.CharField(max_length=500, blank=True, null=True)
-    email     = models.EmailField(max_length=254)
-    phone     = models.CharField(max_length=500, blank=True, null=True)
-    
-    def __str__(self):
-        return self.business
-    
-    
-    
-
-class Event(models.Model):
-    EVENT_TYPE_CHOICES = [
-        ('race', 'Race'),
-        ('event', 'Event'),
-        ('other', 'Other'),
-    ]
-
-    title            = models.CharField(max_length=200)
-    event_type       = models.CharField(max_length=50, choices=EVENT_TYPE_CHOICES, default='race')
-    location_city    = models.CharField(max_length=200, blank=True, null=True)
-    location_address = models.CharField(max_length=500, blank=True, null=True)
-    notes            = models.TextField(blank=True, null=True)
-    slug             = models.SlugField(max_length=100, unique=True, blank=True)
-
-    class Meta:
-        ordering = ['title']
+    def clean(self):
+        super().clean()
+        self._assert_owned_fk("category", self.category)
 
     def save(self, *args, **kwargs):
-        if not self.slug or self.slug.strip() == "":
-            self.slug = slugify(f"{self.title}")
+        if _is_blank(self.slug) and self.sub_cat:
+            if self.category and self.category.slug:
+                base = f"{self.category.slug}-{self.sub_cat}"
+            elif self.category_id:
+                base = f"{self.category_id}-{self.sub_cat}"
+            else:
+                base = self.sub_cat
+            self.slug = _safe_slug(base, 100) or None
+
+        # Enforce ownership consistency
+        self.full_clean()
         super().save(*args, **kwargs)
+
+
+class Team(OwnedModelMixin):
+    name = models.CharField(max_length=50, blank=True, null=True)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "name"], name="uniq_money_team_per_user")
+        ]
+        indexes = [
+            models.Index(fields=["user", "name"]),
+        ]
+
+    def __str__(self):
+        return self.name or "Unnamed Team"
+
+
+
+
+class Client(OwnedModelMixin):
+    business = models.CharField(max_length=500, blank=True, null=True)
+    first = models.CharField(max_length=500, blank=True, null=True)
+    last = models.CharField(max_length=500, blank=True, null=True)
+    street = models.CharField(max_length=500, blank=True, null=True)
+    address2 = models.CharField(max_length=500, blank=True, null=True)
+    email = models.EmailField(max_length=254)
+    phone = models.CharField(max_length=500, blank=True, null=True)
+
+    class Meta:
+        ordering = ["business", "last", "first"]
+        indexes = [
+            models.Index(fields=["user", "business"]),
+            models.Index(fields=["user", "email"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "email"], name="uniq_money_client_user_email"),
+        ]
+
+
+    def __str__(self):
+        return self.business or f"{self.first or ''} {self.last or ''}".strip() or "Unnamed Client"
+
+    def clean(self):
+        super().clean()
+
+        # Normalize/strip
+        if self.business is not None:
+            self.business = self.business.strip() or None
+        if self.first is not None:
+            self.first = self.first.strip() or None
+        if self.last is not None:
+            self.last = self.last.strip() or None
+        if self.street is not None:
+            self.street = self.street.strip() or None
+        if self.address2 is not None:
+            self.address2 = self.address2.strip() or None
+        if self.phone is not None:
+            self.phone = self.phone.strip() or None
+
+        if self.email:
+            self.email = self.email.strip().lower()
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class Event(OwnedModelMixin):
+    EVENT_TYPE_CHOICES = [
+        ("race", "Race"),
+        ("event", "Event"),
+        ("other", "Other"),
+    ]
+
+    title                      = models.CharField(max_length=200)
+    event_type                 = models.CharField(max_length=50, choices=EVENT_TYPE_CHOICES, default="race")
+    event_year                 = models.PositiveIntegerField(default=timezone.localdate().year, validators=[MinValueValidator(2000), MaxValueValidator(2100)], db_index=True, help_text="Year this event belongs to (used for reporting and invoice grouping).",)
+    location_city = models.CharField(max_length=200, blank=True, null=True)
+    location_address = models.CharField(max_length=500, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    slug = models.SlugField(max_length=100, blank=True, null=True)
+
+    class Meta:
+        ordering = ["title"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "slug"],
+                condition=Q(slug__isnull=False),
+                name="uniq_money_event_user_slug_not_null",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["user", "title"]),
+            models.Index(fields=["user", "event_type"]),
+            models.Index(fields=["user", "event_year"]),
+            models.Index(fields=["user", "slug"]),
+        ]
 
     def __str__(self):
         return self.title
-    
-    
+
+    def save(self, *args, **kwargs):
+        if _is_blank(self.slug):
+            self.slug = _safe_slug(self.title, 100) or None
+        if not self.event_year and self.title:
+            self.event_year = timezone.localdate().year
+        super().save(*args, **kwargs)
 
 
-class Service(models.Model):
-    service = models.CharField(max_length=500, blank=True, null=True) 
-    
-    def __str__(self):
-        return self.service
+class Service(OwnedModelMixin):
+    service = models.CharField(max_length=500, blank=True, null=True)
 
-
-
-
-class InvoiceItem(models.Model):
-    invoice = models.ForeignKey('Invoice', on_delete=models.CASCADE, related_name='items')
-    description = models.CharField(max_length=500) 
-    qty = models.IntegerField(default=0, blank=True, null=True)
-    price = models.DecimalField(max_digits=20, decimal_places=2, default=0.00, blank=True, null=True)
-
-    def __str__(self):
-        return f"{self.description} - {self.qty} x {self.price}"
-
-    @property
-    def total(self):
-        return (self.qty or 0) * (self.price or 0)
-    
-    
-    
-    
-    
-class Invoice(models.Model):
-    invoice_number = models.CharField(max_length=25, blank=True, null=True)
-    client         = models.ForeignKey('Client', on_delete=models.PROTECT, related_name='invoices')
-    event_name     = models.CharField(max_length=500, blank=True, null=True)
-    location       = models.CharField(max_length=500, blank=True, null=True)
-    event          = models.ForeignKey('Event', on_delete=models.PROTECT, default=1, related_name='invoices')
-    service        = models.ForeignKey('Service', on_delete=models.PROTECT, related_name='invoices')
-    amount         = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, editable=False)
-    date           = models.DateField()
-    due            = models.DateField()
-    paid_date      = models.DateField(null=True, blank=True)
-
-    STATUS_CHOICES = [
-        ('Unpaid', 'Unpaid'),
-        ('Paid', 'Paid'),
-        ('Partial', 'Partial'),
-    ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Unpaid')
-
-    if SearchVectorField:
-        search_vector = SearchVectorField(null=True, blank=True)
-
-    from_name   = models.CharField(max_length=255, blank=True)
-    from_address = models.TextField(blank=True)                 # multiline postal block
-    from_phone  = models.CharField(max_length=50, blank=True)
-    from_email  = models.EmailField(blank=True)
-    from_website = models.URLField(blank=True)
-    from_tax_id = models.CharField(max_length=64, blank=True)
-
-    from_logo_url                    = models.URLField(blank=True)
-    from_header_logo_max_width_px    = models.PositiveIntegerField(default=320)
-
-    from_terms       = models.CharField(max_length=100, blank=True)   # e.g., "Net 30"
-    from_net_days    = models.PositiveIntegerField(default=30)
-    from_footer_text = models.TextField(blank=True)
-
-    # Formatting hints captured (useful for PDFs, currency symbols, etc.)
-    from_currency = models.CharField(max_length=3, default="USD")
-    from_locale   = models.CharField(max_length=10, default="en_US")
-    from_timezone = models.CharField(max_length=64, default="America/Indiana/Indianapolis")
-
-    # ------- NEW: issuance / archiving hooks (minimal) -------
-    issued_at  = models.DateTimeField(null=True, blank=True)     # set when you officially "issue"
-    version    = models.PositiveIntegerField(default=1)           # bump if you create a revision
-    pdf_url    = models.URLField(
-        blank=True,
-        max_length=1000,
-    )                      
-    pdf_sha256 = models.CharField(max_length=64, blank=True)    
     class Meta:
-        ordering = ['invoice_number']
+        ordering = ["service"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "service"], name="uniq_money_service_per_user")
+        ]
+        indexes = [
+            models.Index(fields=["user", "service"]),
+        ]
 
     def __str__(self):
-        return self.invoice_number or f"Invoice {self.pk}"
+        return self.service or "Unnamed Service"
 
-    # ------- totals -------
-    def update_amount(self):
-        """
-        Recalculate the total invoice amount based on related items (qty * price).
-        Relies on InvoiceItem with related_name='items'.
-        """
-        total = self.items.annotate(
-            line_total=ExpressionWrapper(F('qty') * F('price'), output_field=DecimalField())
-        ).aggregate(sum=Sum('line_total'))['sum'] or 0
-        self.amount = total
-        self.save()
 
-    # ------- flags / convenience -------
-    @property
-    def is_paid(self):
-        return self.paid_date is not None or self.status == 'Paid'
+# -----------------------------------------------------------------------------
+# Transactions
+# -----------------------------------------------------------------------------
 
-    @property
-    def is_locked(self):
-        """
-        Consider the invoice 'locked' once issued (you can key your UI off this).
-        """
-        return bool(self.issued_at)
-
-    @property
-    def days_to_pay(self):
-        if self.paid_date:
-            return (self.paid_date - self.date).days
-        return None
-
-    @property
-    def net_income(self):
-        income = self.transactions.filter(trans_type='Income').aggregate(total=Sum('amount'))['total'] or 0
-        expenses = self.transactions.filter(trans_type='Expense').aggregate(total=Sum('amount'))['total'] or 0
-        return income - expenses
-
-    # ------- NEW: snapshot helpers -------
-    def has_from_snapshot(self) -> bool:
-        """
-        Returns True if the invoice already has a usable snapshot.
-        """
-        return bool(self.from_name or self.from_logo_url or self.from_address)
-
-    def snapshot_from_profile(self, profile, absolute_logo_url: str | None = None, overwrite: bool = False):
-        """
-        Copy active CompanyProfile details into this invoice's snapshot fields.
-        Set overwrite=True ONLY if you explicitly want to replace an existing snapshot.
-        """
-        if not profile:
-            return
-        if self.has_from_snapshot() and not overwrite:
-            return
-
-        # Identity
-        self.from_name = profile.name_for_display
-        self.from_address = "\n".join(profile.full_address_lines())
-        self.from_phone = profile.main_phone or ""
-        self.from_email = profile.invoice_reply_to_email or profile.support_email or ""
-        self.from_website = profile.website or ""
-        self.from_tax_id = profile.tax_id_ein or ""
-
-        # Branding / render hints
-        if absolute_logo_url:
-            self.from_logo_url = absolute_logo_url
-        else:
-            try:
-                self.from_logo_url = profile.logo.url or ""
-            except Exception:
-                self.from_logo_url = ""
-        self.from_header_logo_max_width_px = profile.header_logo_max_width_px
-
-        # Policy defaults
-        self.from_terms = profile.default_terms or ""
-        self.from_net_days = int(getattr(profile, "default_net_days", 30) or 30)
-        self.from_footer_text = profile.default_footer_text or ""
-
-        # Formatting hints
-        self.from_currency = profile.default_currency or "USD"
-        self.from_locale = profile.default_locale or "en_US"
-        self.from_timezone = profile.timezone or "America/Indiana/Indianapolis"
-
-    
-class Transaction(models.Model):
+class Transaction(OwnedModelMixin):
     TRANSPORT_CHOICES = [
-        ('personal_vehicle', 'Personal Vehicle'),
-        ('rental_car', 'Rental Car'),
+        ("personal_vehicle", "Personal Vehicle"),
+        ("rental_car", "Rental Car"),
     ]
-    INCOME = 'Income'
-    EXPENSE = 'Expense'
+
+    INCOME = "Income"
+    EXPENSE = "Expense"
 
     TRANS_TYPE_CHOICES = [
-        (INCOME, 'Income'),
-        (EXPENSE, 'Expense'),
-        
+        (INCOME, "Income"),
+        (EXPENSE, "Expense"),
     ]
-    user               = models.ForeignKey(User, on_delete=models.CASCADE)
-    trans_type         = models.CharField(max_length=10, choices=TRANS_TYPE_CHOICES, default=EXPENSE)
-    category           = models.ForeignKey('Category', on_delete=models.PROTECT)
-    sub_cat            = models.ForeignKey('SubCategory', on_delete=models.PROTECT, null=True, blank=True)
-    amount             = models.DecimalField(max_digits=20, decimal_places=2)
-    transaction        = models.CharField(max_length=255)
-    team               = models.ForeignKey('Team', null=True, blank=True, on_delete=models.PROTECT)
-    event              = models.ForeignKey('Event', null=True, blank=True, on_delete=models.PROTECT, related_name='transactions')
-    receipt            = models.FileField(upload_to='receipts/', blank=True, null=True)
-    date               = models.DateField()
-    invoice_number     = models.CharField(max_length=25, blank=True, null=True, help_text="Optional")
-    recurring_template = models.ForeignKey('RecurringTransaction', null=True, blank=True, on_delete=models.SET_NULL, related_name='generated_transactions')
-    transport_type     = models.CharField(max_length=30, choices=TRANSPORT_CHOICES, null=True, blank=True, help_text="Used to identify if actual expenses apply")
-    
-    class Meta:
-        indexes = [
-            models.Index(fields=['date', 'trans_type']),
-            models.Index(fields=['user', 'date']),
-            models.Index(fields=['event']),
-            models.Index(fields=['category']),
-            models.Index(fields=['sub_cat']),
-            models.Index(fields=['invoice_number']),
-        ]
-        ordering = ['date']
 
-    @property
-    def deductible_amount(self):
-        if self.sub_cat and self.sub_cat.slug == 'meals':
-            return round(self.amount * Decimal('0.5'), 2)
-        return self.amount
+    trans_type = models.CharField(max_length=10, choices=TRANS_TYPE_CHOICES, default=EXPENSE)
+    category = models.ForeignKey("Category", on_delete=models.PROTECT)
+    sub_cat = models.ForeignKey("SubCategory", on_delete=models.PROTECT, null=True, blank=True)
+    amount = models.DecimalField(max_digits=20, decimal_places=2)
+    transaction = models.CharField(max_length=255)
+    team = models.ForeignKey("Team", null=True, blank=True, on_delete=models.PROTECT)
+    event = models.ForeignKey(
+        "Event",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="transactions",
+    )
+    receipt = models.FileField(upload_to="receipts/", blank=True, null=True)
+    date = models.DateField()
+    invoice_number = models.CharField(max_length=25, blank=True, null=True, help_text="Optional")
+    recurring_template = models.ForeignKey(
+        "RecurringTransaction",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="generated_transactions",
+    )
+    transport_type = models.CharField(
+        max_length=30,
+        choices=TRANSPORT_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Used to identify if actual expenses apply",
+    )
+
+    class Meta:
+        ordering = ["date"]
+        indexes = [
+            models.Index(fields=["user", "date"]),
+            models.Index(fields=["user", "trans_type", "date"]),
+            models.Index(fields=["user", "invoice_number"]),
+            models.Index(fields=["user", "event"]),
+            models.Index(fields=["user", "category"]),
+            models.Index(fields=["user", "sub_cat"]),
+        ]
 
     def __str__(self):
         return f"{self.transaction} - {self.amount}"
 
+    @property
+    def deductible_amount(self):
+        # NOTE: If you have a dedicated tax flag for meals, swap this check accordingly.
+        if self.sub_cat and self.sub_cat.slug == "meals":
+            return _quantize_money(self.amount * Decimal("0.5"))
+        return _quantize_money(self.amount)
+
+    def clean(self):
+        super().clean()
+        self._assert_owned_fk("category", self.category)
+        self._assert_owned_fk("sub_cat", self.sub_cat)
+        self._assert_owned_fk("event", self.event)
+        self._assert_owned_fk("team", self.team)
+
+        # If both sub_cat and category are set, they must match
+        if self.sub_cat and self.category and self.sub_cat.category_id != self.category_id:
+            raise ValidationError(
+                {"sub_cat": "Sub-Category does not belong to the selected Category."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
-# ================================================================  M I L E S
-
+# -----------------------------------------------------------------------------
+# Mileage / Vehicles
+# -----------------------------------------------------------------------------
 
 class MileageRate(models.Model):
     """
     Mileage rate stored per-year so historical reports remain correct.
+
+    - user = NULL means "global default for that year"
+    - user != NULL means per-user override for that year
     """
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True,help_text="Optional: set per-user rates. Leave blank for a global rate.",)
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="mileage_rates",
+        help_text="Optional: set per-user rates. Leave blank for a global rate.",
+    )
     year = models.PositiveIntegerField(db_index=True)
-    rate = models.DecimalField(max_digits=6,  decimal_places=4, default=Decimal("0.7000"), validators=[MinValueValidator(Decimal("0"))], help_text="Dollars per mile for this year (e.g. 0.6700).",)
+    rate = models.DecimalField(
+        max_digits=6,
+        decimal_places=4,
+        default=Decimal("0.7000"),
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="Dollars per mile for this year (e.g. 0.6700).",
+    )
 
     class Meta:
         verbose_name = "Mileage Rate"
         verbose_name_plural = "Mileage Rates"
+        ordering = ["-year"]
         constraints = [
             models.UniqueConstraint(fields=["user", "year"], name="uniq_mileage_rate_user_year"),
-            models.UniqueConstraint(fields=["year"], condition=Q(user__isnull=True), name="uniq_mileage_rate_global_year"),
+            models.UniqueConstraint(
+                fields=["year"],
+                condition=Q(user__isnull=True),
+                name="uniq_mileage_rate_global_year",
+            ),
         ]
-
-        ordering = ["-year"]
 
     def __str__(self):
         who = self.user.username if self.user else "Global"
         return f"{who} – {self.year}: ${self.rate}/mi"
-    
-    
-    
-    
-class Miles(models.Model):
-    MILEAGE_TYPE_CHOICES = [
-        ("Business", "Business"),
-        ("Commuting", "Commuting"),
-        ("Other", "Other"),
-        ("Reimbursed", "Reimbursed"),
-    ]
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    date = models.DateField()
-    begin = models.DecimalField(max_digits=10, decimal_places=1, null=True, validators=[MinValueValidator(0)])
-    end = models.DecimalField(max_digits=10, decimal_places=1, null=True, validators=[MinValueValidator(0)])
-    total = models.DecimalField(max_digits=10, decimal_places=1, null=True, editable=False)
-    client = models.ForeignKey("Client", on_delete=models.PROTECT)
-    event = models.ForeignKey("Event", on_delete=models.SET_NULL, null=True, blank=True, help_text="Event this mileage was associated with (for event-level cost analysis).")
-    invoice_v2 = models.ForeignKey("InvoiceV2", on_delete=models.SET_NULL, null=True, blank=True, related_name="mileage_entries", help_text="If set, this mileage entry is tied to an Invoice V2.")
-    invoice_number = models.CharField(max_length=255, null=True, blank=True, db_index=True, help_text="Legacy invoice number string. For new entries, usually mirrors InvoiceV2.invoice_number.")
-    vehicle = models.ForeignKey("Vehicle", on_delete=models.PROTECT)
-    mileage_type = models.CharField(max_length=20, choices=MILEAGE_TYPE_CHOICES, default="Business")
-
-    class Meta:
-        indexes = [
-            models.Index(fields=["user", "date"]),
-            models.Index(fields=["mileage_type"]),
-            models.Index(fields=["vehicle"]),
-        ]
-        verbose_name_plural = "Miles"
-        ordering = ["-date"]
-
-    def __str__(self):
-        label = self.invoice_number or (self.invoice_v2.invoice_number if self.invoice_v2 else "No invoice")
-        return f"{label} – {self.client} ({self.date})"
 
 
-
-
-class Vehicle(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+class Vehicle(OwnedModelMixin):
     name = models.CharField(max_length=255)
     placed_in_service_date = models.DateField()
-    placed_in_service_mileage = models.DecimalField(max_digits=10, decimal_places=1, validators=[MinValueValidator(0)])
+    placed_in_service_mileage = models.DecimalField(
+        max_digits=10,
+        decimal_places=1,
+        validators=[MinValueValidator(0)],
+    )
     year = models.PositiveIntegerField()
     make = models.CharField(max_length=100)
     model = models.CharField(max_length=100)
@@ -440,40 +508,51 @@ class Vehicle(models.Model):
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        ordering = ["-is_active", "name"]
         indexes = [
             models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["user", "name"]),
             models.Index(fields=["vin"]),
         ]
-        ordering = ["-is_active", "name"]
 
     def __str__(self):
         return self.name
 
 
-
 class VehicleYear(models.Model):
+    """
+    Vehicle year records are owned by the vehicle's user.
+
+    Keeping an explicit user FK here is redundant and can drift. We omit it and
+    enforce ownership through vehicle.user in views/forms.
+    """
+
     vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name="year_records")
     tax_year = models.PositiveIntegerField()
     begin_mileage = models.DecimalField(max_digits=10, decimal_places=1, validators=[MinValueValidator(0)])
     end_mileage = models.DecimalField(max_digits=10, decimal_places=1, validators=[MinValueValidator(0)])
 
     class Meta:
+        ordering = ["-tax_year"]
         constraints = [
             models.UniqueConstraint(fields=["vehicle", "tax_year"], name="uniq_vehicle_year"),
         ]
         indexes = [
             models.Index(fields=["tax_year"]),
+            models.Index(fields=["vehicle", "tax_year"]),
         ]
-        ordering = ["-tax_year"]
-
 
     def __str__(self):
         return f"{self.vehicle} – {self.tax_year}"
 
+    def clean(self):
+        super().clean()
+        if self.begin_mileage is not None and self.end_mileage is not None:
+            if self.end_mileage < self.begin_mileage:
+                raise ValidationError({"end_mileage": "End mileage must be >= begin mileage."})
 
 
-
-class VehicleExpense(models.Model):
+class VehicleExpense(OwnedModelMixin):
     EXPENSE_TYPE_CHOICES = [
         ("Maintenance", "Maintenance"),
         ("Repair", "Repair"),
@@ -486,109 +565,219 @@ class VehicleExpense(models.Model):
         ("Other", "Other"),
     ]
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
     vehicle = models.ForeignKey(Vehicle, on_delete=models.PROTECT, related_name="expenses")
     date = models.DateField()
     expense_type = models.CharField(max_length=30, choices=EXPENSE_TYPE_CHOICES, default="Other")
     description = models.CharField(max_length=255)
     vendor = models.CharField(max_length=255, null=True, blank=True)
-    amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
-    odometer = models.DecimalField(max_digits=10, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+    )
+    odometer = models.DecimalField(
+        max_digits=10,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+    )
     notes = models.TextField(null=True, blank=True)
     receipt = models.FileField(upload_to="vehicle/receipts/", null=True, blank=True)
     is_tax_related = models.BooleanField(default=False)
 
     class Meta:
+        ordering = ["-date"]
         indexes = [
             models.Index(fields=["user", "date"]),
-            models.Index(fields=["vehicle", "date"]),
-            models.Index(fields=["expense_type"]),
+            models.Index(fields=["user", "vehicle", "date"]),
+            models.Index(fields=["user", "expense_type"]),
         ]
-        ordering = ["-date"]
 
     def __str__(self):
         return f"{self.vehicle} – {self.expense_type} ({self.date})"
 
-
-
-# =========================================================
-
-
-
-class RecurringTransaction(models.Model):
-    INCOME = 'Income'
-    EXPENSE = 'Expense'
-    TRANS_TYPE_CHOICES = [(INCOME, 'Income'), (EXPENSE, 'Expense')]
-
-    user            = models.ForeignKey(User, on_delete=models.CASCADE)
-    trans_type      = models.CharField(max_length=10, choices=TRANS_TYPE_CHOICES, default=EXPENSE)
-    category        = models.ForeignKey('Category', on_delete=models.PROTECT, null=True, blank=True, help_text="Auto-filled from Sub-Category.")
-    sub_cat         = models.ForeignKey('SubCategory', on_delete=models.PROTECT, null=True, blank=True)
-    amount          = models.DecimalField(max_digits=20, decimal_places=2)
-    transaction     = models.CharField(max_length=255)
-    day             = models.IntegerField(help_text="Day of the month to apply")
-    team            = models.ForeignKey(Team, null=True, blank=True, on_delete=models.PROTECT)
-    event           = models.ForeignKey('Event', null=True, blank=True, on_delete=models.PROTECT)
-    receipt         = models.FileField(upload_to='receipts/', blank=True, null=True)
-    active          = models.BooleanField(default=True)
-    last_created    = models.DateField(null=True, blank=True)
-
     def clean(self):
-        if self.sub_cat:
-            self.category = self.sub_cat.category
-        if not self.sub_cat and not self.category:
-            raise ValidationError("Select either a Sub-Category or a Category.")
+        super().clean()
+        self._assert_owned_fk("vehicle", self.vehicle)
 
     def save(self, *args, **kwargs):
-        if self.sub_cat:
-            self.category = self.sub_cat.category
+        self.full_clean()
         super().save(*args, **kwargs)
+
+
+class Miles(OwnedModelMixin):
+    MILEAGE_TYPE_CHOICES = [
+        ("Business", "Business"),
+        ("Commuting", "Commuting"),
+        ("Other", "Other"),
+        ("Reimbursed", "Reimbursed"),
+    ]
+
+    date = models.DateField()
+    begin = models.DecimalField(max_digits=10, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
+    end = models.DecimalField(max_digits=10, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
+    total = models.DecimalField(max_digits=10, decimal_places=1, null=True, blank=True, editable=False)
+
+    client = models.ForeignKey("Client", on_delete=models.PROTECT)
+    event = models.ForeignKey(
+        "Event",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Event this mileage was associated with (for event-level cost analysis).",
+    )
+    invoice_v2 = models.ForeignKey(
+        "InvoiceV2",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="mileage_entries",
+        help_text="If set, this mileage entry is tied to an Invoice V2.",
+    )
+    invoice_number = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Legacy invoice number string. For new entries, usually mirrors InvoiceV2.invoice_number.",
+    )
+    vehicle = models.ForeignKey("Vehicle", on_delete=models.PROTECT)
+    mileage_type = models.CharField(max_length=20, choices=MILEAGE_TYPE_CHOICES, default="Business")
+
+    class Meta:
+        verbose_name_plural = "Miles"
+        ordering = ["-date"]
+        indexes = [
+            models.Index(fields=["user", "date"]),
+            models.Index(fields=["user", "vehicle"]),
+            models.Index(fields=["user", "mileage_type"]),
+        ]
+
+    def __str__(self):
+        label = self.invoice_number or (self.invoice_v2.invoice_number if self.invoice_v2 else "No invoice")
+        return f"{label} – {self.client} ({self.date})"
+
+    def clean(self):
+        super().clean()
+        self._assert_owned_fk("client", self.client)
+        self._assert_owned_fk("event", self.event)
+        self._assert_owned_fk("invoice_v2", self.invoice_v2)
+        self._assert_owned_fk("vehicle", self.vehicle)
+
+        # Keep invoice_number aligned when invoice_v2 is selected
+        if self.invoice_v2 and self.invoice_v2.invoice_number and _is_blank(self.invoice_number):
+            self.invoice_number = self.invoice_v2.invoice_number
+
+        # Validate + compute total
+        if self.begin is not None and self.end is not None:
+            if self.end < self.begin:
+                raise ValidationError({"end": "End mileage must be >= begin mileage."})
+            self.total = (self.end - self.begin).quantize(Decimal("0.1"))
+        else:
+            self.total = None
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+# -----------------------------------------------------------------------------
+# Recurring Transactions & Receipts
+# -----------------------------------------------------------------------------
+
+class RecurringTransaction(OwnedModelMixin):
+    INCOME = "Income"
+    EXPENSE = "Expense"
+    TRANS_TYPE_CHOICES = [(INCOME, "Income"), (EXPENSE, "Expense")]
+
+    trans_type = models.CharField(max_length=10, choices=TRANS_TYPE_CHOICES, default=EXPENSE)
+    category = models.ForeignKey(
+        "Category",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        help_text="Auto-filled from Sub-Category.",
+    )
+    sub_cat = models.ForeignKey("SubCategory", on_delete=models.PROTECT, null=True, blank=True)
+    amount = models.DecimalField(max_digits=20, decimal_places=2)
+    transaction = models.CharField(max_length=255)
+    day = models.IntegerField(
+        help_text="Day of the month to apply",
+        validators=[MinValueValidator(1), MaxValueValidator(31)],
+    )
+    team = models.ForeignKey("Team", null=True, blank=True, on_delete=models.PROTECT)
+    event = models.ForeignKey("Event", null=True, blank=True, on_delete=models.PROTECT)
+    receipt = models.FileField(upload_to="receipts/", blank=True, null=True)
+    active = models.BooleanField(default=True)
+    last_created = models.DateField(null=True, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["user", "day", "active"])]
 
     def __str__(self):
         return f"{self.transaction} - {self.amount} on day {self.day}"
 
-    class Meta:
-        indexes = [models.Index(fields=['user', 'day', 'active'])]
+    def clean(self):
+        super().clean()
+
+        self._assert_owned_fk("sub_cat", self.sub_cat)
+        self._assert_owned_fk("category", self.category)
+        self._assert_owned_fk("event", self.event)
+        self._assert_owned_fk("team", self.team)
+
+        # Auto-fill category from sub_cat
+        if self.sub_cat:
+            self.category = self.sub_cat.category
+
+        if not self.sub_cat and not self.category:
+            raise ValidationError("Select either a Sub-Category or a Category.")
+
+        if self.sub_cat and self.category and self.sub_cat.category_id != self.category_id:
+            raise ValidationError({"sub_cat": "Sub-Category does not belong to the selected Category."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
-
-
-class Receipt(models.Model):
-    transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name='receipts')
+class Receipt(OwnedModelMixin):
+    transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name="receipts")
     date = models.DateField(blank=True, null=True)
     amount = models.DecimalField(max_digits=20, decimal_places=2, blank=True, null=True)
-    event = models.ForeignKey('Event', null=True, blank=True, on_delete=models.SET_NULL)
+    event = models.ForeignKey("Event", null=True, blank=True, on_delete=models.SET_NULL)
     invoice_number = models.CharField(max_length=255, blank=True, null=True)
-    receipt_file = models.FileField(upload_to='receipts/', blank=True, null=True)
+    receipt_file = models.FileField(upload_to="receipts/", blank=True, null=True)
 
     class Meta:
-        ordering = ['-date']
+        ordering = ["-date"]
+        indexes = [
+            models.Index(fields=["user", "date"]),
+            models.Index(fields=["user", "invoice_number"]),
+        ]
 
     def __str__(self):
         return f"Receipt: {self.transaction.transaction} - {self.amount or 'No Amount'}"
 
+    def clean(self):
+        super().clean()
+        self._assert_owned_fk("transaction", self.transaction)
+        self._assert_owned_fk("event", self.event)
+
+        # Ensure receipt.user matches transaction.user
+        if self.transaction and self.user_id and self.transaction.user_id != self.user_id:
+            raise ValidationError({"transaction": _ownership_error()})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
-def logo_upload_path(instance, filename):
-    # e.g., branding/airborne-images/logo.png
-    slug = instance.slug or "default"
-    return f"branding/{slug}/{filename}"
-
-HEX_COLOR_VALIDATOR = RegexValidator(
-    regex=r"^#(?:[0-9a-fA-F]{3}){1,2}$",
-    message="Enter a valid hex color like #000000 or #fff.",
-)
-
-def validate_image_extension_no_svg(value):
-    """
-    Prevent SVG uploads for logos; allow common raster formats.
-    """
-    name = getattr(value, "name", "") or ""
-    ext = name.lower().rsplit(".", 1)[-1] if "." in name else ""
-    allowed = {"png", "jpg", "jpeg", "webp"}
-    if ext not in allowed:
-        raise ValidationError(f"Unsupported logo file type '.{ext}'. Allowed: {', '.join(sorted(allowed))}.")
-
+# -----------------------------------------------------------------------------
+# Company Profile (deployment-level, not user-owned)
+# -----------------------------------------------------------------------------
 
 PDF_HEADER_LAYOUT_CHOICES = [
     ("stacked", "Stacked (logo above address)"),
@@ -596,7 +785,13 @@ PDF_HEADER_LAYOUT_CHOICES = [
     ("inline-right", "Inline (address left, logo right)"),
 ]
 
+
 class CompanyProfile(models.Model):
+    """
+    Deployment-level profile (not per-user).
+    If you ever need per-user profiles, add user FK + constraints similar to above.
+    """
+
     VEHICLE_EXPENSE_METHOD_MILEAGE = "mileage"
     VEHICLE_EXPENSE_METHOD_ACTUAL = "actual"
     VEHICLE_EXPENSE_METHOD_CHOICES = [
@@ -604,60 +799,79 @@ class CompanyProfile(models.Model):
         (VEHICLE_EXPENSE_METHOD_ACTUAL, "Actual vehicle expenses"),
     ]
 
-    slug                    = models.SlugField(unique=True, help_text="Short identifier for this client (e.g., 'airborne-images', 'skyguy').")
-    legal_name              = models.CharField(max_length=255, help_text="Registered legal name used on invoices.")
-    display_name            = models.CharField(max_length=255, blank=True, help_text="Public/trade name; falls back to legal name if blank.")
+    slug = models.SlugField(unique=True, help_text="Short identifier (e.g., 'airborne-images', 'skyguy').")
+    legal_name = models.CharField(max_length=255, help_text="Registered legal name used on invoices.")
+    display_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Trade name; falls back to legal name if blank.",
+    )
 
-    logo                    = models.ImageField(upload_to=logo_upload_path, validators=[validate_image_extension_no_svg], help_text="Primary logo used in invoice header.")
-    logo_light              = models.ImageField(upload_to=logo_upload_path, blank=True, null=True, validators=[validate_image_extension_no_svg], help_text="Optional light-mode logo variation.")
-    logo_dark               = models.ImageField(upload_to=logo_upload_path, blank=True, null=True, validators=[validate_image_extension_no_svg], help_text="Optional dark-mode logo variation.")
-    logo_alt_text           = models.CharField(max_length=255, blank=True, help_text="Accessible alt text for the logo image.")
-    brand_color_primary     = models.CharField(max_length=7, blank=True, validators=[HEX_COLOR_VALIDATOR], help_text="Primary brand color (hex), e.g., #0055FF.")
-    brand_color_secondary   = models.CharField(max_length=7, blank=True, validators=[HEX_COLOR_VALIDATOR], help_text="Secondary brand color (hex), optional.")
-    website                 = models.URLField(blank=True)
+    logo = models.ImageField(
+        upload_to=logo_upload_path,
+        validators=[validate_image_extension_no_svg],
+        help_text="Primary logo used in invoice header.",
+    )
+    logo_light = models.ImageField(
+        upload_to=logo_upload_path,
+        blank=True,
+        null=True,
+        validators=[validate_image_extension_no_svg],
+        help_text="Optional light-mode logo variation.",
+    )
+    logo_dark = models.ImageField(
+        upload_to=logo_upload_path,
+        blank=True,
+        null=True,
+        validators=[validate_image_extension_no_svg],
+        help_text="Optional dark-mode logo variation.",
+    )
+    logo_alt_text = models.CharField(max_length=255, blank=True)
+    brand_color_primary = models.CharField(max_length=7, blank=True, validators=[HEX_COLOR_VALIDATOR])
+    brand_color_secondary = models.CharField(max_length=7, blank=True, validators=[HEX_COLOR_VALIDATOR])
+    website = models.URLField(blank=True)
 
-    # Address & contact (postal identity)
-    address_line1           = models.CharField(max_length=255)
-    address_line2           = models.CharField(max_length=255, blank=True)
-    city                    = models.CharField(max_length=100)
-    state_province          = models.CharField(max_length=100)
-    postal_code             = models.CharField(max_length=20)
-    country                 = models.CharField(max_length=100, default="United States")
-    main_phone              = models.CharField(max_length=50, blank=True)
-    support_email           = models.EmailField(blank=True)
-    invoice_reply_to_email  = models.EmailField(blank=True)
+    address_line1 = models.CharField(max_length=255)
+    address_line2 = models.CharField(max_length=255, blank=True)
+    city = models.CharField(max_length=100)
+    state_province = models.CharField(max_length=100)
+    postal_code = models.CharField(max_length=20)
+    country = models.CharField(max_length=100, default="United States")
+    main_phone = models.CharField(max_length=50, blank=True)
+    support_email = models.EmailField(blank=True)
+    invoice_reply_to_email = models.EmailField(blank=True)
 
-    # Billing contact (for AR / invoice reply-to)
-    billing_contact_name    = models.CharField(max_length=255, blank=True)
-    billing_contact_email   = models.EmailField(blank=True)
+    billing_contact_name = models.CharField(max_length=255, blank=True)
+    billing_contact_email = models.EmailField(blank=True)
 
-    # Tax
-    tax_id_ein              = models.CharField(max_length=64, blank=True, help_text="EIN / Tax ID as displayed on invoices (do not include sensitive PII).")
-    vehicle_expense_method  = models.CharField(max_length=20, choices=VEHICLE_EXPENSE_METHOD_CHOICES, default=VEHICLE_EXPENSE_METHOD_MILEAGE, help_text="Tax reporting method for vehicle costs.",)
+    tax_id_ein = models.CharField(max_length=64, blank=True, help_text="EIN / Tax ID displayed on invoices.")
+    vehicle_expense_method = models.CharField(
+        max_length=20,
+        choices=VEHICLE_EXPENSE_METHOD_CHOICES,
+        default=VEHICLE_EXPENSE_METHOD_MILEAGE,
+        help_text="Tax reporting method for vehicle costs.",
+    )
 
-    # Payments & remittance
-    pay_to_name             = models.CharField(max_length=255, blank=True, help_text="Name checks should be made payable to (defaults to legal_name if blank).")
-    remittance_address      = models.TextField( blank=True, help_text="If different from primary address. Multiline allowed.")
+    pay_to_name = models.CharField(max_length=255, blank=True)
+    remittance_address = models.TextField(blank=True)
 
-    # Defaults for invoice creation
-    default_terms           = models.CharField( max_length=100, blank=True, help_text='e.g., "Net 30".')
-    default_net_days        = models.PositiveIntegerField(default=30)
-    default_late_fee_policy = models.CharField(max_length=255, blank=True, help_text='Short line like "1.5% per month after 30 days".')
-    default_footer_text     = models.TextField( blank=True, help_text="Footer / legal disclaimers displayed on invoices.")
+    default_terms = models.CharField(max_length=100, blank=True, help_text='e.g., "Net 30".')
+    default_net_days = models.PositiveIntegerField(default=30)
+    default_late_fee_policy = models.CharField(max_length=255, blank=True)
+    default_footer_text = models.TextField(blank=True)
 
-    # Rendering / formatting hints
-    pdf_header_layout        = models.CharField(max_length=20, choices=PDF_HEADER_LAYOUT_CHOICES, default="inline-left")
-    header_logo_max_width_px = models.PositiveIntegerField( default=320, help_text="Render hint for PDF header logo max width.")
-    default_currency         = models.CharField(max_length=3, default="USD")
-    default_locale           = models.CharField(max_length=10, default="en_US")
-    timezone                 = models.CharField(max_length=64, default="America/Indiana/Indianapolis")
+    pdf_header_layout = models.CharField(max_length=20, choices=PDF_HEADER_LAYOUT_CHOICES, default="inline-left")
+    header_logo_max_width_px = models.PositiveIntegerField(default=320)
+    default_currency = models.CharField(max_length=3, default="USD")
+    default_locale = models.CharField(max_length=10, default="en_US")
+    timezone = models.CharField(max_length=64, default="America/Indiana/Indianapolis")
 
-    # Activation & metadata
-    is_active                = models.BooleanField( default=False, help_text="Only one active profile allowed per deployment.")
-    created_at               = models.DateTimeField(auto_now_add=True)
-    updated_at               = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=False, help_text="Only one active profile allowed per deployment.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        ordering = ["-is_active", "slug"]
         constraints = [
             models.UniqueConstraint(
                 fields=["is_active"],
@@ -665,7 +879,6 @@ class CompanyProfile(models.Model):
                 name="unique_active_company_profile",
             ),
         ]
-        ordering = ["-is_active", "slug"]
 
     @classmethod
     def get_active(cls):
@@ -682,66 +895,42 @@ class CompanyProfile(models.Model):
         lines = [self.address_line1]
         if self.address_line2:
             lines.append(self.address_line2)
-        city_line = ", ".join(filter(None, [self.city, self.state_province]))  # "City, ST"
+
+        city_line = ", ".join(filter(None, [self.city, self.state_province]))
         if self.postal_code:
             city_line = f"{city_line} {self.postal_code}" if city_line else self.postal_code
         if city_line:
             lines.append(city_line)
+
         if self.country:
             lines.append(self.country)
         return lines
 
-
     def clean(self):
         missing = []
         if self.is_active:
-            if not self.legal_name:
-                missing.append("legal_name")
-            if not self.address_line1:
-                missing.append("address_line1")
-            if not self.city:
-                missing.append("city")
-            if not self.state_province:
-                missing.append("state_province")
-            if not self.postal_code:
-                missing.append("postal_code")
-            if not self.country:
-                missing.append("country")
+            for f in ("legal_name", "address_line1", "city", "state_province", "postal_code", "country"):
+                if not getattr(self, f, None):
+                    missing.append(f)
             if not self.logo:
                 missing.append("logo")
+
         if missing:
             raise ValidationError({"__all__": f"Active profile requires fields: {', '.join(missing)}"})
 
 
+# -----------------------------------------------------------------------------
+# Invoice V2 (user-scoped)
+# -----------------------------------------------------------------------------
 
-
-
-# --------------------------------------------  N E W  M O D E L S ---------------------- #
-
-
-
-class InvoiceV2(models.Model):
-    """
-    New invoice model, designed to coexist with legacy Invoice.
-
-    - Invoice-centric
-    - Multi-client friendly
-    - Event is optional
-    - Uses YYNNNN invoice numbering (YY = year, NNNN starts at 0100 each year)
-    """
-
-    # ---------- Identity & relationships ----------
+class InvoiceV2(OwnedModelMixin):
     invoice_number = models.CharField(
         max_length=25,
         blank=True,
         null=True,
         help_text="Human-visible invoice ID (YYNNNN format; auto-generated if blank).",
     )
-    client = models.ForeignKey(
-        "Client",
-        on_delete=models.PROTECT,
-        related_name="invoices_v2",
-    )
+    client = models.ForeignKey("Client", on_delete=models.PROTECT, related_name="invoices_v2")
     event = models.ForeignKey(
         "Event",
         on_delete=models.PROTECT,
@@ -750,26 +939,10 @@ class InvoiceV2(models.Model):
         blank=True,
         help_text="Optional: link this invoice to a specific event/race.",
     )
-    event_name = models.CharField(
-        max_length=500,
-        blank=True,
-        null=True,
-        help_text="Display name of the event at time of invoicing.",
-    )
-    location = models.CharField(
-        max_length=500,
-        blank=True,
-        null=True,
-        help_text="Display location (city/track) at time of invoicing.",
-    )
-    service = models.ForeignKey(
-        "Service",
-        on_delete=models.PROTECT,
-        related_name="invoices_v2",
-        help_text="Primary service for this invoice.",
-    )
+    event_name = models.CharField(max_length=500, blank=True, null=True)
+    location = models.CharField(max_length=500, blank=True, null=True)
+    service = models.ForeignKey("Service", on_delete=models.PROTECT, related_name="invoices_v2")
 
-    # ---------- Money & dates ----------
     amount = models.DecimalField(
         default=Decimal("0.00"),
         max_digits=12,
@@ -777,175 +950,77 @@ class InvoiceV2(models.Model):
         editable=False,
         help_text="Total invoice amount, calculated from line items.",
     )
-    date = models.DateField(
-        help_text="Invoice date.",
-    )
-    due = models.DateField(
-        help_text="Due date.",
-    )
-    paid_date = models.DateField(
-        null=True,
-        blank=True,
-        help_text="Date fully paid.",
-    )
+    date = models.DateField(help_text="Invoice date.")
+    due = models.DateField(help_text="Due date.")
+    paid_date = models.DateField(null=True, blank=True, help_text="Date fully paid.")
 
     STATUS_UNPAID = "Unpaid"
     STATUS_PAID = "Paid"
     STATUS_PARTIAL = "Partial"
-
     STATUS_CHOICES = [
         (STATUS_UNPAID, "Unpaid"),
         (STATUS_PAID, "Paid"),
         (STATUS_PARTIAL, "Partial"),
     ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_UNPAID)
 
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default=STATUS_UNPAID,
-    )
+    issued_at = models.DateTimeField(null=True, blank=True)
+    version = models.PositiveIntegerField(default=1)
+    pdf_url = models.URLField(blank=True, max_length=1000)
+    pdf_sha256 = models.CharField(max_length=64, blank=True)
 
-    # ---------- Issuance / archiving ----------
-    issued_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="Set when the invoice is officially issued/sent.",
-    )
-    version = models.PositiveIntegerField(
-        default=1,
-        help_text="Revision number; bump when you create a new version.",
-    )
-    pdf_url = models.URLField(
-        blank=True,
-        max_length=1000,
-        help_text="Location of the archived PDF (e.g., S3).",
-    )
-    pdf_sha256 = models.CharField(
-        max_length=64,
-        blank=True,
-        help_text="Optional SHA-256 hash of the archived PDF for integrity checks.",
-    )
-
-    # ---------- Email metadata ----------
-    sent_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="Timestamp when this invoice email was last sent.",
-    )
-    sent_to = models.EmailField(
-        null=True,
-        blank=True,
-        help_text="Email address the invoice was last sent to.",
-    )
+    sent_at = models.DateTimeField(null=True, blank=True)
+    sent_to = models.EmailField(null=True, blank=True)
     sent_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name="invoice_v2_emails_sent",
-        help_text="User who last sent this invoice.",
     )
 
-    # Optional Postgres search vector
     if SearchVectorField is not None:
         search_vector = SearchVectorField(null=True, blank=True)
 
-    # ---------- Immutable "From" snapshot ----------
-    from_name = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Business name as shown on this invoice.",
-    )
-    from_address = models.TextField(
-        blank=True,
-        help_text="Postal address block as printed on this invoice.",
-    )
-    from_phone = models.CharField(
-        max_length=50,
-        blank=True,
-    )
-    from_email = models.EmailField(
-        blank=True,
-    )
-    from_website = models.URLField(
-        blank=True,
-    )
-    from_tax_id = models.CharField(
-        max_length=64,
-        blank=True,
-        help_text="Tax ID / EIN as shown on this invoice.",
-    )
+    # Snapshot fields (“From”)
+    from_name = models.CharField(max_length=255, blank=True)
+    from_address = models.TextField(blank=True)
+    from_phone = models.CharField(max_length=50, blank=True)
+    from_email = models.EmailField(blank=True)
+    from_website = models.URLField(blank=True)
+    from_tax_id = models.CharField(max_length=64, blank=True)
 
-    # Branding / render hints
-    from_logo_url = models.URLField(
-        blank=True,
-        help_text="Absolute or storage URL to logo used on this invoice.",
-    )
-    from_header_logo_max_width_px = models.PositiveIntegerField(
-        default=320,
-    )
+    from_logo_url = models.URLField(blank=True)
+    from_header_logo_max_width_px = models.PositiveIntegerField(default=320)
 
-    # Policy defaults captured at issue time
-    from_terms = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text='e.g., "Net 30".',
-    )
-    from_net_days = models.PositiveIntegerField(
-        default=30,
-        help_text="Number of days from invoice date to due date when issued.",
-    )
-    from_footer_text = models.TextField(
-        blank=True,
-        help_text="Footer notes / payment instructions as shown on this invoice.",
-    )
+    from_terms = models.CharField(max_length=100, blank=True)
+    from_net_days = models.PositiveIntegerField(default=30)
+    from_footer_text = models.TextField(blank=True)
 
-    # Formatting hints
-    from_currency = models.CharField(
-        max_length=3,
-        default="USD",
-        help_text="ISO currency code captured at issue time.",
-    )
-    from_locale = models.CharField(
-        max_length=10,
-        default="en_US",
-    )
-    from_timezone = models.CharField(
-        max_length=64,
-        default="America/Indiana/Indianapolis",
-    )
+    from_currency = models.CharField(max_length=3, default="USD")
+    from_locale = models.CharField(max_length=10, default="en_US")
+    from_timezone = models.CharField(max_length=64, default="America/Indiana/Indianapolis")
 
-    # ---------- Stored PDF snapshot ----------
-    pdf_snapshot = models.FileField(
-        upload_to="invoices_v2/",
-        blank=True,
-        null=True,
-        help_text="Archived PDF snapshot stored in default storage.",
-    )
-    pdf_snapshot_created_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When the snapshot was generated.",
-    )
+    pdf_snapshot = models.FileField(upload_to="invoices_v2/", blank=True, null=True)
+    pdf_snapshot_created_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["invoice_number"]
         constraints = [
-            # Ensure invoice_number is unique when set
             models.UniqueConstraint(
-                fields=["invoice_number"],
-                name="uniq_invoicev2_number",
-                condition=models.Q(invoice_number__isnull=False),
-            )
+                fields=["user", "invoice_number"],
+                name="uniq_invoicev2_user_number",
+                condition=Q(invoice_number__isnull=False),
+            ),
         ]
         indexes = [
-            models.Index(fields=["invoice_number"]),
-            models.Index(fields=["client", "date"]),
-            models.Index(fields=["event", "date"]),
-            models.Index(fields=["status"]),
+            models.Index(fields=["user", "invoice_number"]),
+            models.Index(fields=["user", "client", "date"]),
+            models.Index(fields=["user", "event", "date"]),
+            models.Index(fields=["user", "status"]),
         ]
 
-    # ---------- String / basic helpers ----------
+
     def __str__(self):
         if self.invoice_number:
             return f"{self.invoice_number} ({self.client})"
@@ -953,63 +1028,65 @@ class InvoiceV2(models.Model):
 
     @property
     def year(self) -> int:
-        return self.date.year
+        return self.date.year if self.date else timezone.localdate().year
 
-    # ---------- Invoice number generator: YYNNNN ----------
+    def clean(self):
+        super().clean()
+        self._assert_owned_fk("client", self.client)
+        self._assert_owned_fk("event", self.event)
+        self._assert_owned_fk("service", self.service)
+
     def _generate_invoice_number(self) -> str:
         """
-        Generates invoice numbers like:
-            YYNNNN
-        where:
-            YY   = last 2 digits of year
-            NNNN = sequence starting at 0100 each year
-
-        Example first invoice in 2026: 260100
-        Next: 260101, 260102, etc.
+        Generates invoice numbers like YYNNNN per *user*.
+        Sequence starts at 0100 each year.
         """
-        year_short = str(self.date.year)[-2:]  # "2026" -> "26"
+        if not self.date:
+            raise ValueError("Invoice date is required to generate invoice_number.")
+        if not self.user_id:
+            raise ValueError("Invoice user is required to generate invoice_number.")
+
+        year_short = str(self.date.year)[-2:] 
         prefix = year_short
 
-        last_invoice = (
-            InvoiceV2.objects
+        qs = (
+            InvoiceV2.objects.select_for_update()
             .filter(
+                user=self.user,
                 invoice_number__startswith=prefix,
-                invoice_number__regex=r"^\d+$",  # only pure digits
+                invoice_number__regex=r"^\d+$",
             )
-            .annotate(
-                numeric_part=Cast("invoice_number", IntegerField())
-            )
+            .annotate(numeric_part=Cast("invoice_number", IntegerField()))
             .order_by("-numeric_part")
-            .first()
         )
 
+        last_invoice = qs.first()
         if not last_invoice or not last_invoice.invoice_number:
             return f"{year_short}0100"
 
         try:
             last_number = int(last_invoice.invoice_number)
         except (TypeError, ValueError):
-            # Fallback if something weird is in the DB
             return f"{year_short}0100"
 
-        next_number = last_number + 1
-        return str(next_number)
+        return str(last_number + 1)
 
     def save(self, *args, **kwargs):
-        """
-        Auto-generate invoice_number if missing using the YYNNNN pattern.
-        Requires self.date to be set.
-        """
+        # Validate ownership consistency
+        self.full_clean()
+
         if not self.invoice_number and self.date:
-            self.invoice_number = self._generate_invoice_number()
+            with transaction.atomic():
+                # Guard against changes during atomic section
+                self.full_clean()
+                self.invoice_number = self._generate_invoice_number()
+                super().save(*args, **kwargs)
+                return
+
         super().save(*args, **kwargs)
 
     # ---------- Totals ----------
     def update_amount(self, save: bool = True):
-        """
-        Recalculate the total invoice amount based on related items (qty * price).
-        Relies on InvoiceItemV2 with related_name='items'.
-        """
         total = (
             self.items.annotate(
                 line_total=ExpressionWrapper(
@@ -1021,26 +1098,21 @@ class InvoiceV2(models.Model):
             .get("sum")
             or Decimal("0.00")
         )
-        self.amount = total
+        self.amount = _quantize_money(total)
         if save:
             self.save(update_fields=["amount"])
 
-    # ---------- Convenience flags ----------
     @property
     def is_paid(self) -> bool:
         return bool(self.paid_date) or self.status == self.STATUS_PAID
 
     @property
     def is_locked(self) -> bool:
-        """
-        Consider the invoice 'locked' once issued.
-        You can key your UI off this to prevent major edits.
-        """
         return bool(self.issued_at)
 
     @property
     def days_to_pay(self):
-        if self.paid_date:
+        if self.paid_date and self.date:
             return (self.paid_date - self.date).days
         return None
 
@@ -1048,29 +1120,15 @@ class InvoiceV2(models.Model):
     def has_pdf_snapshot(self) -> bool:
         return bool(self.pdf_snapshot)
 
-    # ---------- Snapshot helpers ----------
     def has_from_snapshot(self) -> bool:
-        """
-        Returns True if the invoice already has a usable 'from' snapshot.
-        """
         return bool(self.from_name or self.from_logo_url or self.from_address)
 
-    def snapshot_from_profile(
-        self,
-        profile,
-        absolute_logo_url: str | None = None,
-        overwrite: bool = False,
-    ):
-        """
-        Copy active business/profile details into this invoice's snapshot fields.
-        Set overwrite=True ONLY if you explicitly want to replace an existing snapshot.
-        """
+    def snapshot_from_profile(self, profile, absolute_logo_url: str | None = None, overwrite: bool = False):
         if not profile:
             return
         if self.has_from_snapshot() and not overwrite:
             return
 
-        # Identity
         self.from_name = getattr(profile, "name_for_display", "") or ""
         address_lines = []
         if hasattr(profile, "full_address_lines"):
@@ -1088,7 +1146,6 @@ class InvoiceV2(models.Model):
         self.from_website = getattr(profile, "website", "") or ""
         self.from_tax_id = getattr(profile, "tax_id_ein", "") or ""
 
-        # Branding / render hints
         if absolute_logo_url:
             self.from_logo_url = absolute_logo_url
         else:
@@ -1107,78 +1164,53 @@ class InvoiceV2(models.Model):
             self.from_header_logo_max_width_px,
         )
 
-        # Policy defaults
         self.from_terms = getattr(profile, "default_terms", "") or ""
         default_net_days = getattr(profile, "default_net_days", self.from_net_days)
         self.from_net_days = int(default_net_days or 30)
         self.from_footer_text = getattr(profile, "default_footer_text", "") or ""
 
-        # Formatting hints
         self.from_currency = getattr(profile, "default_currency", "") or "USD"
         self.from_locale = getattr(profile, "default_locale", "") or "en_US"
-        self.from_timezone = getattr(
-            profile,
-            "timezone",
-            "America/Indiana/Indianapolis",
-        )
+        self.from_timezone = getattr(profile, "timezone", "America/Indiana/Indianapolis")
 
-    # ---------- Review helper tied to Transactions ----------
     @property
     def net_income(self) -> Decimal:
         """
-        Convenience helper for review screens.
-        Uses the existing Transaction model, matched by invoice_number.
+        Scoped to this invoice's user to prevent cross-user leakage.
         """
         if not self.invoice_number:
             return Decimal("0.00")
 
-        Transaction = apps.get_model("money", "Transaction")
-        qs = Transaction.objects.filter(invoice_number=self.invoice_number)
+        TransactionModel = apps.get_model("money", "Transaction")
+        qs = TransactionModel.objects.filter(user=self.user, invoice_number=self.invoice_number)
 
         income_total = (
-            qs.filter(trans_type=Transaction.INCOME)
+            qs.filter(trans_type=TransactionModel.INCOME)
             .aggregate(total=Sum("amount"))
             .get("total")
             or Decimal("0.00")
         )
         expense_total = (
-            qs.filter(trans_type=Transaction.EXPENSE)
+            qs.filter(trans_type=TransactionModel.EXPENSE)
             .aggregate(total=Sum("amount"))
             .get("total")
             or Decimal("0.00")
         )
-        return income_total - expense_total
+        return _quantize_money(income_total - expense_total)
 
-    # ---------- Income subcategory helper ----------
     def _get_income_subcat_from_items(self):
-        """
-        Pick the *income* sub-category from this invoice's line items.
-
-        We look for the first line item where the linked SubCategory's
-        category_type == Category.INCOME.
-
-        Raises ValueError if no such sub-category can be found.
-        """
-        # Category is defined earlier in this models module
-        from .models import Category  # or simply use Category if already in scope
-
         items = self.items.select_related("sub_cat__category")
-
         for item in items:
             sub_cat = getattr(item, "sub_cat", None)
             if not sub_cat:
                 continue
-
             if sub_cat.category_type == Category.INCOME:
                 return sub_cat
-
         raise ValueError(
             "Cannot determine income SubCategory from invoice items. "
-            "Add at least one line item with an Income category "
-            "before marking this invoice as paid."
+            "Add at least one line item with an Income category before marking this invoice as paid."
         )
 
-    # ---------- Income transaction creator ----------
     def create_income_transaction(
         self,
         *,
@@ -1190,42 +1222,25 @@ class InvoiceV2(models.Model):
         transport_type=None,
         overwrite_existing: bool = False,
     ):
-        """
-        Create (or optionally update) a single Income Transaction for this invoice.
-
-        - Uses the *income* SubCategory derived from line items.
-        - Derives Category from sub_cat.category.
-        - Uses this invoice's invoice_number as the bridge.
-        - If event is not provided, falls back to invoice.event.
-        - If date is not provided, uses paid_date, then invoice.date, then today.
-        - If amount is not provided, uses the invoice.amount.
-        - If overwrite_existing=True and an income transaction already exists
-          for this invoice_number, its amount/date/etc. will be updated instead
-          of creating a duplicate.
-        """
-        Transaction = apps.get_model("money", "Transaction")
+        TransactionModel = apps.get_model("money", "Transaction")
 
         if not self.invoice_number:
             raise ValueError("Cannot create income transaction without invoice_number.")
 
-        # Figure out which SubCategory should be used for income
         sub_cat = self._get_income_subcat_from_items()
         category = getattr(sub_cat, "category", None)
         if category is None:
-            raise ValueError(
-                "Selected income SubCategory has no Category; cannot create Transaction."
-            )
+            raise ValueError("Selected income SubCategory has no Category; cannot create Transaction.")
 
-        tx_date = date or self.paid_date or self.date or timezone.now().date()
+        tx_date = date or self.paid_date or self.date or timezone.localdate()
         tx_event = event if event is not None else self.event
         tx_amount = amount if amount is not None else self.amount
-
         description = self.event_name or f"Invoice {self.invoice_number}"
 
-        # Optionally reuse an existing income transaction for this invoice
-        existing_qs = Transaction.objects.filter(
+        existing_qs = TransactionModel.objects.filter(
+            user=user,
             invoice_number=self.invoice_number,
-            trans_type=Transaction.INCOME,
+            trans_type=TransactionModel.INCOME,
         ).order_by("pk")
 
         if overwrite_existing and existing_qs.exists():
@@ -1241,10 +1256,9 @@ class InvoiceV2(models.Model):
             tx.save()
             return tx
 
-        # Default behavior: create a new income transaction
-        transaction = Transaction.objects.create(
+        return TransactionModel.objects.create(
             user=user,
-            trans_type=Transaction.INCOME,
+            trans_type=TransactionModel.INCOME,
             category=category,
             sub_cat=sub_cat,
             amount=tx_amount,
@@ -1255,9 +1269,7 @@ class InvoiceV2(models.Model):
             invoice_number=self.invoice_number,
             transport_type=transport_type,
         )
-        return transaction
 
-    # ---------- Mark as paid ----------
     def mark_as_paid(
         self,
         *,
@@ -1268,26 +1280,15 @@ class InvoiceV2(models.Model):
         transport_type=None,
         commit=True,
     ):
-        """
-        Mark this invoice as fully paid and create a matching Income Transaction.
-
-        - Sets paid_date (to payment_date or today).
-        - Sets status to 'Paid'.
-        - Creates ONE Income Transaction for the full invoice amount,
-          using the income SubCategory from the line items.
-        - If an income transaction already exists for this invoice_number,
-          it will be updated rather than duplicated.
-        """
-        pay_date = payment_date or timezone.now().date()
+        pay_date = payment_date or timezone.localdate()
         self.paid_date = pay_date
         self.status = self.STATUS_PAID
 
         if commit:
-            # Ensure the invoice amount is correct first, then save once
             self.update_amount(save=False)
             self.save(update_fields=["amount", "paid_date", "status"])
 
-        income_tx = self.create_income_transaction(
+        return self.create_income_transaction(
             user=user,
             amount=self.amount,
             date=pay_date,
@@ -1296,64 +1297,22 @@ class InvoiceV2(models.Model):
             transport_type=transport_type,
             overwrite_existing=True,
         )
-        return income_tx
 
 
-
-
-
-
-
-
-
-class InvoiceItemV2(models.Model):
-    """
-    Line items for InvoiceV2.
-    User selects sub_cat, and category is automatically derived
-    from sub_cat.category for consistent tax reporting.
-    """
-
-    invoice = models.ForeignKey(
-        InvoiceV2,
-        on_delete=models.CASCADE,
-        related_name="items",
-    )
+class InvoiceItemV2(OwnedModelMixin):
+    invoice = models.ForeignKey(InvoiceV2, on_delete=models.CASCADE, related_name="items")
     description = models.CharField(max_length=255)
-    qty = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal("1.00"),
-        help_text="Quantity (hours, days, units, etc.).",
-    )
-    price = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        help_text="Unit price.",
-    )
-
-    # User picks just the sub-category
-    sub_cat = models.ForeignKey(
-        "SubCategory",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="invoice_items_v2",
-        help_text="Choose the sub-category; category will be set automatically.",
-    )
-
-    # Category is derived from sub_cat.category and not edited directly
-    category = models.ForeignKey(
-        "Category",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="invoice_items_v2",
-        editable=False,
-        help_text="Set automatically from sub-category.",
-    )
+    qty = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("1.00"), help_text="Quantity (hours, days, units, etc.).",)
+    price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Unit price.")
+    sub_cat = models.ForeignKey("SubCategory", on_delete=models.PROTECT, null=True, blank=True, related_name="invoice_items_v2", help_text="Choose the sub-category; category will be set automatically.",)
+    category = models.ForeignKey("Category", on_delete=models.PROTECT, null=True, blank=True, related_name="invoice_items_v2", editable=False, help_text="Set automatically from sub-category.",)
 
     class Meta:
         ordering = ["pk"]
+        indexes = [
+            models.Index(fields=["user", "invoice"]),
+            models.Index(fields=["user", "sub_cat"]),
+        ]
 
     def __str__(self):
         return f"{self.description} ({self.qty} @ {self.price})"
@@ -1363,20 +1322,37 @@ class InvoiceItemV2(models.Model):
         return (self.qty or Decimal("0")) * (self.price or Decimal("0"))
 
     def _sync_category_from_subcat(self):
-        """
-        Ensure category matches the selected sub-category's category.
-        """
         if self.sub_cat and hasattr(self.sub_cat, "category"):
             self.category = self.sub_cat.category
         else:
             self.category = None
 
+    
+    def clean(self):
+        super().clean()
+
+        if self.invoice is None:
+            raise ValidationError({"invoice": "Invoice is required."})
+
+        self._assert_owned_fk("invoice", self.invoice)
+        self._assert_owned_fk("sub_cat", self.sub_cat)
+        self._assert_owned_fk("category", self.category)
+
+        if self.user_id and self.invoice.user_id != self.user_id:
+            raise ValidationError({"invoice": _ownership_error()})
+
+        if self.sub_cat:
+            self._sync_category_from_subcat()
+
+        if self.sub_cat and self.category and self.sub_cat.category_id != self.category_id:
+            raise ValidationError({"sub_cat": "Sub-Category does not belong to the selected Category."})
+
+
     def save(self, *args, **kwargs):
-        # Always sync category before saving
         self._sync_category_from_subcat()
+        self.full_clean()
         super().save(*args, **kwargs)
 
-        # After saving item, refresh invoice total
         if self.invoice_id:
             self.invoice.update_amount(save=True)
 
@@ -1384,4 +1360,187 @@ class InvoiceItemV2(models.Model):
         invoice = self.invoice
         super().delete(*args, **kwargs)
         if invoice:
-            self.invoice.update_amount(save=True)
+            invoice.update_amount(save=True)
+
+
+# -----------------------------------------------------------------------------
+# Legacy Invoices (deprecated — still scoped through Client/Event/Service ownership)
+# -----------------------------------------------------------------------------
+
+class Invoice(models.Model):
+    """
+    Deprecated legacy Invoice.
+    If it remains accessible anywhere, it must be scoped (at minimum through client.user).
+    """
+
+    invoice_number = models.CharField(max_length=25, blank=True, null=True)
+    client = models.ForeignKey("Client", on_delete=models.PROTECT, related_name="legacy_invoices")
+    event_name = models.CharField(max_length=500, blank=True, null=True)
+    location = models.CharField(max_length=500, blank=True, null=True)
+    event = models.ForeignKey("Event", on_delete=models.PROTECT, related_name="legacy_invoices")
+    service = models.ForeignKey("Service", on_delete=models.PROTECT, related_name="legacy_invoices")
+    amount = models.DecimalField(default=Decimal("0.00"), max_digits=12, decimal_places=2, editable=False)
+    date = models.DateField()
+    due = models.DateField()
+    paid_date = models.DateField(null=True, blank=True)
+
+    STATUS_CHOICES = [
+        ("Unpaid", "Unpaid"),
+        ("Paid", "Paid"),
+        ("Partial", "Partial"),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Unpaid")
+
+    if SearchVectorField is not None:
+        search_vector = SearchVectorField(null=True, blank=True)
+
+    from_name = models.CharField(max_length=255, blank=True)
+    from_address = models.TextField(blank=True)
+    from_phone = models.CharField(max_length=50, blank=True)
+    from_email = models.EmailField(blank=True)
+    from_website = models.URLField(blank=True)
+    from_tax_id = models.CharField(max_length=64, blank=True)
+
+    from_logo_url = models.URLField(blank=True)
+    from_header_logo_max_width_px = models.PositiveIntegerField(default=320)
+
+    from_terms = models.CharField(max_length=100, blank=True)
+    from_net_days = models.PositiveIntegerField(default=30)
+    from_footer_text = models.TextField(blank=True)
+
+    from_currency = models.CharField(max_length=3, default="USD")
+    from_locale = models.CharField(max_length=10, default="en_US")
+    from_timezone = models.CharField(max_length=64, default="America/Indiana/Indianapolis")
+
+    issued_at = models.DateTimeField(null=True, blank=True)
+    version = models.PositiveIntegerField(default=1)
+    pdf_url = models.URLField(blank=True, max_length=1000)
+    pdf_sha256 = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        ordering = ["invoice_number"]
+        indexes = [
+            models.Index(fields=["date"]),
+            models.Index(fields=["invoice_number"]),
+        ]
+
+    def __str__(self):
+        return self.invoice_number or f"Invoice {self.pk}"
+
+    def clean(self):
+        super().clean()
+
+        errors = {}
+
+        # Client ↔ Event ownership
+        if self.client and self.event:
+            if self.client.user_id != self.event.user_id:
+                errors["event"] = _ownership_error()
+
+        # Client ↔ Service ownership
+        if self.client and self.service:
+            if self.client.user_id != self.service.user_id:
+                errors["service"] = _ownership_error()
+
+        if errors:
+            raise ValidationError(errors)
+
+
+    def update_amount(self):
+        total = (
+            self.items.annotate(
+                line_total=ExpressionWrapper(
+                    F("qty") * F("price"),
+                    output_field=DecimalField(max_digits=12, decimal_places=2),
+                )
+            )
+            .aggregate(sum=Sum("line_total"))
+            .get("sum")
+            or Decimal("0.00")
+        )
+        self.amount = _quantize_money(total)
+        self.save(update_fields=["amount"])
+
+    @property
+    def is_paid(self):
+        return self.paid_date is not None or self.status == "Paid"
+
+    @property
+    def is_locked(self):
+        return bool(self.issued_at)
+
+    @property
+    def days_to_pay(self):
+        if self.paid_date and self.date:
+            return (self.paid_date - self.date).days
+        return None
+
+    @property
+    def net_income(self):
+        # Legacy: avoid cross-user leaks by using client.user
+        TransactionModel = apps.get_model("money", "Transaction")
+        if not self.invoice_number:
+            return Decimal("0.00")
+        qs = TransactionModel.objects.filter(user=self.client.user, invoice_number=self.invoice_number)
+        income = (
+            qs.filter(trans_type=TransactionModel.INCOME).aggregate(total=Sum("amount")).get("total")
+            or Decimal("0.00")
+        )
+        expenses = (
+            qs.filter(trans_type=TransactionModel.EXPENSE).aggregate(total=Sum("amount")).get("total")
+            or Decimal("0.00")
+        )
+        return _quantize_money(income - expenses)
+
+    def has_from_snapshot(self) -> bool:
+        return bool(self.from_name or self.from_logo_url or self.from_address)
+
+    def snapshot_from_profile(self, profile, absolute_logo_url: str | None = None, overwrite: bool = False):
+        if not profile:
+            return
+        if self.has_from_snapshot() and not overwrite:
+            return
+
+        self.from_name = profile.name_for_display
+        self.from_address = "\n".join(profile.full_address_lines())
+        self.from_phone = profile.main_phone or ""
+        self.from_email = profile.invoice_reply_to_email or profile.support_email or ""
+        self.from_website = profile.website or ""
+        self.from_tax_id = profile.tax_id_ein or ""
+
+        if absolute_logo_url:
+            self.from_logo_url = absolute_logo_url
+        else:
+            try:
+                self.from_logo_url = profile.logo.url or ""
+            except Exception:
+                self.from_logo_url = ""
+        self.from_header_logo_max_width_px = profile.header_logo_max_width_px
+
+        self.from_terms = profile.default_terms or ""
+        self.from_net_days = int(getattr(profile, "default_net_days", 30) or 30)
+        self.from_footer_text = profile.default_footer_text or ""
+
+        self.from_currency = profile.default_currency or "USD"
+        self.from_locale = profile.default_locale or "en_US"
+        self.from_timezone = profile.timezone or "America/Indiana/Indianapolis"
+
+
+class InvoiceItem(models.Model):
+    invoice = models.ForeignKey("Invoice", on_delete=models.CASCADE, related_name="items")
+    description = models.CharField(max_length=500)
+    qty = models.IntegerField(default=0, blank=True, null=True)
+    price = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        blank=True,
+        null=True,
+    )
+
+    def __str__(self):
+        return f"{self.description} - {self.qty} x {self.price}"
+
+    @property
+    def total(self):
+        return (self.qty or 0) * (self.price or Decimal("0.00"))

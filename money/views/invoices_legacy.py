@@ -25,13 +25,8 @@ class LegacyInvoiceDetailView(LoginRequiredMixin, View):
             pk=pk,
         )
 
-        # Prefer issue_date if it exists, fall back to date
         issue_date = getattr(legacy, "issue_date", None) or getattr(legacy, "date", None)
-
-        # Prefer total_amount if present, fall back to amount
         total_amount = getattr(legacy, "total_amount", None) or getattr(legacy, "amount", None)
-
-        # If you later add a PDF field to the legacy model, plug it in here
         pdf_url = None
 
         context = {
@@ -55,8 +50,7 @@ class LegacyFileInvoiceDetailView(LoginRequiredMixin, View):
 
     def get(self, request, filename, *args, **kwargs):
         legacy_dir = getattr(settings, "LEGACY_INVOICE_DIR", "legacy_invoices/")
-
-        # Safety: only allow paths within the configured legacy directory
+        
         if not filename.startswith(legacy_dir):
             raise Http404("Invalid legacy invoice path")
 

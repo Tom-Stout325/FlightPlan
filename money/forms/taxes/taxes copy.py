@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from django import forms
-from django.utils import timezone
 
 from money.models import (
     Category,
@@ -46,14 +45,10 @@ class UserOwnedModelFormMixin:
 class CategoryForm(UserOwnedModelFormMixin, forms.ModelForm):
     class Meta:
         model = Category
-        fields = ["category", "category_type", "schedule_c_line"]
+        fields = ["category"]
         widgets = {
             "category": forms.TextInput(
                 attrs={"class": "form-control", "placeholder": "Enter category name"}
-            ),
-            "category_type": forms.Select(attrs={"class": "form-select"}),
-            "schedule_c_line": forms.TextInput(
-                attrs={"class": "form-control", "placeholder": "Schedule C line (optional)"}
             ),
         }
 
@@ -61,20 +56,17 @@ class CategoryForm(UserOwnedModelFormMixin, forms.ModelForm):
 class SubCategoryForm(UserOwnedModelFormMixin, forms.ModelForm):
     class Meta:
         model = SubCategory
-        fields = ["sub_cat", "category", "schedule_c_line", "include_in_tax_reports"]
+        fields = ["sub_cat", "category"]
         widgets = {
             "sub_cat": forms.TextInput(
                 attrs={"class": "form-control", "placeholder": "Enter sub-category name"}
             ),
             "category": forms.Select(attrs={"class": "form-select"}),
-            "schedule_c_line": forms.TextInput(
-                attrs={"class": "form-control", "placeholder": "Schedule C line (optional)"}
-            ),
-            "include_in_tax_reports": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         if self.user and "category" in self.fields:
             self.fields["category"].queryset = (
                 Category.objects.filter(user=self.user).order_by("category")
@@ -88,7 +80,6 @@ class MileageForm(UserOwnedModelFormMixin, forms.ModelForm):
             "date",
             "begin",
             "end",
-
             "client",
             "event",
             "invoice_v2",
@@ -100,7 +91,6 @@ class MileageForm(UserOwnedModelFormMixin, forms.ModelForm):
             "date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "begin": forms.NumberInput(attrs={"step": "0.1", "class": "form-control"}),
             "end": forms.NumberInput(attrs={"step": "0.1", "class": "form-control"}),
-            "total": forms.NumberInput(attrs={"step": "0.1", "class": "form-control"}),
             "client": forms.Select(attrs={"class": "form-select"}),
             "event": forms.Select(attrs={"class": "form-select"}),
             "invoice_v2": forms.Select(attrs={"class": "form-select"}),
@@ -111,10 +101,6 @@ class MileageForm(UserOwnedModelFormMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        # Helpful default
-        if not self.instance.pk and not self.initial.get("date"):
-            self.initial["date"] = timezone.localdate()
 
         if not self.user:
             return
@@ -147,25 +133,17 @@ class MileageForm(UserOwnedModelFormMixin, forms.ModelForm):
         cleaned = super().clean()
         begin = cleaned.get("begin")
         end = cleaned.get("end")
-        total = cleaned.get("total")
-
         if begin is not None and end is not None and end < begin:
             self.add_error("end", "End mileage must be greater than or equal to Begin mileage.")
-
-        if total is not None and total < 0:
-            self.add_error("total", "Total miles cannot be negative.")
-
         return cleaned
 
     def save(self, commit=True):
         obj: Miles = super().save(commit=False)
 
-        # Ensure ownership for OwnedModelMixin models
         if hasattr(obj, "user_id"):
             self._require_user()
             obj.user = self.user
 
-        # Keep invoice_number aligned with InvoiceV2 selection
         if obj.invoice_v2 and not obj.invoice_number:
             obj.invoice_number = obj.invoice_v2.invoice_number
 
@@ -193,7 +171,7 @@ class MileageRateForm(forms.ModelForm):
 
     def save(self, commit=True):
         obj: MileageRate = super().save(commit=False)
-        if self.user:
+        if self.user is not None:
             obj.user = self.user
         if commit:
             obj.save()

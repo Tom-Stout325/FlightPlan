@@ -11,11 +11,11 @@ from django.template.loader import get_template
 from django.templatetags.static import static
 from django.views.decorators.http import require_GET
 
-
 from .utils import find_best_drone_profile
 from flightlogs.models import FlightLog
 from .models import Equipment, DroneSafetyProfile
 from .forms import EquipmentForm, DroneSafetyProfileForm
+
 try:
     from weasyprint import HTML
     WEASYPRINT_AVAILABLE = True
@@ -26,19 +26,26 @@ except Exception:
 # -------------------------------------------------------------------
 # Helpers
 # -------------------------------------------------------------------
-def _equipment_queryset():
+def _equipment_queryset(user):
     """
-    Central place to define inventory ordering.
+    Central place to define inventory ordering + user scoping.
     """
-    return Equipment.objects.all().order_by("-active", "-purchase_date", "equipment_type", "name")
+    return (
+        Equipment.objects
+        .filter(user=user)
+        .order_by("-active", "-purchase_date", "equipment_type", "name")
+    )
 
 
-def _attach_drone_flight_stats(equipment_qs):
+def _attach_drone_flight_stats(request, equipment_qs):
     """
     Adds:
       - flights_count
       - total_duration
     for drone items that have serial_number.
+
+    NOTE: If FlightLog is user-owned in your system, scope it:
+      FlightLog.objects.filter(user=request.user, drone_serial__in=...)
     """
     drone_serials = list(
         equipment_qs.filter(equipment_type="Drone")
@@ -49,10 +56,14 @@ def _attach_drone_flight_stats(equipment_qs):
 
     stats_map = {}
     if drone_serials:
+        flight_qs = FlightLog.objects.filter(drone_serial__in=drone_serials)
+
+        # If FlightLog has `user`, scope it. Safe no-op if it doesn't.
+        if hasattr(FlightLog, "user"):
+            flight_qs = flight_qs.filter(user=request.user)
+
         stats = (
-            FlightLog.objects
-            .filter(drone_serial__in=drone_serials)
-            .values("drone_serial")
+            flight_qs.values("drone_serial")
             .annotate(
                 flights_count=Count("id"),
                 total_duration=Sum("air_time"),
@@ -86,19 +97,20 @@ def equipment_list(request):
     """
     Inventory list + inline create form.
     """
-    equipment_qs = _equipment_queryset()
-    equipment = _attach_drone_flight_stats(equipment_qs)
+    equipment_qs = _equipment_queryset(request.user)
+    equipment = _attach_drone_flight_stats(request, equipment_qs)
 
     if request.method == "POST":
         form = EquipmentForm(request.POST, request.FILES)
         if form.is_valid():
             obj = form.save(commit=False)
 
-            # Convenience: if placed-in-service is blank and purchase_date exists, set it
+            # ✅ User scoping on create
+            obj.user = request.user
+
             if not obj.placed_in_service_date and obj.purchase_date:
                 obj.placed_in_service_date = obj.purchase_date
 
-            # Convenience: default business_use_percent to 100 for typical business equipment
             if obj.business_use_percent is None:
                 obj.business_use_percent = Decimal("100.00")
 
@@ -127,7 +139,6 @@ def equipment_list(request):
 def equipment_create(request):
     """
     Dedicated create endpoint (kept for backward compatibility).
-    If you only use inline create on the list page, you can remove this route later.
     """
     if request.method != "POST":
         return redirect("equipment:equipment_list")
@@ -135,6 +146,9 @@ def equipment_create(request):
     form = EquipmentForm(request.POST, request.FILES)
     if form.is_valid():
         obj = form.save(commit=False)
+
+        # ✅ User scoping on create
+        obj.user = request.user
 
         if not obj.placed_in_service_date and obj.purchase_date:
             obj.placed_in_service_date = obj.purchase_date
@@ -149,9 +163,8 @@ def equipment_create(request):
 
     messages.error(request, "There was a problem saving the equipment.")
 
-    # Re-render list page with errors
-    equipment_qs = _equipment_queryset()
-    equipment = _attach_drone_flight_stats(equipment_qs)
+    equipment_qs = _equipment_queryset(request.user)
+    equipment = _attach_drone_flight_stats(request, equipment_qs)
     return render(
         request,
         "equipment/equipment_list.html",
@@ -161,12 +174,15 @@ def equipment_create(request):
 
 @login_required
 def equipment_edit(request, pk):
-    item = get_object_or_404(Equipment, pk=pk)
+    item = get_object_or_404(Equipment, user=request.user, pk=pk)
 
     if request.method == "POST":
         form = EquipmentForm(request.POST, request.FILES, instance=item)
         if form.is_valid():
             obj = form.save(commit=False)
+
+            # ✅ Ensure user stays correct even if tampered POST
+            obj.user = request.user
 
             if not obj.placed_in_service_date and obj.purchase_date:
                 obj.placed_in_service_date = obj.purchase_date
@@ -192,7 +208,7 @@ def equipment_edit(request, pk):
 
 @login_required
 def equipment_delete(request, pk):
-    item = get_object_or_404(Equipment, pk=pk)
+    item = get_object_or_404(Equipment, user=request.user, pk=pk)
 
     if request.method == "POST":
         name = item.name
@@ -210,19 +226,16 @@ def equipment_delete(request, pk):
 @login_required
 def equipment_pdf(request):
     """
-    PDF of the full inventory (requires WeasyPrint).
+    PDF of the user's inventory (requires WeasyPrint).
     """
     if not WEASYPRINT_AVAILABLE:
         messages.error(request, "PDF export is not available on this system.")
         return redirect("equipment:equipment_list")
 
-    equipment = Equipment.objects.all().order_by("equipment_type", "name")
+    equipment = Equipment.objects.filter(user=request.user).order_by("equipment_type", "name")
     logo_url = request.build_absolute_uri(static("images/logo.png"))
 
-    context = {
-        "equipment": equipment,
-        "logo_url": logo_url,
-    }
+    context = {"equipment": equipment, "logo_url": logo_url}
 
     template = get_template("equipment/equipment_pdf.html")
     html_string = template.render(context, request=request)
@@ -247,18 +260,13 @@ def equipment_pdf_single(request, pk):
         messages.error(request, "PDF export is not available on this system.")
         return redirect("equipment:equipment_list")
 
-    item = get_object_or_404(Equipment, pk=pk)
+    item = get_object_or_404(Equipment, user=request.user, pk=pk)
     logo_url = request.build_absolute_uri(static("images/logo.png"))
 
     faa_is_pdf = bool(item.faa_certificate and item.faa_certificate.name.lower().endswith(".pdf"))
     receipt_is_pdf = bool(item.receipt and item.receipt.name.lower().endswith(".pdf"))
 
-    context = {
-        "item": item,
-        "logo_url": logo_url,
-        "faa_is_pdf": faa_is_pdf,
-        "receipt_is_pdf": receipt_is_pdf,
-    }
+    context = {"item": item, "logo_url": logo_url, "faa_is_pdf": faa_is_pdf, "receipt_is_pdf": receipt_is_pdf}
 
     template = get_template("equipment/equipment_pdf_single.html")
     html_string = template.render(context, request=request)
@@ -278,9 +286,9 @@ def equipment_pdf_single(request, pk):
 @login_required
 def export_equipment_csv(request):
     """
-    CSV export with the new tax/depreciation fields included.
+    CSV export (user-scoped).
     """
-    equipment = Equipment.objects.all().order_by("equipment_type", "name")
+    equipment = Equipment.objects.filter(user=request.user).order_by("equipment_type", "name")
 
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="equipment.csv"'
@@ -337,18 +345,11 @@ def export_equipment_csv(request):
 
 
 # -------------------------------------------------------------------
-# Optional: Drone safety profile suggestion endpoint (if you use it)
+# Drone safety profile suggestion endpoint (global catalog)
 # -------------------------------------------------------------------
 @login_required
 @require_GET
 def drone_profile_suggest(request: HttpRequest) -> JsonResponse:
-    """
-    GET params:
-      - brand (optional)
-      - name
-    Returns:
-      {found: bool, id, full_display_name}
-    """
     name = (request.GET.get("name") or "").strip()
     brand = (request.GET.get("brand") or "").strip() or None
 
@@ -359,26 +360,17 @@ def drone_profile_suggest(request: HttpRequest) -> JsonResponse:
     if not profile:
         return JsonResponse({"found": False})
 
-    return JsonResponse(
-        {
-            "found": True,
-            "id": str(profile.pk),
-            "full_display_name": profile.full_display_name,
-        }
-    )
+    return JsonResponse({"found": True, "id": str(profile.pk), "full_display_name": profile.full_display_name})
 
 
-    
 # -------------------------------
-# Drone Safety Profile CRUD
+# Drone Safety Profile CRUD (global)
 # -------------------------------
-
 @login_required
 def drone_safety_profile_list(request):
     sort = request.GET.get("sort", "brand")
     direction = request.GET.get("dir", "asc")
 
-    # Map friendly sort keys → model fields
     sort_map = {
         "brand": "brand",
         "model": "model_name",
@@ -386,28 +378,13 @@ def drone_safety_profile_list(request):
         "year": "year_released",
         "active": "active",
     }
-
     sort_key = sort_map.get(sort, "brand")
-
-    if direction == "desc":
-        order_by = f"-{sort_key}"
-    else:
-        order_by = sort_key
-        direction = "asc"  # normalize anything else
+    order_by = f"-{sort_key}" if direction == "desc" else sort_key
+    direction = "desc" if direction == "desc" else "asc"
 
     profiles = DroneSafetyProfile.objects.all().order_by(order_by)
 
-    context = {
-        "profiles": profiles,
-        "sort": sort,
-        "dir": direction,
-    }
-    return render(
-        request,
-        "equipment/drone_safety_profile_list.html",
-        context,
-    )
-
+    return render(request, "equipment/drone_safety_profile_list.html", {"profiles": profiles, "sort": sort, "dir": direction})
 
 
 @login_required
@@ -422,14 +399,7 @@ def drone_safety_profile_create(request):
     else:
         form = DroneSafetyProfileForm()
 
-    return render(
-        request,
-        "equipment/drone_safety_profile_form.html",
-        {
-            "form": form,
-            "title": "Add Drone Safety Profile",
-        },
-    )
+    return render(request, "equipment/drone_safety_profile_form.html", {"form": form, "title": "Add Drone Safety Profile"})
 
 
 @login_required
@@ -449,11 +419,7 @@ def drone_safety_profile_edit(request, pk):
     return render(
         request,
         "equipment/drone_safety_profile_form.html",
-        {
-            "form": form,
-            "title": f"Edit {profile.full_display_name}",
-            "profile": profile,
-        },
+        {"form": form, "title": f"Edit {profile.full_display_name}", "profile": profile},
     )
 
 
@@ -467,14 +433,4 @@ def drone_safety_profile_delete(request, pk):
         messages.success(request, f"Deleted drone safety profile: {name}.")
         return redirect("equipment:drone_safety_profile_list")
 
-    return render(
-        request,
-        "equipment/drone_safety_profile_confirm_delete.html",
-        {
-            "profile": profile,
-        },
-    )
-
-
-
-
+    return render(request, "equipment/drone_safety_profile_confirm_delete.html", {"profile": profile})

@@ -9,7 +9,7 @@ from django.conf import settings
 from django.urls import reverse
 from django.utils import timezone
 
-from money.models import Event, Client
+
 
 
 User = settings.AUTH_USER_MODEL
@@ -27,13 +27,13 @@ class OpsPlan(models.Model):
         (ARCHIVED, "Archived"),
     ]
 
-    event                    = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="ops_plans")
+    event                    = models.ForeignKey("money.Event", on_delete=models.CASCADE, related_name="ops_plans")
     event_name               = models.CharField(max_length=200, blank=True)
     plan_year                = models.PositiveIntegerField(validators=[MinValueValidator(2000), MaxValueValidator(2100)])
     status                   = models.CharField(max_length=12, choices=STATUS_CHOICES, default=DRAFT)
     start_date               = models.DateField(null=True, blank=True)
     end_date                 = models.DateField(null=True, blank=True)
-    client                   = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True, related_name="ops_plans")
+    client                   = models.ForeignKey("money.Client", on_delete=models.SET_NULL, null=True, blank=True, related_name="ops_plans")
     address                  = models.CharField(max_length=255, blank=True)
     pilot_in_command         = models.CharField(max_length=150, blank=True)
     visual_observers         = models.CharField(max_length=255, blank=True, help_text="Comma-separated names")

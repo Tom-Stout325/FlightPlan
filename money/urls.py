@@ -17,33 +17,32 @@ from .views.transactions import (
     export_transactions_csv,
     recurring_report_view,
     run_monthly_recurring_view,
-    receipts_list,
-    receipt_detail,
+
 )
 
-from .views.invoices import (
-    # Legacy invoice tools (old Invoice model)
-    InvoiceCreateView,
-    InvoiceUpdateView,
-    invoice_review,
-    invoice_review_pdf,
-    unpaid_invoices,
-    export_invoices_csv,
-    export_invoices_pdf,
-    send_invoice_email,
+# Unified invoices + legacy
+from .views.invoices_unified import InvoiceUnifiedListView
+from .views.invoices_legacy import LegacyInvoiceDetailView, LegacyFileInvoiceDetailView
 
-    # V2 invoice tools
-    InvoiceV2ListView,  # (may still exist even if not used directly)
-    InvoiceV2DetailView,
-    InvoiceV2UpdateView,
-    InvoiceV2MarkPaidView,
-    InvoiceV2CreateView,
+
+
+from money.views.invoices_v2 import (
     InvoiceV2IssueView,
+    InvoiceV2MarkPaidView,
+    InvoiceV2DeleteView,
+    InvoiceV2DetailView,
+    InvoiceV2ListView,
+    invoice_v2_create,
+    invoice_v2_update,
     invoice_v2_pdf_view,
     invoice_v2_send_email,
     invoice_v2_review,
     invoice_review_router,
 )
+
+
+
+
 
 from .views.clients import (
     ClientListView,
@@ -64,17 +63,7 @@ from .views.reports import (
     travel_summary_pdf_download,
 )
 
-from .views.taxes import (
-    schedule_c_summary,
-    schedule_c_summary_pdf,
-    form_4797_view,
-    form_4797_pdf,
-    financial_statement,
-    tax_financial_statement,
-    financial_statement_pdf,
-    category_summary,
-    tax_category_summary,
-    category_summary_pdf,
+from .views.tax_tools import (
     CategoryListView,
     CategoryCreateView,
     CategoryUpdateView,
@@ -82,13 +71,25 @@ from .views.taxes import (
     SubCategoryCreateView,
     SubCategoryUpdateView,
     SubCategoryDeleteView,
+    mileage_log,
+    mileage_report_pdf,
+    export_mileage_csv,
     MileageCreateView,
     MileageUpdateView,
     MileageDeleteView,
-    mileage_log,
     update_mileage_rate,
-    export_mileage_csv,
-    mileage_report_pdf,
+)
+
+from .views.tax_reports import (
+    schedule_c_summary,
+    tax_financial_statement,
+    tax_category_summary,
+    financial_statement,
+    financial_statement_pdf,
+    category_summary,
+    category_summary_pdf,
+    form_4797_view,
+    form_4797_pdf,
 )
 
 from .views.vehicles import (
@@ -107,18 +108,15 @@ from .views.events import (
     EventDeleteView,
 )
 
-from .views.invoices_unified import InvoiceUnifiedListView
-from .views.invoices_legacy import LegacyInvoiceDetailView, LegacyFileInvoiceDetailView
 
 
 app_name = "money"
-
 
 urlpatterns = [
     # ---------------------------------------------------------------------
     # Dashboard
     # ---------------------------------------------------------------------
-    path("dashboard", Dashboard.as_view(), name="dashboard"),
+    path("dashboard/", Dashboard.as_view(), name="dashboard"),
 
     # ---------------------------------------------------------------------
     # Transactions
@@ -131,11 +129,6 @@ urlpatterns = [
     path("transaction/delete/<int:pk>/", TransactionDeleteView.as_view(), name="delete_transaction"),
     path("transactions/export/", export_transactions_csv, name="export_transactions_csv"),
 
-    # ---------------------------------------------------------------------
-    # Receipts
-    # ---------------------------------------------------------------------
-    path("receipts/", receipts_list, name="receipts_list"),
-    path("receipts/<int:pk>/", receipt_detail, name="receipt_detail"),
 
     # ---------------------------------------------------------------------
     # Recurring Transactions
@@ -148,29 +141,21 @@ urlpatterns = [
     path("run-monthly-recurring/", run_monthly_recurring_view, name="run_monthly_recurring"),
 
     # -------------------------------------------------------------------
-    # Invoices (Legacy Invoice model tools)
-    # -------------------------------------------------------------------
-    path("invoice/<int:pk>/review/", invoice_review, name="invoice_review"),
-    path("invoice/<int:pk>/review/pdf/", invoice_review_pdf, name="invoice_review_pdf"),
-    path("invoice/new", InvoiceCreateView.as_view(), name="create_invoice"),
-    path("invoice/edit/<int:pk>/", InvoiceUpdateView.as_view(), name="update_invoice"),
-    path("invoice/<int:invoice_id>/email/", send_invoice_email, name="send_invoice_email"),
-    path("unpaid-invoices/", unpaid_invoices, name="unpaid_invoices"),
-    path("invoices/export/csv/", export_invoices_csv, name="export_invoices_csv"),
-    path("invoices/export/pdf/", export_invoices_pdf, name="export_invoices_pdf"),
-
-    # -------------------------------------------------------------------
     # Invoices (Unified list: v2 + legacy rows together)
     # Keep the name you already use in templates: money:invoice_v2_list
     # -------------------------------------------------------------------
-    path("invoices/", InvoiceUnifiedListView.as_view(), name="invoice_v2_list"),
+    path("invoices/v2/", InvoiceUnifiedListView.as_view(), name="invoice_v2_list"),
 
     # -------------------------------------------------------------------
     # Invoices (V2 invoice CRUD)
     # -------------------------------------------------------------------
-    path("invoices/v2/new/", InvoiceV2CreateView.as_view(), name="invoice_v2_create"),
+    
+    path("invoices/v2/", InvoiceV2ListView.as_view(), name="invoice_v2_list"),
+    path("invoices/v2/new/", invoice_v2_create, name="invoice_v2_create"),
     path("invoices/v2/<int:pk>/", InvoiceV2DetailView.as_view(), name="invoice_v2_detail"),
-    path("invoices/v2/<int:pk>/edit/", InvoiceV2UpdateView.as_view(), name="invoice_v2_edit"),
+    path("invoices/v2/<int:pk>/edit/", invoice_v2_update, name="invoice_v2_edit"),
+    path("invoices/v2/<int:pk>/delete/", InvoiceV2DeleteView.as_view(), name="invoice_v2_delete"),
+         
     path("invoices/v2/<int:pk>/mark-paid/", InvoiceV2MarkPaidView.as_view(), name="invoice_v2_mark_paid"),
     path("invoices/v2/<int:pk>/issue/", InvoiceV2IssueView.as_view(), name="invoice_v2_issue"),
     path("invoices/v2/<int:pk>/pdf/", invoice_v2_pdf_view, name="invoice_v2_pdf"),
@@ -210,18 +195,13 @@ urlpatterns = [
     # ---------------------------------------------------------------------
     path("financial-statement/", financial_statement, name="financial_statement"),
     path("tax/financial-statement/", tax_financial_statement, name="tax_financial_statement"),
-
-    # NOTE: These two were in your file exactly like this (and may produce /money/money/...).
-    # Keeping them to avoid breaking hardcoded links. See aliases below.
-    path("money/financial-statement/pdf/<int:year>/", financial_statement_pdf, name="financial_statement_pdf"),
+    path("financial-statement/pdf/<int:year>/", financial_statement_pdf, name="financial_statement_pdf"),
     path("category-summary/", category_summary, name="category_summary"),
-    path("tax/category-summary/", tax_category_summary, name="tax_category_summary"),
-    path("money/category-summary/pdf/", category_summary_pdf, name="category_summary_pdf"),
-
-    path("schedule-c/", schedule_c_summary, name="schedule_c_summary"),
-    path("schedule-c/<int:year>/pdf/", schedule_c_summary_pdf, name="schedule_c_summary_pdf"),
+    path("category-summary/pdf/", category_summary_pdf, name="category_summary_pdf"),
     path("form-4797/", form_4797_view, name="form_4797"),
     path("form-4797/pdf/", form_4797_pdf, name="form_4797_pdf"),
+    path("tax/category-summary/", tax_category_summary, name="tax_category_summary"),
+    path("taxes/schedule-c/", schedule_c_summary, name="schedule_c_summary"),
 
     # ---------------------------------------------------------------------
     # Category & SubCategory CRUD
@@ -265,7 +245,6 @@ urlpatterns = [
 
     # ---------------------------------------------------------------------
     # OPTIONAL CLEAN ALIASES (safe to keep; remove later when you migrate templates)
-    # These fix the double /money/money/ URLs WITHOUT breaking the old ones.
     # ---------------------------------------------------------------------
     path("financial-statement/pdf/<int:year>/", financial_statement_pdf, name="financial_statement_pdf_clean"),
     path("category-summary/pdf/", category_summary_pdf, name="category_summary_pdf_clean"),

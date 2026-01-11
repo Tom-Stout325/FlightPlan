@@ -17,7 +17,8 @@
       <div class="card-header d-flex justify-content-between align-items-center bg-light">
         <div>
           <h5 class="mb-0">{{ cat.category }}</h5>
-          <small class="text-muted">ID: {{ cat.id }}</small>
+          <small class="text-muted">ID: {{ cat.id }}</small> &nbsp|&nbsp
+          <small class="text-muted">Slug: {{ cat.slug }}</small>
         </div>
         <div>
           <a href="{% url 'money:edit_category' cat.id %}" class="btn btn-sm btn-outline-primary me-1">Edit</a>
@@ -30,7 +31,8 @@
             <li class="list-group-item d-flex justify-content-between align-items-center">
               <div>
                 <strong>{{ sub.sub_cat }}</strong>
-                <small class="text-muted">(ID: {{ sub.id }})</small>
+                <small class="text-muted">(ID: {{ sub.id }})</small> &nbsp|&nbsp
+                <small class="text-muted">(Slug: {{ sub.slug }})</small>
               </div>
               <div>
                 <a href="{% url 'money:edit_sub_category' sub.id %}" class="btn btn-sm btn-outline-primary me-1">Edit</a>

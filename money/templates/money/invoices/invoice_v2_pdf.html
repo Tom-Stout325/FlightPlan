@@ -213,7 +213,6 @@
             {% if invoice.service %}
               <strong>Service:</strong> {{ invoice.service }}<br>
             {% endif %}
-            <strong>Items:</strong> {{ invoice.items.count }} item{{ invoice.items.count|pluralize }}<br>
           </p>
         </div>
       </div>
@@ -221,14 +220,14 @@
 
     <!-- Line Items -->
     <div class="card">
-      <div class="card-title">Line Items</div>
+      <div class="card-title">Invoice Items</div>
       <table>
         <thead>
           <tr>
             <th>Description</th>
 
             <th class="text-end small">Qty</th>
-            <th class="text-end small">Price</th>
+            <th class="text-end small">Amount</th>
             <th class="text-end small">Total</th>
           </tr>
         </thead>

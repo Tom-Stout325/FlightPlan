@@ -1,14 +1,13 @@
-import logging
+# _FLIGHTPLAN/money/views/dashboard.py
 
-logger = logging.getLogger(__name__)
+from __future__ import annotations
+
+import logging
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import TemplateView
 
-from ..forms import *
-from ..models import *
-
-
+logger = logging.getLogger(__name__)
 
 
 class Dashboard(LoginRequiredMixin, TemplateView):
@@ -16,7 +15,5 @@ class Dashboard(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['current_page'] = 'dashboard'
+        context["current_page"] = "dashboard"
         return context
-    
-    

@@ -3,20 +3,48 @@
 {% load l10n %}
 {% load humanize %}
 
-{% block title %}Financial Reports{% endblock %}
+{% block title %}Reports{% endblock %}
+
+{% block extra_css %}
+<style>
+  .card {
+    transition: all 0.25s ease-in-out;
+  }
+
+  .card:hover {
+    box-shadow: 0 0.75rem 1.25rem rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+    border: 1px solid #4807f8ff !important;
+  }
+
+  .custom-hover:hover {
+    background-color: #ffe7e5ff !important;
+  }
+</style>
+{% endblock %}
 
 {% block content %}
 
-<div>
-  <h2 class="text-primary text-center fw-lighter">{{ BRAND.name }}</h2>
-  <h3 class="text-success text-center fw-light">Financial Reports</h3>
+<div class="mb-3">
+  <h2 class="text-primary text-center fw-lighter">{{ BRAND_PROFILE.display_name }}
+</h2>
+  <h3 class="text-primary text-center fw-light">Reports</h3>
 </div>
 
-<div class="container mt-5">
-  <div class="row g-4 justify-content-center">
 
-    {% for card in report_cards %}
-      <div class="col-sm-12 col-md-6 col-lg-4">
+<hr class="w-50 mx-auto text-primary mb-3">
+<div class="container mt-4 mb-5">
+
+  <!-- =========================
+       Financial Reports
+       ========================= -->
+  <div class="text-center mb-3">
+    <h4 class="text-primary fw-light mb-0">Financial Reports</h4>
+  </div>
+
+  <div class="row g-4 justify-content-center">
+    {% for card in financial_cards %}
+      <div class="col-12 col-md-6 col-lg-4">
         <a href="{{ card.url }}" class="text-decoration-none">
           <div class="card h-100 border-0 shadow-sm custom-hover"
                style="background-color: {{ card.bg_color }};">
@@ -24,10 +52,10 @@
               <div class="mb-3">
                 <i class="{{ card.icon }} fa-2x {{ card.text_class }}"></i>
               </div>
-              <h5 class="card-title {{ card.text_class }} fw-bold">
+              <h5 class="card-title {{ card.text_class }} fw-bold mb-2">
                 {{ card.title }}
               </h5>
-              <p class="card-text text-secondary small">
+              <p class="card-text text-secondary small mb-0">
                 {{ card.subtitle }}
               </p>
             </div>
@@ -36,28 +64,51 @@
       </div>
     {% empty %}
       <div class="col-12">
-        <p class="text-center text-muted">
-          No reports are enabled for this client.
+        <p class="text-center text-muted mb-0">
+          No financial reports are enabled for this client.
         </p>
       </div>
     {% endfor %}
-
   </div>
+
+  <hr class="my-5">
+
+  <!-- =========================
+       Tax Reports
+       ========================= -->
+  <div class="text-center mb-3">
+    <h4 class="text-success fw-light mb-0">Tax Reports</h4>
+  </div>
+
+  <div class="row g-4 justify-content-center">
+    {% for card in tax_cards %}
+      <div class="col-12 col-md-6 col-lg-4">
+        <a href="{{ card.url }}" class="text-decoration-none">
+          <div class="card h-100 border-0 shadow-sm custom-hover"
+               style="background-color: {{ card.bg_color }};">
+            <div class="card-body text-center py-4" style="border-radius: .5rem;">
+              <div class="mb-3">
+                <i class="{{ card.icon }} fa-2x {{ card.text_class }}"></i>
+              </div>
+              <h5 class="card-title {{ card.text_class }} fw-bold mb-2">
+                {{ card.title }}
+              </h5>
+              <p class="card-text text-secondary small mb-0">
+                {{ card.subtitle }}
+              </p>
+            </div>
+          </div>
+        </a>
+      </div>
+    {% empty %}
+      <div class="col-12">
+        <p class="text-center text-muted mb-0">
+          No tax reports are enabled for this client.
+        </p>
+      </div>
+    {% endfor %}
+  </div>
+
 </div>
 
-<style>
-.card {
-  transition: all 0.25s ease-in-out;
-}
-
-.card:hover {
-  box-shadow: 0 0.75rem 1.25rem rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
-  border: 1px solid #ccc;
-}
-
-.custom-hover:hover {
-  background-color: #f8f9fa !important;
-}
-</style>
 {% endblock %}

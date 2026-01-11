@@ -9,14 +9,14 @@
   <!-- Header -->
   <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-4">
     <div>
-      <h1 class="h3 mb-1">Invoices (v2)</h1>
+      <h1 class="h3 mb-1 text-primary">INVOICES</h1>
       <p class="text-muted mb-0">
-        Browse and filter your invoices (including legacy).
+        Browse and filter invoices.
       </p>
     </div>
     <div>
       <a href="{% url 'money:invoice_v2_create' %}" class="btn btn-primary btn-sm">
-        New Invoice
+       + New Invoice
       </a>
     </div>
   </div>
@@ -85,7 +85,7 @@
         <thead class="table-light">
           <tr>
             <th scope="col">Invoice #</th>
-            <th scope="col">Client</th>
+            <th scope="col">Client / Location</th>
             <th scope="col" class="d-none d-sm-table-cell">Event</th>
             <th scope="col">Date</th>
             <th scope="col" class="text-end">Amount</th>
@@ -122,7 +122,7 @@
                     {% endif %}
 
                     {% if row.detail_url and row.detail_url != "#" %}
-                      <a class="btn btn-sm btn-outline-secondary" href="{{ row.detail_url }}">Details</a>
+                      <a class="btn btn-sm btn-outline-secondary" href="{{ row.detail_url }}">Details <span class="text-muted">V2</span> </a>
                     {% endif %}
                   </div>
                 </div>

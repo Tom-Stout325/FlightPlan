@@ -21,6 +21,8 @@ ENABLED_REPORTS = [
     "financial_statement",
     "form_4797",
     "category_summary",
-    "schedule_c",
     "travel_summary",
+    "schedule_c",
+    "tax_financial_statement",
+    "tax_category_summary",
 ]

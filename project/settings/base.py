@@ -65,13 +65,13 @@ INSTALLED_APPS = [
     
     'accounts',
     'clients',
+    'money',
     'documents',
     'equipment',
     'flightlogs',
     'operations',
     'pilot',
     'help',
-    'money',
     'airspace',
 
 ]

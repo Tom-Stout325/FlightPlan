@@ -35,63 +35,87 @@
       <h3 class="mb-0 text-center">Create Invoice</h3>
     </div>
     <div class="card-body">
-      <form method="post" novalidate>
-        {% csrf_token %}
+     <form method="post" novalidate>
+  {% csrf_token %}
 
-        <div class="row">
-          <div class="col-md-3 mb-3">{{ form.invoice_number|as_crispy_field }}</div>
-          <div class="col-md-3 mb-3">{{ form.client|as_crispy_field }}</div>
-          <div class="col-md-3 mb-3">{{ form.event|as_crispy_field }}</div>
-          <div class="col-md-3 mb-3">{{ form.location|as_crispy_field }}</div>
-          <div class="col-md-3 mb-3">{{ form.service|as_crispy_field }}</div>
+  {# ✅ Inline formset management form (must be inside the <form>) #}
+  {{ items_formset.management_form }}
 
-          {# Issue / Due defaulting comes from the view; the fields remain editable here #}
-          <div class="col-md-3 mb-3">{{ form.date|as_crispy_field }}</div>
-          <div class="col-md-3 mb-3">{{ form.due|as_crispy_field }}</div>
-          <div class="col-md-3 mb-3">{{ form.paid_date|as_crispy_field }}</div>
-          <div class="col-md-3 mb-3">{{ form.status|as_crispy_field }}</div>
-        </div>
+  <div class="row">
+    <div class="col-md-3 mb-3">{{ form.invoice_number|as_crispy_field }}</div>
+    <div class="col-md-3 mb-3">{{ form.client|as_crispy_field }}</div>
+    <div class="col-md-3 mb-3">{{ form.event|as_crispy_field }}</div>
+    <div class="col-md-3 mb-3">{{ form.location|as_crispy_field }}</div>
+    <div class="col-md-3 mb-3">{{ form.service|as_crispy_field }}</div>
 
-        <hr class="mt-4 mb-4 text-primary">
+    <div class="col-md-3 mb-3">{{ form.date|as_crispy_field }}</div>
+    <div class="col-md-3 mb-3">{{ form.due|as_crispy_field }}</div>
+    <div class="col-md-3 mb-3">{{ form.paid_date|as_crispy_field }}</div>
+    <div class="col-md-3 mb-3">{{ form.status|as_crispy_field }}</div>
+  </div>
 
-        <h5 class="mb-3 text-success">Invoice Items</h5>
-        {{ formset.management_form }}
+  <hr class="mt-4 mb-4 text-primary">
 
-        <div class="table-responsive mb-4">
-          <table class="table table-bordered table-hover align-middle" id="invoice-items-table">
-            <thead class="table-success">
-              <tr>
-                <th>Description</th>
-                <th>Qty</th>
-                <th>Price</th>
-                <th>Total</th>
-                <th class="text-center">Delete</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for form in formset %}
-              <tr class="invoice-item-row">
-                <td>{{ form.description|as_crispy_field }}</td>
-                <td>{{ form.qty|as_crispy_field }}</td>
-                <td>{{ form.price|as_crispy_field }}</td>
-                <td class="row-total">$<span class="total-value">0.00</span></td>
-                <td class="text-center">{{ form.DELETE }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-            <tfoot>
-              <tr class="table-light">
-                <td colspan="3" class="text-end fw-bold">Grand Total:</td>
-                <td colspan="2" class="fw-bold">$<span id="grand-total">0.00</span></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+  <h5 class="mb-3 text-success">Invoice Items</h5>
 
-        <div class="text-end">
-          <button type="submit" class="btn btn-success">💾 Save Invoice</button>
-        </div>
-      </form>
+  {# ✅ show non-form errors for the formset (super helpful) #}
+  {% if items_formset.non_form_errors %}
+    <div class="alert alert-danger">
+      {{ items_formset.non_form_errors }}
+    </div>
+  {% endif %}
+
+  <div class="table-responsive mb-4">
+    <table class="table table-bordered table-hover align-middle" id="invoice-items-table">
+      <thead class="table-success">
+        <tr>
+          <th>Description</th>
+          <th>Qty</th>
+          <th>Price</th>
+          <th>Total</th>
+          <th class="text-center">Delete</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for item_form in items_formset %}
+          {# ✅ include hidden fields like id so updates work correctly #}
+          {% for hidden in item_form.hidden_fields %}{{ hidden }}{% endfor %}
+
+          <tr class="invoice-item-row">
+            <td>{{ item_form.description|as_crispy_field }}</td>
+            <td>{{ item_form.qty|as_crispy_field }}</td>
+            <td>{{ item_form.price|as_crispy_field }}</td>
+            <td class="row-total">$<span class="total-value">0.00</span></td>
+            <td class="text-center">{{ item_form.DELETE }}</td>
+          </tr>
+
+          {% if item_form.errors %}
+            <tr>
+              <td colspan="5">
+                <div class="alert alert-danger mb-0">
+                  {{ item_form.errors }}
+                </div>
+              </td>
+            </tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+
+      <tfoot>
+        <tr class="table-light">
+          <td colspan="3" class="text-end fw-bold">Grand Total:</td>
+          <td colspan="2" class="fw-bold">$<span id="grand-total">0.00</span></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="text-end">
+    <button type="submit" class="btn btn-success">💾 Save Invoice</button>
+  </div>
+</form>
+
     </div>
   </div>
 
