@@ -1,19 +1,22 @@
-from __future__ import annotations
-
-from django.conf import settings
 from django.db import models
+from django.utils.text import slugify
+from django.core.validators import FileExtensionValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
+import uuid
+import hashlib
+from django.core.exceptions import ValidationError
+from django.conf import settings
+from django.urls import reverse
+from django.utils import timezone
 
 
+
+
+
+    
+
+    
 class DroneIncidentReport(models.Model):
-    # ✅ NEW: ownership
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="drone_incident_reports",
-        null=True,   # temporary for migration/backfill; we will make NOT NULL after backfill
-        blank=True,
-    )
-
     report_date = models.DateField()
     reported_by = models.CharField(max_length=100)
     contact = models.CharField(max_length=100)
@@ -63,20 +66,13 @@ class DroneIncidentReport(models.Model):
         ordering = ["-report_date"]
 
 
-class SOPDocument(models.Model):
-    # ✅ NEW: ownership
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="sop_documents",
-        null=True,   # temporary for migration/backfill; we will make NOT NULL after backfill
-        blank=True,
-    )
 
-    title = models.CharField(max_length=255)
+
+class SOPDocument(models.Model):
+    title       = models.CharField(max_length=255)
     description = models.TextField(blank=True)
-    file = models.FileField(upload_to="sop_docs/")
-    created_at = models.DateTimeField(auto_now_add=True)
+    file        = models.FileField(upload_to='sop_docs/')
+    created_at  = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.title
@@ -86,25 +82,24 @@ class SOPDocument(models.Model):
         ordering = ["-title"]
 
 
-class GeneralDocument(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="general_documents", null=True,  blank=True,)
 
+class GeneralDocument(models.Model):
     CATEGORY_CHOICES = [
-        ("Insurance", "Insurance"),
-        ("FAA Airspace Waivers", "FAA Airspace Waivers"),
+        ('Insurance', 'Insurance'),
+        ('FAA Airspace Waivers', 'FAA Airspace Waivers'),
         ("FAA Operational Waivers", "FAA Operational Waivers"),
-        ("Registrations", "Drone Registrations"),
-        ("event", "Event Instructions"),
-        ("Policies", "Policies"),
-        ("Compliance", "Compliance"),
-        ("Legal", "Legal"),
-        ("Other", "Other"),
+        ('Registrations', 'Drone Registrations'),
+        ('event', 'Event Instructions'),
+        ('Policies', 'Policies'),
+        ('Compliance', 'Compliance'),
+        ('Legal', 'Legal'),
+        ('Other', 'Other'),
     ]
 
-    title = models.CharField(max_length=255)
-    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
+    title       = models.CharField(max_length=255)
+    category    = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
     description = models.TextField(blank=True)
-    file = models.FileField(upload_to="general_documents/")
+    file        = models.FileField(upload_to='general_documents/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

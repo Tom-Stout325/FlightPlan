@@ -17,7 +17,7 @@ print(">>> USING ALLOWED_HOSTS:", ALLOWED_HOSTS)
 
 
 ENABLED_REPORTS = [
-    "financial_statement",
+    "profit_loss",
     "form_4797",
     "category_summary",
     "nhra_summary",
@@ -27,6 +27,7 @@ ENABLED_REPORTS = [
     "travel_summary",
     "travel_expenses",
     "schedule_c",
-    "tax_financial_statement",
+    "tax_profit_loss",
     "tax_category_summary",
+    "drone_safety_profile_list",
 ]

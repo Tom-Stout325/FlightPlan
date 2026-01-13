@@ -8,15 +8,17 @@
     <div>
       <h2 class="text-primary fw-light mb-1">Drone Safety Profiles</h2>
       <p class="text-muted small mb-0">
-        {{ profiles|length }} profiles loaded from your safety library.
+        {{ profiles|length }} profiles loaded from Drone Safety Database.
       </p>
     </div>
-    <div class="mt-2 mt-md-0">
-      <a href="{% url 'equipment:drone_safety_profile_create' %}"
-         class="btn btn-outline-success">
-        <i class="fa fa-plus me-1"></i> Add Profile
-      </a>
-    </div>
+    {% if request.user.is_staff %}
+      <div class="mt-2 mt-md-0">
+        <a href="{% url 'equipment:drone_safety_profile_create' %}"
+          class="btn btn-outline-success">
+          <i class="fa fa-plus me-1"></i> Add Profile
+        </a>
+      </div>
+    {% endif %}
   </div>
 
   <div class="card shadow-sm">
@@ -77,7 +79,7 @@
                 </a>
               </th>
 
-              {# Enterprise (not sortable per your request, but easy to add later) #}
+              {# Enterprise #}
               <th class="text-center d-none d-md-table-cell">
                 Enterprise
               </th>
@@ -95,20 +97,26 @@
                 </a>
               </th>
 
-              <th class="text-center">Actions</th>
+              {% if request.user.is_staff %}
+                <th class="text-center">Actions</th>
+              {% endif %}
             </tr>
           </thead>
+
           <tbody>
             {% for p in profiles %}
               <tr>
                 <td>{{ p.brand }}</td>
                 <td>{{ p.model_name }}</td>
+
                 <td class="d-none d-sm-table-cell">
                   {{ p.full_display_name }}
                 </td>
+
                 <td class="text-center d-none d-md-table-cell">
                   {{ p.year_released|default:"—" }}
                 </td>
+
                 <td class="text-center d-none d-md-table-cell">
                   {% if p.is_enterprise %}
                     <span class="badge bg-primary-subtle text-primary small">Enterprise</span>
@@ -116,6 +124,7 @@
                     <span class="badge bg-secondary-subtle text-secondary small">Standard</span>
                   {% endif %}
                 </td>
+
                 <td class="text-center">
                   {% if p.active %}
                     <span class="badge bg-success-subtle text-success small">Active</span>
@@ -123,35 +132,44 @@
                     <span class="badge bg-secondary-subtle text-secondary small">Inactive</span>
                   {% endif %}
                 </td>
-                <td class="text-center">
-                  <div class="btn-group btn-group-sm" role="group">
-                    <a href="{% url 'equipment:drone_safety_profile_edit' p.pk %}"
-                       class="btn btn-outline-primary">
-                      Edit
-                    </a>
-                    <a href="{% url 'equipment:drone_safety_profile_delete' p.pk %}"
-                       class="btn btn-outline-danger">
-                      Delete
-                    </a>
-                  </div>
-                </td>
+
+                {% if request.user.is_staff %}
+                  <td class="text-center">
+                    <div class="btn-group btn-group-sm" role="group">
+                      <a href="{% url 'equipment:drone_safety_profile_edit' p.pk %}"
+                        class="btn btn-outline-primary">
+                        Edit
+                      </a>
+                      <a href="{% url 'equipment:drone_safety_profile_delete' p.pk %}"
+                        class="btn btn-outline-danger">
+                        Delete
+                      </a>
+                    </div>
+                  </td>
+                {% endif %}
               </tr>
+
               <tr class="d-table-row d-sm-none">
-                <td colspan="7" class="border-0 pt-0 pb-3">
+                <td colspan="{% if request.user.is_staff %}7{% else %}6{% endif %}" class="border-0 pt-0 pb-3">
                   <small class="text-muted">
                     {{ p.full_display_name }}<br>
                     {{ p.safety_features|truncatechars:120 }}
                   </small>
                 </td>
               </tr>
+
             {% empty %}
               <tr>
-                <td colspan="7" class="text-center text-muted py-4">
-                  No safety profiles yet. Click “Add Profile” to create one.
+                <td colspan="{% if request.user.is_staff %}7{% else %}6{% endif %}" class="text-center text-muted py-4">
+                  No safety profiles yet.
+                  {% if request.user.is_staff %}
+                    Click “Add Profile” to create one.
+                  {% endif %}
                 </td>
               </tr>
             {% endfor %}
           </tbody>
+
         </table>
       </div>
     </div>

@@ -17,53 +17,43 @@ class EquipmentForm(forms.ModelForm):
             "serial_number",
             "faa_number",
             "faa_certificate",
-            "drone_safety_profile",
+            "receipt",
             "purchase_date",
             "purchase_cost",
-            "receipt",
-            "date_sold",
-            "sale_price",
-            "property_type",
             "placed_in_service_date",
+            "property_type",
             "depreciation_method",
             "useful_life_years",
             "business_use_percent",
-            "deducted_full_cost",
-            "notes",
+            "date_sold",
+            "sale_price",
             "active",
+            "notes",
+            "drone_safety_profile",
         ]
         widgets = {
-            "purchase_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
-            "placed_in_service_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
-            "date_sold": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
-
             "name": forms.TextInput(attrs={"class": "form-control"}),
+            "equipment_type": forms.Select(attrs={"class": "form-select"}),
             "brand": forms.TextInput(attrs={"class": "form-control"}),
             "model": forms.TextInput(attrs={"class": "form-control"}),
             "serial_number": forms.TextInput(attrs={"class": "form-control"}),
             "faa_number": forms.TextInput(attrs={"class": "form-control"}),
-
-            "purchase_cost": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
-            "sale_price": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
-            "useful_life_years": forms.NumberInput(attrs={"class": "form-control", "min": "0"}),
-            "business_use_percent": forms.NumberInput(
-                attrs={"class": "form-control", "step": "0.01", "min": "0", "max": "100"}
-            ),
-
-            # Prefer form-select for selects (Bootstrap 5)
-            "equipment_type": forms.Select(attrs={"class": "form-select"}),
+            "purchase_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "purchase_cost": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+            "placed_in_service_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
             "property_type": forms.Select(attrs={"class": "form-select"}),
             "depreciation_method": forms.Select(attrs={"class": "form-select"}),
-            "drone_safety_profile": forms.Select(attrs={"class": "form-select"}),
-
-            "notes": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
-
-            "deducted_full_cost": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "useful_life_years": forms.NumberInput(attrs={"class": "form-control", "min": 1, "max": 50}),
+            "business_use_percent": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": 0, "max": 100}),
+            "date_sold": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "sale_price": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
             "active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "notes": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+            "drone_safety_profile": forms.Select(attrs={"class": "form-select"}),
         }
 
     def __init__(self, *args, user=None, **kwargs):
-        # `user` is optional; helpful if you later add user-owned choices.
+        # `user` is optional; views should pass it for consistency & future scoping.
         self.user = user
         super().__init__(*args, **kwargs)
 
@@ -78,12 +68,6 @@ class EquipmentForm(forms.ModelForm):
             for f in ("faa_number", "faa_certificate", "drone_safety_profile"):
                 if f in self.fields:
                     self.fields[f].required = False
-
-        # Optional convenience: default placed_in_service_date to purchase_date for new items
-        if not self.instance.pk and "placed_in_service_date" in self.fields:
-            purchase = self.initial.get("purchase_date") or None
-            if purchase:
-                self.fields["placed_in_service_date"].initial = purchase
 
     def clean_faa_certificate(self):
         file = self.cleaned_data.get("faa_certificate")
@@ -151,8 +135,8 @@ class DroneSafetyProfileForm(forms.ModelForm):
         ]
         widgets = {
             "brand": forms.Select(attrs={"class": "form-select"}),
-            "model_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Mavic 4 Pro"}),
-            "full_display_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "DJI Mavic 4 Pro"}),
+            "model_name": forms.TextInput(attrs={"class": "form-control"}),
+            "full_display_name": forms.TextInput(attrs={"class": "form-control"}),
             "year_released": forms.NumberInput(attrs={"class": "form-control", "min": 2000, "max": 2100}),
             "is_enterprise": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "safety_features": forms.Textarea(

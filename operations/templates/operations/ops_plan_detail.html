@@ -152,7 +152,7 @@
       <a href="{% url 'operations:ops_plan_update' plan.pk %}" class="btn btn-primary btn-sm text-nowrap">
         <i class="fa-regular fa-pen-to-square"></i> Edit
       </a>
-      <a href="{% url 'operations:ops_plan_list' plan.event.id %}" class="btn btn-secondary btn-sm text-nowrap">
+      <a href="{% url 'operations:ops_plan_index' %}" class="btn btn-secondary btn-sm text-nowrap">
         <i class="fa-solid fa-arrow-left"></i> Back to List
       </a>
       <a href="{% url 'operations:ops_plan_pdf' plan.pk %}" target="_blank" class="btn btn-outline-danger btn-sm text-nowrap">

@@ -1,7 +1,10 @@
-from .models import CompanyProfile
-import re
+# money/context_processors.py
 
-def client_profile(request):
+import re
+from .models import CompanyProfile
+
+
+def company_profile(request):
     profile = CompanyProfile.get_active()
 
     absolute_logo_url = None
@@ -19,19 +22,22 @@ def client_profile(request):
     # Format phone number: (317) 987-7387
     formatted_phone = None
     if profile and profile.main_phone:
-        # Remove non-digits
         digits = re.sub(r"\D", "", profile.main_phone)
-
-        # US 10-digit format
         if len(digits) == 10:
             formatted_phone = f"({digits[0:3]}) {digits[3:6]}-{digits[6:]}"
         else:
-            formatted_phone = profile.main_phone # fallback
+            formatted_phone = profile.main_phone
 
     return {
-        "BRAND_PROFILE": profile,
-        "BRAND_LOGO_URL": absolute_logo_url,
-        "formatted_brand_phone": formatted_phone,
-         "vehicle_expense_method": getattr(profile, "vehicle_expense_method", "mileage"),
-}
-    
+        # ✅ Primary objects
+        "company_profile": profile,
+        "company_name": profile.name_for_display if profile else "",
+
+        # ✅ Branding helpers
+        "COMPANY_PROFILE": profile,          # optional legacy alias
+        "COMPANY_LOGO_URL": absolute_logo_url,
+        "formatted_company_phone": formatted_phone,
+
+        # ✅ Business rules / flags
+        "vehicle_expense_method": getattr(profile, "vehicle_expense_method", "mileage"),
+    }

@@ -2,7 +2,7 @@ from django import template
 from django.utils.safestring import mark_safe
 from datetime import timedelta
 import os
-
+from calendar import month_name
 register = template.Library()
 
 # -----------------------------
@@ -164,3 +164,15 @@ def add_class(field, css_class):
     Usage: {{ form.field|add_class:"form-control form-control-sm" }}
     """
     return field.as_widget(attrs={"class": css_class})
+
+
+
+
+
+@register.filter
+def month_name_display(value):
+    try:
+        i = int(value)
+        return month_name[i] if 1 <= i <= 12 else ""
+    except Exception:
+        return ""

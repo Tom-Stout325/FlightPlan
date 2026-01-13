@@ -23,11 +23,11 @@
 
     <div class="d-flex gap-2">
       {% if view.event %}
-        <a href="{% url 'operations:ops_plan_list' %}" class="btn btn-outline-secondary btn-sm">
+        <a href="{% url 'operations:ops_plan_index' %}" class="btn btn-outline-secondary btn-sm">
           <i class="fa-solid fa-arrow-left"></i> Back to List
         </a>
       {% elif plan %}
-        <a href="{% url 'operations:ops_plan_list' plan.event.id %}" class="btn btn-outline-secondary btn-sm">
+        <a href="{% url 'operations:ops_plan_index' %}" class="btn btn-outline-secondary btn-sm">
           <i class="fa-solid fa-arrow-left"></i> Back to List
         </a>
       {% endif %}
@@ -154,11 +154,11 @@
 
         <div class="d-flex justify-content-between mt-4">
           {% if view.event %}
-            <a href="{% url 'operations:ops_plan_list' view.event.id %}" class="btn btn-outline-secondary">
+            <a href="{% url 'operations:ops_plan_index' %}" class="btn btn-outline-secondary">
               <i class="fa-solid fa-xmark"></i> Cancel
             </a>
           {% elif plan %}
-            <a href="{% url 'operations:ops_plan_list' plan.event.id %}" class="btn btn-outline-secondary">
+            <a href="{% url 'operations:ops_plan_index' %}" class="btn btn-outline-secondary">
               <i class="fa-solid fa-xmark"></i> Cancel
             </a>
           {% else %}

@@ -1,5 +1,4 @@
 # _FLIGHTPLAN/money/views/tax_reports.py
-
 from __future__ import annotations
 
 import logging
@@ -8,8 +7,8 @@ from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import Case, DecimalField, ExpressionWrapper, F, Q, Sum, Value, When
-from django.db.models.functions import Coalesce
-from django.http import HttpResponse
+from django.db.models.functions import Coalesce, ExtractYear
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -31,26 +30,46 @@ PERSONAL_VEHICLE_TRANSPORT = "personal_vehicle"
 # Helpers
 # -----------------------------------------------------------------------------
 
-def _selected_year_from_request(request) -> int:
-    current_year = timezone.localdate().year
-    year_raw = (request.GET.get("year") or "").strip()
-    return int(year_raw) if year_raw.isdigit() else current_year
+def _selected_year_from_request(request: HttpRequest) -> int | None:
+    year_raw = (request.GET.get("year") or "").strip().lower()
+    if year_raw in ("", "all", "any"):
+        return None
+    if year_raw.isdigit():
+        return int(year_raw)
+    return None
 
 
-def _tx_base_qs(user, year: int | None):
-    qs = (
+def _year_choices_for_user(user) -> list[int]:
+    years = (
         Transaction.objects.filter(user=user)
-        .select_related("category", "sub_cat", "sub_cat__category", "event", "team")
+        .annotate(y=ExtractYear("date"))
+        .values_list("y", flat=True)
+        .distinct()
+        .order_by("-y")
     )
-    if year is not None:
-        qs = qs.filter(date__year=year)
-    return qs
+    years = [y for y in years if y is not None]
+    if years:
+        return years
+
+    current_year = timezone.localdate().year
+    return list(range(2023, current_year + 1))[::-1]
+
+
+def _company_context() -> dict:
+    profile = CompanyProfile.get_active()
+    return {
+        "company_profile": profile,
+        "company_name": profile.name_for_display if profile else "",
+    }
+
+
+def _base_amount_expr():
+    return Coalesce(F("amount"), Value(ZERO), output_field=TWO_DP)
 
 
 def _tax_deductible_amount_expr():
-    base_amount = Coalesce(F("amount"), Value(ZERO), output_field=TWO_DP)
+    base_amount = _base_amount_expr()
     meals_amount = ExpressionWrapper(base_amount * Value(MEALS_RATE), output_field=TWO_DP)
-
     return Case(
         When(Q(sub_cat__slug="meals") | Q(sub_cat__slug__iendswith="-meals"), then=meals_amount),
         default=base_amount,
@@ -65,21 +84,22 @@ def _exclude_personal_vehicle_fuel(qs):
     )
 
 
-def _company_context():
-    profile = CompanyProfile.get_active()
-    return {
-        "company_profile": profile,
-        "company_name": profile.name_for_display if profile else "",
-    }
+def _tx_qs_for_user(user, year: int | None):
+    qs = (
+        Transaction.objects.filter(user=user)
+        .select_related("category", "sub_cat", "sub_cat__category", "event", "team")
+    )
+    if year is not None:
+        qs = qs.filter(date__year=year)
+    return qs
 
 
-def _summary_context(request, year: int, *, tax_only: bool):
-    qs = _exclude_personal_vehicle_fuel(_tx_base_qs(request.user, year))
+def _build_tax_statement_context(request: HttpRequest, year: int | None) -> dict:
+    qs = _tx_qs_for_user(request.user, year)
+    qs = qs.filter(sub_cat__include_in_tax_reports=True)
+    qs = _exclude_personal_vehicle_fuel(qs)
 
-    if tax_only:
-        qs = qs.filter(sub_cat__include_in_tax_reports=True)
-
-    deductible_expr = _tax_deductible_amount_expr()
+    amount_expr = _tax_deductible_amount_expr()
 
     grouped = (
         qs.values(
@@ -90,55 +110,55 @@ def _summary_context(request, year: int, *, tax_only: bool):
             "sub_cat__slug",
             "sub_cat__schedule_c_line",
         )
-        .annotate(
-            total=Coalesce(
-                Sum(deductible_expr, output_field=TWO_DP),
-                Value(ZERO),
-                output_field=TWO_DP,
-            )
-        )
+        .annotate(total=Coalesce(Sum(amount_expr, output_field=TWO_DP), Value(ZERO), output_field=TWO_DP))
         .order_by("trans_type", "category__category", "sub_cat__sub_cat")
     )
 
-    data = {
-        Transaction.INCOME: defaultdict(list),
-        Transaction.EXPENSE: defaultdict(list),
-    }
-    category_totals = {
-        Transaction.INCOME: defaultdict(lambda: Decimal("0.00")),
-        Transaction.EXPENSE: defaultdict(lambda: Decimal("0.00")),
-    }
-    trans_totals = {
-        Transaction.INCOME: Decimal("0.00"),
-        Transaction.EXPENSE: Decimal("0.00"),
-    }
+    income_map: dict[str, dict] = defaultdict(lambda: {"cat_total": ZERO, "subs": []})
+    expense_map: dict[str, dict] = defaultdict(lambda: {"cat_total": ZERO, "subs": []})
 
     for row in grouped:
         trans_type = row.get("trans_type") or Transaction.EXPENSE
-        cat_name = row.get("category__category") or "Uncategorized"
-        total = (row.get("total") or Decimal("0.00")).quantize(Decimal("0.01"))
+        cat_name = (row.get("category__category") or "Uncategorized").strip() or "Uncategorized"
 
-        data[trans_type][cat_name].append(
-            {
-                "sub_cat": row.get("sub_cat__sub_cat") or "",
-                "sub_slug": row.get("sub_cat__slug") or "",
-                "total": total,
-                "schedule_c_line": (row.get("sub_cat__schedule_c_line") or row.get("category__schedule_c_line") or ""),
-            }
-        )
-        category_totals[trans_type][cat_name] = (category_totals[trans_type][cat_name] + total).quantize(Decimal("0.01"))
-        trans_totals[trans_type] = (trans_totals[trans_type] + total).quantize(Decimal("0.01"))
+        sub_name = (row.get("sub_cat__sub_cat") or "").strip()
+        sched_line = (row.get("sub_cat__schedule_c_line") or row.get("category__schedule_c_line") or "").strip()
+        amount = (row.get("total") or ZERO).quantize(Decimal("0.01"))
 
-    net = (trans_totals[Transaction.INCOME] - trans_totals[Transaction.EXPENSE]).quantize(Decimal("0.01"))
+        if trans_type == Transaction.INCOME:
+            income_map[cat_name]["cat_total"] = (income_map[cat_name]["cat_total"] + amount).quantize(Decimal("0.01"))
+            if sub_name:
+                income_map[cat_name]["subs"].append((sub_name, amount, sched_line))
+        else:
+            expense_map[cat_name]["cat_total"] = (expense_map[cat_name]["cat_total"] + amount).quantize(Decimal("0.01"))
+            if sub_name:
+                expense_map[cat_name]["subs"].append((sub_name, amount, sched_line))
+
+    income_category_totals = [
+        {"category": cat, "total": data["cat_total"], "subcategories": data["subs"]}
+        for cat, data in income_map.items()
+    ]
+    expense_category_totals = [
+        {"category": cat, "total": data["cat_total"], "subcategories": data["subs"]}
+        for cat, data in expense_map.items()
+    ]
+
+    income_category_totals.sort(key=lambda x: x["category"])
+    expense_category_totals.sort(key=lambda x: x["category"])
+
+    income_total = sum((r["total"] for r in income_category_totals), start=ZERO).quantize(Decimal("0.01"))
+    expense_total = sum((r["total"] for r in expense_category_totals), start=ZERO).quantize(Decimal("0.01"))
+    net_profit = (income_total - expense_total).quantize(Decimal("0.01"))
 
     ctx = {
         "selected_year": year,
-        "year_choices": list(range(2023, timezone.localdate().year + 1)),
-        "tax_only": tax_only,
-        "groups": data,
-        "category_totals": category_totals,
-        "totals": trans_totals,
-        "net": net,
+        "year_choices": _year_choices_for_user(request.user),
+        "income_category_totals": income_category_totals,
+        "expense_category_totals": expense_category_totals,
+        "income_category_total": income_total,
+        "expense_category_total": expense_total,
+        "net_profit": net_profit,
+        "tax_only": True,
         "now": timezone.now(),
     }
     ctx.update(_company_context())
@@ -146,67 +166,23 @@ def _summary_context(request, year: int, *, tax_only: bool):
 
 
 # -----------------------------------------------------------------------------
-# Views
+# Views (tax-only)
 # -----------------------------------------------------------------------------
 
 @login_required
-def financial_statement(request):
+def tax_profit_loss(request: HttpRequest) -> HttpResponse:
     year = _selected_year_from_request(request)
-    ctx = _summary_context(request, year, tax_only=False)
-    ctx["current_page"] = "financial_statement"
-    return render(request, "money/taxes/financial_statement.html", ctx)
+    ctx = _build_tax_statement_context(request, year)
+    ctx["current_page"] = "tax_profit_loss"
+    return render(request, "money/taxes/tax_profit_loss.html", ctx)
 
 
 @login_required
-def tax_financial_statement(request):
+def tax_category_summary(request: HttpRequest) -> HttpResponse:
     year = _selected_year_from_request(request)
-    ctx = _summary_context(request, year, tax_only=True)
-    ctx["current_page"] = "tax_financial_statement"
-    return render(request, "money/taxes/tax_financial_statement.html", ctx)
-
-
-@login_required
-def tax_category_summary(request):
-    year = _selected_year_from_request(request)
-    ctx = _summary_context(request, year, tax_only=True)
+    ctx = _build_tax_statement_context(request, year)
     ctx["current_page"] = "tax_category_summary"
     return render(request, "money/taxes/tax_category_summary.html", ctx)
-
-
-@login_required
-def category_summary(request):
-    year = _selected_year_from_request(request)
-    ctx = _summary_context(request, year, tax_only=False)
-    ctx["current_page"] = "category_summary"
-    return render(request, "money/taxes/category_summary.html", ctx)
-
-
-@login_required
-def financial_statement_pdf(request, year: int):
-    try:
-        selected_year = int(year)
-    except (TypeError, ValueError):
-        selected_year = timezone.localdate().year
-
-    ctx = _summary_context(request, selected_year, tax_only=False)
-    html_string = render_to_string("money/taxes/financial_statement_pdf.html", ctx, request=request)
-    pdf = HTML(string=html_string, base_url=request.build_absolute_uri("/")).write_pdf()
-
-    resp = HttpResponse(pdf, content_type="application/pdf")
-    resp["Content-Disposition"] = f'attachment; filename="Financial_Statement_{selected_year}.pdf"'
-    return resp
-
-
-@login_required
-def category_summary_pdf(request):
-    year = _selected_year_from_request(request)
-    ctx = _summary_context(request, year, tax_only=False)
-    html_string = render_to_string("money/taxes/category_summary_pdf.html", ctx, request=request)
-    pdf = HTML(string=html_string, base_url=request.build_absolute_uri("/")).write_pdf()
-
-    resp = HttpResponse(pdf, content_type="application/pdf")
-    resp["Content-Disposition"] = f'attachment; filename="Category_Summary_{year}.pdf"'
-    return resp
 
 
 # -----------------------------------------------------------------------------
@@ -214,11 +190,12 @@ def category_summary_pdf(request):
 # -----------------------------------------------------------------------------
 
 @login_required
-def schedule_c_summary(request):
+def schedule_c_summary(request: HttpRequest) -> HttpResponse:
     year = _selected_year_from_request(request)
 
-    qs = _exclude_personal_vehicle_fuel(_tx_base_qs(request.user, year))
+    qs = _tx_qs_for_user(request.user, year)
     qs = qs.filter(trans_type=Transaction.EXPENSE, sub_cat__include_in_tax_reports=True)
+    qs = _exclude_personal_vehicle_fuel(qs)
 
     deductible_expr = _tax_deductible_amount_expr()
     schedule_c_line = Coalesce(F("sub_cat__schedule_c_line"), F("category__schedule_c_line"), Value(""))
@@ -233,12 +210,12 @@ def schedule_c_summary(request):
     )
 
     by_line = defaultdict(list)
-    line_totals = defaultdict(lambda: Decimal("0.00"))
-    grand_total = Decimal("0.00")
+    line_totals = defaultdict(lambda: ZERO)
+    grand_total = ZERO
 
     for r in rows:
         line = (r.get("schedule_c_line") or "").strip() or "Unmapped"
-        total = (r.get("total") or Decimal("0.00")).quantize(Decimal("0.01"))
+        total = (r.get("total") or ZERO).quantize(Decimal("0.01"))
         by_line[line].append(
             {
                 "category": r.get("category__category") or "Uncategorized",
@@ -252,7 +229,7 @@ def schedule_c_summary(request):
     ctx = {
         "current_page": "schedule_c",
         "selected_year": year,
-        "year_choices": list(range(2023, timezone.localdate().year + 1)),
+        "year_choices": _year_choices_for_user(request.user),
         "lines": dict(by_line),
         "line_totals": dict(line_totals),
         "grand_total": grand_total,
@@ -267,7 +244,7 @@ def schedule_c_summary(request):
 # -----------------------------------------------------------------------------
 
 @login_required
-def form_4797_view(request):
+def form_4797_view(request: HttpRequest) -> HttpResponse:
     year = _selected_year_from_request(request)
 
     equipment_qs = (
@@ -275,11 +252,13 @@ def form_4797_view(request):
         .select_related("category", "sub_cat")
         .order_by("placed_in_service_date", "id")
     )
+    if year is not None:
+        equipment_qs = equipment_qs.filter(placed_in_service_date__year=year)
 
     ctx = {
         "current_page": "form_4797",
         "selected_year": year,
-        "year_choices": list(range(2023, timezone.localdate().year + 1)),
+        "year_choices": _year_choices_for_user(request.user),
         "equipment": equipment_qs,
         "now": timezone.now(),
     }
@@ -288,7 +267,7 @@ def form_4797_view(request):
 
 
 @login_required
-def form_4797_pdf(request):
+def form_4797_pdf(request: HttpRequest) -> HttpResponse:
     year = _selected_year_from_request(request)
 
     equipment_qs = (
@@ -296,10 +275,13 @@ def form_4797_pdf(request):
         .select_related("category", "sub_cat")
         .order_by("placed_in_service_date", "id")
     )
+    if year is not None:
+        equipment_qs = equipment_qs.filter(placed_in_service_date__year=year)
 
     ctx = {
         "current_page": "form_4797",
         "selected_year": year,
+        "year_choices": _year_choices_for_user(request.user),
         "equipment": equipment_qs,
         "now": timezone.now(),
     }
@@ -308,6 +290,7 @@ def form_4797_pdf(request):
     html_string = render_to_string("money/taxes/form_4797_pdf.html", ctx, request=request)
     pdf = HTML(string=html_string, base_url=request.build_absolute_uri("/")).write_pdf()
 
+    suffix = str(year) if year is not None else "ALL"
     resp = HttpResponse(pdf, content_type="application/pdf")
-    resp["Content-Disposition"] = f'attachment; filename="Form_4797_{year}.pdf"'
+    resp["Content-Disposition"] = f'attachment; filename="Form_4797_{suffix}.pdf"'
     return resp

@@ -11,12 +11,11 @@ from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.paginator import Paginator
 from django.db import transaction as db_tx
-from django.db.models import Q, Sum
+from django.db.models import Sum
 from django.db.models.functions import ExtractYear
-from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import HttpRequest, HttpResponse
+from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.timezone import now
@@ -33,7 +32,38 @@ logger = logging.getLogger(__name__)
 
 
 # ------------------------------------------------------------------------------
-# Transactions
+# Shared helpers
+# ------------------------------------------------------------------------------
+
+
+def _tx_qs(user):
+    """Base scoped queryset for Transactions."""
+    return (
+        Transaction.objects.select_related(
+            "category",
+            "sub_cat__category",
+            "sub_cat",
+            "team",
+            "event",
+        )
+        .filter(user=user)
+    )
+
+
+def _recurring_qs(user):
+    """Base scoped queryset for RecurringTransaction templates."""
+    return RecurringTransaction.objects.filter(user=user)
+
+
+def _valid_run_date(year: int, month: int, day_value):
+    last_day = monthrange(year, month)[1]
+    run_day = day_value or 1
+    run_day = max(1, min(int(run_day), last_day))
+    return date(year, month, run_day)
+
+
+# ------------------------------------------------------------------------------
+# Transactions (list + CRUD)
 # ------------------------------------------------------------------------------
 
 
@@ -45,17 +75,7 @@ class Transactions(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         user = self.request.user
-
-        qs = (
-            Transaction.objects.select_related(
-                "category",
-                "sub_cat__category",
-                "sub_cat",
-                "team",
-                "event",
-            )
-            .filter(user=user)
-        )
+        qs = _tx_qs(user)
 
         # Filter inputs (always scoped to the current user)
         event_id = (self.request.GET.get("event") or "").strip()
@@ -112,23 +132,10 @@ class Transactions(LoginRequiredMixin, ListView):
 
         ctx["current_sort"] = getattr(self, "current_sort", "-date")
 
-        ctx["events"] = (
-            Event.objects.filter(user=user, transactions__user=user)
-            .distinct()
-            .order_by("slug")
-        )
-
-        ctx["categories"] = (
-            Category.objects.filter(user=user, transaction__user=user)
-            .distinct()
-            .order_by("category")
-        )
-
-        ctx["subcategories"] = (
-            SubCategory.objects.filter(user=user, transaction__user=user)
-            .distinct()
-            .order_by("sub_cat")
-        )
+        # Only show dropdown options that actually appear in THIS user's transactions.
+        ctx["events"] = Event.objects.filter(user=user, transactions__user=user).distinct().order_by("slug")
+        ctx["categories"] = Category.objects.filter(user=user, transaction__user=user).distinct().order_by("category")
+        ctx["subcategories"] = SubCategory.objects.filter(user=user, transaction__user=user).distinct().order_by("sub_cat")
 
         ctx["years"] = [
             str(y)
@@ -160,16 +167,7 @@ class TransactionDetailView(LoginRequiredMixin, DetailView):
     context_object_name = "transaction"
 
     def get_queryset(self):
-        return (
-            Transaction.objects.select_related(
-                "category",
-                "sub_cat__category",
-                "sub_cat",
-                "team",
-                "event",
-            )
-            .filter(user=self.request.user)
-        )
+        return _tx_qs(self.request.user)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -177,37 +175,37 @@ class TransactionDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class TransactionCreateView(LoginRequiredMixin, CreateView):
-    model = Transaction
-    form_class = TransForm
-    template_name = "money/transactions/transaction_add.html"
-    success_url = reverse_lazy("money:add_transaction_success")
+class _TransactionFormUserKwargsMixin:
+    """
+    Ensure TransForm receives user so it can:
+      - scope dropdowns
+      - set instance.user BEFORE model validation (OwnedModelMixin.clean)
+      - align category from sub_cat before Transaction.clean()
+    """
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["user"] = self.request.user
         return kwargs
 
+
+class TransactionCreateView(LoginRequiredMixin, _TransactionFormUserKwargsMixin, CreateView):
+    model = Transaction
+    form_class = TransForm
+    template_name = "money/transactions/transaction_add.html"
+    success_url = reverse_lazy("money:add_transaction_success")
+
     def form_valid(self, form):
-        try:
-            with db_tx.atomic():
-                obj = form.save(commit=False)
-                obj.user = self.request.user
+        # Defensive (form should already have set instance.user early)
+        if not form.instance.user_id:
+            form.instance.user = self.request.user
 
-                # Ensure category is always aligned with sub_cat when provided
-                if obj.sub_cat_id:
-                    obj.category = obj.sub_cat.category
+        # Defensive: keep category aligned from sub_cat
+        if form.instance.sub_cat_id:
+            form.instance.category = form.instance.sub_cat.category
 
-                obj.save()
-                form.save_m2m()
-
-            messages.success(self.request, "Transaction added successfully!")
-            return redirect(self.get_success_url())
-
-        except Exception as e:
-            logger.exception("Error adding transaction for user %s: %s", self.request.user.id, e)
-            messages.error(self.request, "Error adding transaction. Please check the form.")
-            return self.form_invalid(form)
+        messages.success(self.request, "Transaction added successfully!")
+        return super().form_valid(form)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -215,49 +213,28 @@ class TransactionCreateView(LoginRequiredMixin, CreateView):
         return context
 
 
-class TransactionUpdateView(LoginRequiredMixin, UpdateView):
+class TransactionUpdateView(LoginRequiredMixin, _TransactionFormUserKwargsMixin, UpdateView):
     model = Transaction
     form_class = TransForm
     template_name = "money/transactions/transaction_edit.html"
     success_url = reverse_lazy("money:transactions")
 
     def get_queryset(self):
-        return Transaction.objects.filter(user=self.request.user)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["user"] = self.request.user
-        return kwargs
+        return _tx_qs(self.request.user)
 
     def form_valid(self, form):
-        try:
-            with db_tx.atomic():
-                obj = form.save(commit=False)
-                obj.user = self.request.user  # defensive (should already be true)
+        # Defensive (should already be true; also prevents cross-user reassignment)
+        form.instance.user = self.request.user
 
-                # Keep category aligned if sub_cat is selected/changed
-                if obj.sub_cat_id:
-                    obj.category = obj.sub_cat.category
+        if form.instance.sub_cat_id:
+            form.instance.category = form.instance.sub_cat.category
 
-                obj.save()
-                form.save_m2m()
-
-            messages.success(self.request, "Transaction updated successfully!")
-            return redirect(self.get_success_url())
-
-        except Exception as e:
-            logger.exception(
-                "Error updating transaction %s for user %s: %s",
-                getattr(self.object, "id", "unknown"),
-                getattr(self.request.user, "id", "anon"),
-                e,
-            )
-            messages.error(self.request, "Error updating transaction. Please check the form.")
-            return self.form_invalid(form)
+        messages.success(self.request, "Transaction updated successfully!")
+        return super().form_valid(form)
 
     def form_invalid(self, form):
         logger.warning(
-            "TransactionUpdateView.form_invalid for user %s. Errors: %s",
+            "TransactionUpdateView.form_invalid user=%s errors=%s",
             getattr(self.request.user, "id", "anon"),
             form.errors,
         )
@@ -281,17 +258,17 @@ class TransactionDeleteView(LoginRequiredMixin, DeleteView):
     success_url = reverse_lazy("money:transactions")
 
     def get_queryset(self):
-        return Transaction.objects.filter(user=self.request.user)
+        return _tx_qs(self.request.user)
 
     def delete(self, request, *args, **kwargs):
         try:
             with db_tx.atomic():
                 response = super().delete(request, *args, **kwargs)
-            messages.success(self.request, "Transaction deleted successfully!")
+            messages.success(request, "Transaction deleted successfully!")
             return response
         except Exception as e:
             logger.exception("Error deleting transaction for user %s: %s", request.user.id, e)
-            messages.error(self.request, "Error deleting transaction.")
+            messages.error(request, "Error deleting transaction.")
             return redirect("money:transactions")
 
     def get_context_data(self, **kwargs):
@@ -301,7 +278,7 @@ class TransactionDeleteView(LoginRequiredMixin, DeleteView):
 
 
 @login_required
-def add_transaction_success(request):
+def add_transaction_success(request: HttpRequest) -> HttpResponse:
     return render(
         request,
         "money/transactions/transaction_add_success.html",
@@ -310,12 +287,9 @@ def add_transaction_success(request):
 
 
 @login_required
-def export_transactions_csv(request):
+def export_transactions_csv(request: HttpRequest) -> HttpResponse:
     """
     Export the user's transactions as CSV.
-
-    Note: Transaction has NO FK named 'invoice' (invoice_number is a CharField),
-    so we only select_related valid FKs.
     """
     transactions = (
         Transaction.objects.filter(user=request.user)
@@ -360,8 +334,15 @@ def export_transactions_csv(request):
 
 
 # ------------------------------------------------------------------------------
-# Recurring Transactions
+# Recurring Transactions (templates)
 # ------------------------------------------------------------------------------
+
+
+class _RecurringFormUserKwargsMixin:
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
 
 
 class RecurringTransactionListView(LoginRequiredMixin, ListView):
@@ -370,7 +351,7 @@ class RecurringTransactionListView(LoginRequiredMixin, ListView):
     context_object_name = "recurring_transactions"
 
     def get_queryset(self):
-        return RecurringTransaction.objects.filter(user=self.request.user)
+        return _recurring_qs(self.request.user).order_by("day", "transaction")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -379,30 +360,22 @@ class RecurringTransactionListView(LoginRequiredMixin, ListView):
         return context
 
 
-class RecurringTransactionCreateView(LoginRequiredMixin, CreateView):
+class RecurringTransactionCreateView(LoginRequiredMixin, _RecurringFormUserKwargsMixin, CreateView):
     model = RecurringTransaction
     form_class = RecurringTransactionForm
     template_name = "money/transactions/recurring_form.html"
     success_url = reverse_lazy("money:recurring_transaction_list")
 
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["user"] = self.request.user
-        return kwargs
-
     def form_valid(self, form):
-        obj = form.save(commit=False)
-        obj.user = self.request.user
+        # Defensive (form should already set this early)
+        if not form.instance.user_id:
+            form.instance.user = self.request.user
 
-        # Keep category aligned with sub_cat if present
-        if obj.sub_cat_id:
-            obj.category = obj.sub_cat.category
-
-        obj.save()
-        form.save_m2m()
+        if form.instance.sub_cat_id:
+            form.instance.category = form.instance.sub_cat.category
 
         messages.success(self.request, "Recurring transaction added successfully!")
-        return redirect(self.get_success_url())
+        return super().form_valid(form)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -410,32 +383,23 @@ class RecurringTransactionCreateView(LoginRequiredMixin, CreateView):
         return context
 
 
-class RecurringTransactionUpdateView(LoginRequiredMixin, UpdateView):
+class RecurringTransactionUpdateView(LoginRequiredMixin, _RecurringFormUserKwargsMixin, UpdateView):
     model = RecurringTransaction
     form_class = RecurringTransactionForm
     template_name = "money/transactions/recurring_form.html"
     success_url = reverse_lazy("money:recurring_transaction_list")
 
     def get_queryset(self):
-        return RecurringTransaction.objects.filter(user=self.request.user)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["user"] = self.request.user
-        return kwargs
+        return _recurring_qs(self.request.user)
 
     def form_valid(self, form):
-        obj = form.save(commit=False)
-        obj.user = self.request.user  # defensive
+        form.instance.user = self.request.user  # defensive
 
-        if obj.sub_cat_id:
-            obj.category = obj.sub_cat.category
-
-        obj.save()
-        form.save_m2m()
+        if form.instance.sub_cat_id:
+            form.instance.category = form.instance.sub_cat.category
 
         messages.success(self.request, "Recurring transaction updated successfully!")
-        return redirect(self.get_success_url())
+        return super().form_valid(form)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -449,10 +413,10 @@ class RecurringTransactionDeleteView(LoginRequiredMixin, DeleteView):
     success_url = reverse_lazy("money:recurring_transaction_list")
 
     def get_queryset(self):
-        return RecurringTransaction.objects.filter(user=self.request.user)
+        return _recurring_qs(self.request.user)
 
     def delete(self, request, *args, **kwargs):
-        messages.success(self.request, "Recurring transaction deleted successfully!")
+        messages.success(request, "Recurring transaction deleted successfully!")
         return super().delete(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -462,14 +426,14 @@ class RecurringTransactionDeleteView(LoginRequiredMixin, DeleteView):
 
 
 @staff_member_required
-def recurring_report_view(request):
+def recurring_report_view(request: HttpRequest) -> HttpResponse:
     """
     Staff-only report page, but data is still scoped to request.user.
     """
     year = int(request.GET.get("year", now().year))
     month_numbers = list(range(1, 13))
 
-    templates = RecurringTransaction.objects.filter(user=request.user).order_by("transaction")
+    templates = _recurring_qs(request.user).order_by("transaction")
 
     tx = (
         Transaction.objects.filter(
@@ -497,15 +461,14 @@ def recurring_report_view(request):
     return render(request, "money/transactions/recurring_report.html", context)
 
 
-def _valid_run_date(year: int, month: int, day_value):
-    last_day = monthrange(year, month)[1]
-    run_day = day_value or 1
-    run_day = max(1, min(int(run_day), last_day))
-    return date(year, month, run_day)
-
-
 @staff_member_required
-def run_monthly_recurring_view(request):
+def run_monthly_recurring_view(request: HttpRequest) -> HttpResponse:
+    """
+    Create one generated Transaction per active RecurringTransaction for a month.
+
+    Duplicate prevention is by (user, recurring_template, year, month) which matches
+    your original behavior.
+    """
     user = request.user
     today = timezone.localdate()
 
@@ -517,7 +480,7 @@ def run_monthly_recurring_view(request):
         target_month = today.month
         target_year = today.year
 
-    recurrences = RecurringTransaction.objects.filter(user=user, active=True).order_by("day", "transaction")
+    recurrences = _recurring_qs(user).filter(active=True).order_by("day", "transaction")
 
     created_count = 0
     skipped_count = 0
@@ -580,5 +543,3 @@ def run_monthly_recurring_view(request):
         f"Skipped {skipped_count} already-created.",
     )
     return redirect("money:recurring_transaction_list")
-
-

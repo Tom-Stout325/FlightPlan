@@ -9,15 +9,18 @@ from django.utils import timezone
 from ...models import Category, Event, RecurringTransaction, SubCategory, Team, Transaction
 
 
+
+
 class TransForm(forms.ModelForm):
     """
-    Transaction form.
+    Transaction form (mobile-friendly Bootstrap widgets).
 
-    Notes:
-    - `Transaction.category` is REQUIRED at the model level.
-    - This form intentionally does NOT expose `category` directly.
-      Category is derived from the selected SubCategory (sub_cat).
-    - Views also enforce category alignment as an extra safety net.
+    Key rules:
+    - Transaction.category is REQUIRED on the model, but not exposed on the form.
+      We derive category from the selected sub_cat.
+    - Transaction is OwnedModelMixin-backed and calls full_clean() in save(),
+      so we MUST set instance.user (owner) and instance.category BEFORE model validation.
+    - All dropdowns are user-scoped when `user` is provided.
     """
 
     invoice_number = forms.CharField(
@@ -43,7 +46,7 @@ class TransForm(forms.ModelForm):
     sub_cat = forms.ModelChoiceField(
         queryset=SubCategory.objects.none(),
         label="Sub-Category",
-        required=False,
+        required=True,  # you said no blank subcategories allowed
         widget=forms.Select(attrs={"class": "form-control"}),
     )
 
@@ -70,15 +73,21 @@ class TransForm(forms.ModelForm):
             "transport_type": forms.Select(attrs={"class": "form-control"}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         """
-        If the view passes `user`, scope dropdowns to that user.
-        Falls back to unscoped querysets (useful for admin/tests),
-        but your views should pass user to prevent leakage.
-        """
-        self.user = kwargs.pop("user", None)
-        super().__init__(*args, **kwargs)
+        Views should pass `user=request.user`.
 
+        This scopes all FK dropdowns and also sets instance.user early so that:
+        - ModelForm._post_clean -> instance.full_clean() doesn't fail with "Owner must be set."
+        """
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+        # Set owner EARLY (critical for OwnedModelMixin + model.save() calling full_clean())
+        if self.user is not None and not getattr(self.instance, "user_id", None):
+            self.instance.user = self.user
+
+        # User-scoped dropdowns
         if self.user is not None:
             self.fields["event"].queryset = Event.objects.filter(user=self.user).order_by("title")
             self.fields["team"].queryset = Team.objects.filter(user=self.user).order_by("name")
@@ -87,62 +96,84 @@ class TransForm(forms.ModelForm):
                 "sub_cat",
             )
         else:
-            # Fallbacks
+            # Fallbacks (admin/tests)
             self.fields["event"].queryset = Event.objects.all().order_by("title")
             self.fields["team"].queryset = Team.objects.all().order_by("name")
             self.fields["sub_cat"].queryset = SubCategory.objects.all().order_by("category__category", "sub_cat")
 
-    def clean_receipt(self):
-        receipt = self.cleaned_data.get("receipt")
-        if receipt and hasattr(receipt, "content_type"):
-            if receipt.content_type not in ["application/pdf", "image/jpeg", "image/png"]:
-                raise ValidationError("Only PDF, JPG, or PNG files are allowed.")
-        return receipt
+    # ----------------------------
+    # Field-level validation (ownership)
+    # ----------------------------
 
     def clean_sub_cat(self):
         sub_cat = self.cleaned_data.get("sub_cat")
-        if sub_cat and self.user is not None:
-            # Defensive: prevent cross-user FK selection even if someone tampers POST data.
-            if getattr(sub_cat, "user_id", None) != self.user.id:
-                raise ValidationError("Invalid sub-category selection.")
+        if sub_cat and self.user is not None and getattr(sub_cat, "user_id", None) != self.user.id:
+            raise ValidationError("Invalid sub-category selection.")
         return sub_cat
 
     def clean_event(self):
         event = self.cleaned_data.get("event")
-        if event and self.user is not None:
-            if getattr(event, "user_id", None) != self.user.id:
-                raise ValidationError("Invalid event selection.")
+        if event and self.user is not None and getattr(event, "user_id", None) != self.user.id:
+            raise ValidationError("Invalid event selection.")
         return event
 
     def clean_team(self):
         team = self.cleaned_data.get("team")
-        if team and self.user is not None:
-            if getattr(team, "user_id", None) != self.user.id:
-                raise ValidationError("Invalid team selection.")
+        if team and self.user is not None and getattr(team, "user_id", None) != self.user.id:
+            raise ValidationError("Invalid team selection.")
         return team
+
+    # ----------------------------
+    # Form-wide validation
+    # ----------------------------
 
     def clean(self):
         cleaned = super().clean()
 
-        # Ensure category is set based on selected sub_cat (since category is required).
-        sub_cat = cleaned.get("sub_cat")
-        if sub_cat:
-            cleaned["category"] = sub_cat.category
-        else:
-            # Without a sub_cat, we can't satisfy required Transaction.category because
-            # category is not exposed in this form.
+        # Defensive: ensure owner is still present
+        if self.user is not None and not getattr(self.instance, "user_id", None):
+            self.instance.user = self.user
+
+        # sub_cat is required by business rule and by this form design
+        if not cleaned.get("sub_cat"):
             raise ValidationError("Please select a Sub-Category.")
 
         return cleaned
 
+    def _post_clean(self):
+        """
+        Critical hook: called before the model instance is validated.
+
+        We must set:
+        - instance.user (owner)
+        - instance.category (required field) derived from sub_cat
+
+        BEFORE instance.full_clean() runs, otherwise model validation may fail.
+        """
+        # Ensure owner BEFORE model validation
+        if self.user is not None and not getattr(self.instance, "user_id", None):
+            self.instance.user = self.user
+
+        sub_cat = self.cleaned_data.get("sub_cat")
+        if sub_cat:
+            # Ensure instance has required FK set before validation
+            self.instance.sub_cat = sub_cat
+            self.instance.category = sub_cat.category
+
+        super()._post_clean()
+
+    # ----------------------------
+    # Save
+    # ----------------------------
+
     def save(self, commit=True):
         instance = super().save(commit=False)
 
-        # Ensure user is set by the view; keep form safe if used elsewhere.
+        # Final guard: user should always be set
         if self.user is not None and not instance.user_id:
             instance.user = self.user
 
-        # Force category alignment
+        # Final guard: align category with sub_cat
         if instance.sub_cat_id:
             instance.category = instance.sub_cat.category
 
@@ -150,6 +181,18 @@ class TransForm(forms.ModelForm):
             instance.save()
             self.save_m2m()
         return instance
+
+
+class RunRecurringForMonthForm(forms.Form):
+    month = forms.IntegerField(min_value=1, max_value=12)
+    year = forms.IntegerField(min_value=1900, max_value=9999)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        today = timezone.localdate()
+        self.fields["month"].initial = today.month
+        self.fields["year"].initial = today.year
+
 
 
 class RecurringTransactionForm(forms.ModelForm):
@@ -288,6 +331,15 @@ class RecurringTransactionForm(forms.ModelForm):
             instance.save()
             self.save_m2m()
         return instance
+
+
+
+
+
+
+
+
+
 
 
 class RunRecurringForMonthForm(forms.Form):

@@ -17,21 +17,17 @@ from .views.transactions import (
     export_transactions_csv,
     recurring_report_view,
     run_monthly_recurring_view,
-
 )
 
-# Unified invoices + legacy
+# Invoices (Unified + legacy detail routes)
 from .views.invoices_unified import InvoiceUnifiedListView
 from .views.invoices_legacy import LegacyInvoiceDetailView, LegacyFileInvoiceDetailView
 
-
-
-from money.views.invoices_v2 import (
+from .views.invoices_v2 import (
     InvoiceV2IssueView,
     InvoiceV2MarkPaidView,
     InvoiceV2DeleteView,
     InvoiceV2DetailView,
-    InvoiceV2ListView,
     invoice_v2_create,
     invoice_v2_update,
     invoice_v2_pdf_view,
@@ -39,10 +35,6 @@ from money.views.invoices_v2 import (
     invoice_v2_review,
     invoice_review_router,
 )
-
-
-
-
 
 from .views.clients import (
     ClientListView,
@@ -53,6 +45,10 @@ from .views.clients import (
 
 from .views.reports import (
     reports_page,
+    profit_loss,
+    profit_loss_pdf,
+    category_summary,
+    category_summary_pdf,
     nhra_summary,
     nhra_summary_report,
     nhra_summary_report_pdf,
@@ -82,12 +78,8 @@ from .views.tax_tools import (
 
 from .views.tax_reports import (
     schedule_c_summary,
-    tax_financial_statement,
+    tax_profit_loss,
     tax_category_summary,
-    financial_statement,
-    financial_statement_pdf,
-    category_summary,
-    category_summary_pdf,
     form_4797_view,
     form_4797_pdf,
 )
@@ -108,8 +100,6 @@ from .views.events import (
     EventDeleteView,
 )
 
-
-
 app_name = "money"
 
 urlpatterns = [
@@ -129,7 +119,6 @@ urlpatterns = [
     path("transaction/delete/<int:pk>/", TransactionDeleteView.as_view(), name="delete_transaction"),
     path("transactions/export/", export_transactions_csv, name="export_transactions_csv"),
 
-
     # ---------------------------------------------------------------------
     # Recurring Transactions
     # ---------------------------------------------------------------------
@@ -142,20 +131,17 @@ urlpatterns = [
 
     # -------------------------------------------------------------------
     # Invoices (Unified list: v2 + legacy rows together)
-    # Keep the name you already use in templates: money:invoice_v2_list
+    # Keep template name you already use: money:invoice_v2_list
     # -------------------------------------------------------------------
-    path("invoices/v2/", InvoiceUnifiedListView.as_view(), name="invoice_v2_list"),
+    path("invoices/", InvoiceUnifiedListView.as_view(), name="invoice_v2_list"),
 
     # -------------------------------------------------------------------
     # Invoices (V2 invoice CRUD)
     # -------------------------------------------------------------------
-    
-    path("invoices/v2/", InvoiceV2ListView.as_view(), name="invoice_v2_list"),
     path("invoices/v2/new/", invoice_v2_create, name="invoice_v2_create"),
     path("invoices/v2/<int:pk>/", InvoiceV2DetailView.as_view(), name="invoice_v2_detail"),
     path("invoices/v2/<int:pk>/edit/", invoice_v2_update, name="invoice_v2_edit"),
     path("invoices/v2/<int:pk>/delete/", InvoiceV2DeleteView.as_view(), name="invoice_v2_delete"),
-         
     path("invoices/v2/<int:pk>/mark-paid/", InvoiceV2MarkPaidView.as_view(), name="invoice_v2_mark_paid"),
     path("invoices/v2/<int:pk>/issue/", InvoiceV2IssueView.as_view(), name="invoice_v2_issue"),
     path("invoices/v2/<int:pk>/pdf/", invoice_v2_pdf_view, name="invoice_v2_pdf"),
@@ -178,12 +164,18 @@ urlpatterns = [
     path("client/delete/<int:pk>/", ClientDeleteView.as_view(), name="delete_client"),
 
     # ---------------------------------------------------------------------
-    # Reports
+    # Reports (landing + business reports)
     # ---------------------------------------------------------------------
     path("reports/", reports_page, name="reports"),
+    path("financial-statement/", profit_loss, name="profit_loss"),
+    path("financial-statement/pdf/<int:year>/", profit_loss_pdf, name="profit_loss_pdf"),
+    path("category-summary/", category_summary, name="category_summary"),
+    path("category-summary/pdf/", category_summary_pdf, name="category_summary_pdf"),
+
     path("nhra-summary/", nhra_summary, name="nhra_summary"),
     path("race-expense-report/", nhra_summary_report, name="nhra_summary_report"),
     path("race-expense-report/pdf/", nhra_summary_report_pdf, name="nhra_summary_report_pdf"),
+
     path("reports/travel-analysis/", travel_expense_analysis, name="travel_expense_analysis"),
     path("reports/travel-analysis/pdf/", travel_expense_analysis_pdf, name="travel_expense_analysis_pdf"),
     path("reports/travel-summary/", travel_summary, name="travel_summary"),
@@ -191,17 +183,13 @@ urlpatterns = [
     path("reports/travel-summary/pdf/download/", travel_summary_pdf_download, name="travel_summary_pdf_download"),
 
     # ---------------------------------------------------------------------
-    # Taxes / Statements
+    # Tax reports (tax-adjusted)
     # ---------------------------------------------------------------------
-    path("financial-statement/", financial_statement, name="financial_statement"),
-    path("tax/financial-statement/", tax_financial_statement, name="tax_financial_statement"),
-    path("financial-statement/pdf/<int:year>/", financial_statement_pdf, name="financial_statement_pdf"),
-    path("category-summary/", category_summary, name="category_summary"),
-    path("category-summary/pdf/", category_summary_pdf, name="category_summary_pdf"),
-    path("form-4797/", form_4797_view, name="form_4797"),
-    path("form-4797/pdf/", form_4797_pdf, name="form_4797_pdf"),
+    path("tax/financial-statement/", tax_profit_loss, name="tax_profit_loss"),
     path("tax/category-summary/", tax_category_summary, name="tax_category_summary"),
     path("taxes/schedule-c/", schedule_c_summary, name="schedule_c_summary"),
+    path("form-4797/", form_4797_view, name="form_4797"),
+    path("form-4797/pdf/", form_4797_pdf, name="form_4797_pdf"),
 
     # ---------------------------------------------------------------------
     # Category & SubCategory CRUD
@@ -244,8 +232,8 @@ urlpatterns = [
     path("events/<int:pk>/delete/", EventDeleteView.as_view(), name="event_delete"),
 
     # ---------------------------------------------------------------------
-    # OPTIONAL CLEAN ALIASES (safe to keep; remove later when you migrate templates)
+    # OPTIONAL CLEAN ALIASES (safe to keep while migrating templates)
     # ---------------------------------------------------------------------
-    path("financial-statement/pdf/<int:year>/", financial_statement_pdf, name="financial_statement_pdf_clean"),
+    path("financial-statement/pdf/<int:year>/", profit_loss_pdf, name="profit_loss_pdf_clean"),
     path("category-summary/pdf/", category_summary_pdf, name="category_summary_pdf_clean"),
 ]

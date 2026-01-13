@@ -1,27 +1,33 @@
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from .models import *
-from .forms import *
+# pilot/admin.py
 
-from django.shortcuts import redirect, render
-from django.contrib import messages
+from django.contrib import admin
+
+from .models import PilotProfile, Training
 
 
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect
+@admin.register(PilotProfile)
+class PilotProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "license_number", "license_date")
+    search_fields = (
+        "user__username",
+        "user__first_name",
+        "user__last_name",
+        "license_number",
+    )
+    list_select_related = ("user",)
 
 
-def register(request):
-    if request.method == 'POST':
-        form = UserCreationForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Account created successfully. You can now log in.')
-            return redirect('login')
-    else:
-        form = UserCreationForm()
-    context = {'form': form, 'current_page': 'register'} 
-    return render(request, 'registration/register.html', context)
-
-
+@admin.register(Training)
+class TrainingAdmin(admin.ModelAdmin):
+    list_display = ("title", "date_completed", "required", "user", "pilot")
+    list_filter = ("required", "date_completed")
+    search_fields = (
+        "title",
+        "user__username",
+        "user__first_name",
+        "user__last_name",
+        "pilot__user__username",
+        "pilot__user__first_name",
+        "pilot__user__last_name",
+    )
+    list_select_related = ("user", "pilot", "pilot__user")

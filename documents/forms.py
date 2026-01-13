@@ -1,71 +1,83 @@
+from __future__ import annotations
+
 from django import forms
-from .models import DroneIncidentReport
-from django.core.exceptions import ValidationError
-from django.utils import timezone
-from .models import *
+
+from .models import DroneIncidentReport, GeneralDocument, SOPDocument
 
 
-#<---------------------------------------- INCIDENT REPORT FORM ---------------------------------------->
-
+# ----------------------------
+# Incident Wizard Step Forms
+# ----------------------------
 class GeneralInfoForm(forms.ModelForm):
     class Meta:
         model = DroneIncidentReport
-        fields = ['report_date', 'reported_by', 'contact', 'role']
-        widgets = {
-            'report_date': forms.DateInput(attrs={'type': 'date'}),
-        }
+        fields = ["report_date", "reported_by", "contact", "role"]
+        widgets = {"report_date": forms.DateInput(attrs={"type": "date"})}
+
 
 class EventDetailsForm(forms.ModelForm):
     class Meta:
         model = DroneIncidentReport
-        fields = ['event_date', 'event_time', 'location', 'event_type', 'description',
-                  'injuries', 'injury_details', 'damage', 'damage_cost', 'damage_desc']
+        fields = ["event_date", "event_time", "location", "event_type", "description"]
         widgets = {
-            'event_date': forms.DateInput(attrs={'type': 'date'}),
-            'event_time': forms.TimeInput(attrs={'type': 'time'}),
+            "event_date": forms.DateInput(attrs={"type": "date"}),
+            "event_time": forms.TimeInput(attrs={"type": "time"}),
         }
+
+
+class ImpactForm(forms.ModelForm):
+    class Meta:
+        model = DroneIncidentReport
+        fields = ["injuries", "injury_details", "damage", "damage_cost", "damage_desc"]
+
 
 class EquipmentDetailsForm(forms.ModelForm):
     class Meta:
         model = DroneIncidentReport
-        fields = ['drone_model', 'registration', 'controller', 'payload', 'battery', ]
+        fields = ["drone_model", "registration", "controller", "payload", "battery"]
+
 
 class EnvironmentalConditionsForm(forms.ModelForm):
     class Meta:
         model = DroneIncidentReport
-        fields = ['weather', 'wind', 'temperature', 'lighting']
+        fields = ["weather", "wind", "temperature", "lighting"]
+
 
 class WitnessForm(forms.ModelForm):
     class Meta:
         model = DroneIncidentReport
-        fields = ['witnesses', 'witness_details']
+        fields = ["witnesses", "witness_details"]
 
-class ActionTakenForm(forms.ModelForm):
+
+class ResponseForm(forms.ModelForm):
     class Meta:
         model = DroneIncidentReport
-        fields = ['emergency', 'agency_response', 'scene_action', 'faa_report', 'faa_ref']
+        fields = ["emergency", "agency_response", "scene_action", "faa_report", "faa_ref"]
 
-class FollowUpForm(forms.ModelForm):
+
+class RootCauseForm(forms.ModelForm):
     class Meta:
         model = DroneIncidentReport
-        fields = ['cause', 'notes', 'signature', 'sign_date']
-        widgets = {
-            'sign_date': forms.DateInput(attrs={'type': 'date'}),
-        }
+        fields = ["cause", "notes"]
 
 
-#<---------------------------------------- GENERAL DOCs/SOP FORMS / SOPs ------------------------------->
+class SignatureForm(forms.ModelForm):
+    class Meta:
+        model = DroneIncidentReport
+        fields = ["signature", "sign_date"]
+        widgets = {"sign_date": forms.DateInput(attrs={"type": "date"})}
 
 
+# ----------------------------
+# SOP + General Documents
+# ----------------------------
 class SOPDocumentForm(forms.ModelForm):
     class Meta:
         model = SOPDocument
-        fields = ['title', 'description', 'file']
+        fields = ["title", "description", "file"]
 
 
 class GeneralDocumentForm(forms.ModelForm):
     class Meta:
         model = GeneralDocument
-        fields = ['title', 'category', 'description', 'file']
-
-
+        fields = ["title", "category", "description", "file"]

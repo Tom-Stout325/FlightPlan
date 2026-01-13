@@ -151,7 +151,6 @@
       </div>
     </div>
 
-    {# NEW: Ops Plans card #}
     <div class="col">
       <div class="card shadow-sm h-100 border-dark hover-scale">
         <div class="card-body d-flex flex-column">
@@ -159,13 +158,24 @@
           <p class="card-text mb-3">Create, review, and export operations plans by event & year.</p>
           <div class="mt-auto">
             <a href="{% url 'operations:ops_plan_index' %}" class="btn btn-dark w-100">View Ops Plans</a>
-
+            
           </div>
         </div>
       </div>
     </div>
-    {# /NEW #}
-
+    <div class="col">
+      <div class="card shadow-sm h-100 border-primary hover-scale">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title text-primary text-center">🦺&nbsp;Drone Safety Profiles</h5>
+          <p class="card-text mb-3">View safety profiles for popular comercial drones.</p>
+          <div class="mt-auto">
+            <a href="{% url 'equipment:drone_safety_profile_list' %}" class="btn btn-primary w-100 text-white">View Safety Profiles</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    {# NEW Cards go here#}
   </div>
 </div>
 

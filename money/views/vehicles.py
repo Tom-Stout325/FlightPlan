@@ -31,13 +31,6 @@ from ..forms.vehicles import (
 
 
 
-
-
-
-
-
-
-
 class VehicleListView(LoginRequiredMixin, ListView):
     model = Vehicle
     template_name = "money/taxes/vehicle_list.html"
@@ -145,9 +138,6 @@ class VehicleDeleteView(LoginRequiredMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         messages.success(self.request, "Vehicle deleted successfully!")
         return super().delete(request, *args, **kwargs)
-
-
-
 
 
 

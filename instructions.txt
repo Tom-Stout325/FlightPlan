@@ -1,6 +1,14 @@
 Next Steps:
 
 
+Review other apps for user scoping:
+Airspace
+documents
+equipment
+flightlogs
+operations
+pilot
+
 
 
 convert legacy invoices to v2

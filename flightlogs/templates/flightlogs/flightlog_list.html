@@ -46,7 +46,10 @@
             <option value="">All</option>
             {% for m in months_present %}
               <option value="{{ m }}" {% if sel_month|add:'' == m|add:'' %}selected{% endif %}>
-                {{ month_labels.m }}
+                {{ m|month_name_display }}
+
+
+
               </option>
             {% endfor %}
           </select>
@@ -95,17 +98,43 @@
       </tr>
     </thead>
     <tbody>
-      {% for log in logs %}
-        <tr>
+        {% for log in logs %}
+          <tr class="{% if not log.takeoff_address and not log.takeoff_latlong %}table-warning{% endif %}">
+
           <td>{{ log.flight_date }}</td>
           <td class="d-none d-md-table-cell">{{ log.landing_time|default:"—" }}</td>
           <td class="d-none d-md-table-cell">{{ log.air_time|duration }}</td>
           <td>{{ log.drone_name }}</td>
           <td>
-            <a href="https://www.google.com/maps/search/?api=1&query={{ log.takeoff_address|urlencode }}" target="_blank">
-              {{ log.takeoff_address|truncatechars:40 }}
-            </a>
+            {% if log.takeoff_address %}
+              <a
+                href="https://www.google.com/maps/search/?api=1&query={{ log.takeoff_address|urlencode }}"
+                target="_blank"
+                title="{{ log.takeoff_address }}"
+              >
+                {{ log.takeoff_address|truncatechars:40 }}
+              </a>
+
+            {% elif log.takeoff_latlong %}
+              <a
+                href="https://www.google.com/maps/search/?api=1&query={{ log.takeoff_latlong|urlencode }}"
+                target="_blank"
+                title="{{ log.takeoff_latlong }}"
+                class="text-muted"
+              >
+                {{ log.takeoff_latlong }}
+              </a>
+
+            {% else %}
+              <span class="text-muted fst-italic">
+                <i class="fas fa-exclamation-circle text-warning me-1"
+                  title="GPS location not recorded for this flight"></i>
+                Location not recorded
+              </span>
+            {% endif %}
           </td>
+
+
           <td class="d-none d-md-table-cell">{{ log.photos }}</td>
           <td class="d-none d-md-table-cell">{{ log.videos }}</td>
           <td>

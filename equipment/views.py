@@ -3,6 +3,7 @@ import tempfile
 from decimal import Decimal
 
 from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Sum
 from django.http import HttpResponse, JsonResponse, HttpRequest
@@ -17,7 +18,8 @@ from .models import Equipment, DroneSafetyProfile
 from .forms import EquipmentForm, DroneSafetyProfileForm
 
 try:
-    from weasyprint import HTML
+    from weasyprint import HTML, CSS
+
     WEASYPRINT_AVAILABLE = True
 except Exception:
     WEASYPRINT_AVAILABLE = False
@@ -31,8 +33,7 @@ def _equipment_queryset(user):
     Central place to define inventory ordering + user scoping.
     """
     return (
-        Equipment.objects
-        .filter(user=user)
+        Equipment.objects.filter(user=user)
         .order_by("-active", "-purchase_date", "equipment_type", "name")
     )
 
@@ -45,7 +46,7 @@ def _attach_drone_flight_stats(request, equipment_qs):
     for drone items that have serial_number.
 
     NOTE: If FlightLog is user-owned in your system, scope it:
-      FlightLog.objects.filter(user=request.user, drone_serial__in=...)
+      FlightLog.objects.filter(user=request.user, drone_serial__in=[...])
     """
     drone_serials = list(
         equipment_qs.filter(equipment_type="Drone")
@@ -66,31 +67,36 @@ def _attach_drone_flight_stats(request, equipment_qs):
             flight_qs.values("drone_serial")
             .annotate(
                 flights_count=Count("id"),
-                total_duration=Sum("air_time"),
+                total_duration=Sum("flight_duration"),
             )
         )
-        stats_map = {row["drone_serial"]: row for row in stats}
+        stats_map = {
+            row["drone_serial"]: {
+                "flights_count": row["flights_count"] or 0,
+                "total_duration": row["total_duration"] or 0,
+            }
+            for row in stats
+        }
 
-    equipment = []
-    for e in equipment_qs:
-        if e.equipment_type == "Drone" and e.serial_number:
-            row = stats_map.get(e.serial_number, {})
-            e.flights_count = row.get("flights_count", 0)
-            e.total_duration = row.get("total_duration")
+    for eq in equipment_qs:
+        serial = (eq.serial_number or "").strip()
+        if eq.equipment_type == "Drone" and serial:
+            s = stats_map.get(serial, {})
+            eq.flights_count = s.get("flights_count", 0)
+            eq.total_duration = s.get("total_duration", 0)
         else:
-            e.flights_count = 0
-            e.total_duration = None
-        equipment.append(e)
+            eq.flights_count = 0
+            eq.total_duration = 0
 
-    return equipment
+    return equipment_qs
 
 
 def _safe_filename(name: str) -> str:
-    return "".join(ch for ch in (name or "") if ch.isalnum() or ch in (" ", "-", "_")).strip().replace(" ", "_") or "equipment"
+    return "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name).strip("_") or "file"
 
 
 # -------------------------------------------------------------------
-# Views
+# Equipment list + create (inline)
 # -------------------------------------------------------------------
 @login_required
 def equipment_list(request):
@@ -101,7 +107,7 @@ def equipment_list(request):
     equipment = _attach_drone_flight_stats(request, equipment_qs)
 
     if request.method == "POST":
-        form = EquipmentForm(request.POST, request.FILES)
+        form = EquipmentForm(request.POST, request.FILES, user=request.user)
         if form.is_valid():
             obj = form.save(commit=False)
 
@@ -120,55 +126,50 @@ def equipment_list(request):
             return redirect("equipment:equipment_list")
 
         messages.error(request, "There was a problem saving the equipment.")
+
     else:
-        form = EquipmentForm()
+        form = EquipmentForm(user=request.user)
 
-    return render(
-        request,
-        "equipment/equipment_list.html",
-        {
-            "equipment": equipment,
-            "form": form,
-            "current_page": "equipment",
-            "weasyprint_available": WEASYPRINT_AVAILABLE,
-        },
-    )
-
-
-@login_required
-def equipment_create(request):
-    """
-    Dedicated create endpoint (kept for backward compatibility).
-    """
-    if request.method != "POST":
-        return redirect("equipment:equipment_list")
-
-    form = EquipmentForm(request.POST, request.FILES)
-    if form.is_valid():
-        obj = form.save(commit=False)
-
-        # ✅ User scoping on create
-        obj.user = request.user
-
-        if not obj.placed_in_service_date and obj.purchase_date:
-            obj.placed_in_service_date = obj.purchase_date
-
-        if obj.business_use_percent is None:
-            obj.business_use_percent = Decimal("100.00")
-
-        obj.save()
-        form.save_m2m()
-        messages.success(request, "Equipment added.")
-        return redirect("equipment:equipment_list")
-
-    messages.error(request, "There was a problem saving the equipment.")
-
-    equipment_qs = _equipment_queryset(request.user)
-    equipment = _attach_drone_flight_stats(request, equipment_qs)
     return render(
         request,
         "equipment/equipment_list.html",
         {"form": form, "equipment": equipment, "current_page": "equipment"},
+    )
+
+
+# -------------------------------------------------------------------
+# Equipment edit / delete
+# -------------------------------------------------------------------
+@login_required
+def equipment_create(request):
+    """
+    Dedicated create view (if you use it elsewhere).
+    """
+    if request.method == "POST":
+        form = EquipmentForm(request.POST, request.FILES, user=request.user)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.user = request.user
+
+            if not obj.placed_in_service_date and obj.purchase_date:
+                obj.placed_in_service_date = obj.purchase_date
+
+            if obj.business_use_percent is None:
+                obj.business_use_percent = Decimal("100.00")
+
+            obj.save()
+            form.save_m2m()
+            messages.success(request, "Equipment added.")
+            return redirect("equipment:equipment_list")
+
+        messages.error(request, "There was a problem saving the equipment.")
+    else:
+        form = EquipmentForm(user=request.user)
+
+    return render(
+        request,
+        "equipment/equipment_form.html",
+        {"form": form, "current_page": "equipment"},
     )
 
 
@@ -177,7 +178,7 @@ def equipment_edit(request, pk):
     item = get_object_or_404(Equipment, user=request.user, pk=pk)
 
     if request.method == "POST":
-        form = EquipmentForm(request.POST, request.FILES, instance=item)
+        form = EquipmentForm(request.POST, request.FILES, instance=item, user=request.user)
         if form.is_valid():
             obj = form.save(commit=False)
 
@@ -197,7 +198,7 @@ def equipment_edit(request, pk):
 
         messages.error(request, "There was a problem updating the equipment.")
     else:
-        form = EquipmentForm(instance=item)
+        form = EquipmentForm(instance=item, user=request.user)
 
     return render(
         request,
@@ -211,7 +212,7 @@ def equipment_delete(request, pk):
     item = get_object_or_404(Equipment, user=request.user, pk=pk)
 
     if request.method == "POST":
-        name = item.name
+        name = str(item)
         item.delete()
         messages.success(request, f'Equipment "{name}" deleted.')
         return redirect("equipment:equipment_list")
@@ -223,123 +224,129 @@ def equipment_delete(request, pk):
     )
 
 
+# -------------------------------------------------------------------
+# PDF export (requires WeasyPrint)
+# -------------------------------------------------------------------
 @login_required
 def equipment_pdf(request):
     """
     PDF of the user's inventory (requires WeasyPrint).
     """
     if not WEASYPRINT_AVAILABLE:
-        messages.error(request, "PDF export is not available on this system.")
+        messages.error(request, "PDF generation is not available (WeasyPrint not installed).")
         return redirect("equipment:equipment_list")
 
-    equipment = Equipment.objects.filter(user=request.user).order_by("equipment_type", "name")
-    logo_url = request.build_absolute_uri(static("images/logo.png"))
-
-    context = {"equipment": equipment, "logo_url": logo_url}
+    equipment_qs = _equipment_queryset(request.user)
+    equipment = _attach_drone_flight_stats(request, equipment_qs)
 
     template = get_template("equipment/equipment_pdf.html")
-    html_string = template.render(context, request=request)
+    html_string = template.render(
+        {"equipment": equipment, "static_logo": static("images/airborne_logo.png")}
+    )
 
-    response = HttpResponse(content_type="application/pdf")
-    response["Content-Disposition"] = 'inline; filename="equipment_inventory.pdf"'
+    with tempfile.NamedTemporaryFile(suffix=".pdf") as output:
+        HTML(string=html_string).write_pdf(
+            output.name,
+            stylesheets=[CSS(string="@page { size: Letter; margin: 0.5in; }")],
+        )
+        output.seek(0)
+        response = HttpResponse(output.read(), content_type="application/pdf")
 
-    with tempfile.NamedTemporaryFile(delete=True) as tmp_file:
-        HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf(target=tmp_file.name)
-        tmp_file.seek(0)
-        response.write(tmp_file.read())
-
+    response["Content-Disposition"] = 'inline; filename="equipment.pdf"'
     return response
 
 
 @login_required
 def equipment_pdf_single(request, pk):
     """
-    PDF for a single piece of equipment (requires WeasyPrint).
+    PDF for one equipment item (requires WeasyPrint).
     """
     if not WEASYPRINT_AVAILABLE:
-        messages.error(request, "PDF export is not available on this system.")
+        messages.error(request, "PDF generation is not available (WeasyPrint not installed).")
         return redirect("equipment:equipment_list")
 
     item = get_object_or_404(Equipment, user=request.user, pk=pk)
-    logo_url = request.build_absolute_uri(static("images/logo.png"))
-
-    faa_is_pdf = bool(item.faa_certificate and item.faa_certificate.name.lower().endswith(".pdf"))
-    receipt_is_pdf = bool(item.receipt and item.receipt.name.lower().endswith(".pdf"))
-
-    context = {"item": item, "logo_url": logo_url, "faa_is_pdf": faa_is_pdf, "receipt_is_pdf": receipt_is_pdf}
 
     template = get_template("equipment/equipment_pdf_single.html")
-    html_string = template.render(context, request=request)
+    html_string = template.render(
+        {"item": item, "static_logo": static("images/airborne_logo.png")}
+    )
 
-    safe = _safe_filename(item.name)
-    response = HttpResponse(content_type="application/pdf")
-    response["Content-Disposition"] = f'inline; filename="{safe}_equipment.pdf"'
+    filename = f"equipment_{_safe_filename(item.name)}.pdf"
 
-    with tempfile.NamedTemporaryFile(delete=True) as tmp_file:
-        HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf(target=tmp_file.name)
-        tmp_file.seek(0)
-        response.write(tmp_file.read())
+    with tempfile.NamedTemporaryFile(suffix=".pdf") as output:
+        HTML(string=html_string).write_pdf(
+            output.name,
+            stylesheets=[CSS(string="@page { size: Letter; margin: 0.5in; }")],
+        )
+        output.seek(0)
+        response = HttpResponse(output.read(), content_type="application/pdf")
 
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
     return response
 
 
+# -------------------------------------------------------------------
+# CSV export
+# -------------------------------------------------------------------
 @login_required
 def export_equipment_csv(request):
-    """
-    CSV export (user-scoped).
-    """
-    equipment = Equipment.objects.filter(user=request.user).order_by("equipment_type", "name")
+    equipment_qs = _equipment_queryset(request.user)
 
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="equipment.csv"'
+
     writer = csv.writer(response)
+    writer.writerow(
+        [
+            "Name",
+            "Type",
+            "Brand",
+            "Model",
+            "Serial Number",
+            "FAA Number",
+            "FAA Certificate URL",
+            "Purchase Date",
+            "Placed In Service",
+            "Purchase Cost",
+            "Receipt URL",
+            "Property Type",
+            "Depreciation Method",
+            "Useful Life (years)",
+            "Business Use (%)",
+            "Date Sold",
+            "Sale Price",
+            "Active",
+            "Notes",
+        ]
+    )
 
-    writer.writerow([
-        "Name",
-        "Type",
-        "Brand",
-        "Model",
-        "Serial Number",
-        "FAA Number",
-        "FAA Certificate URL",
-        "Purchase Date",
-        "Placed In Service Date",
-        "Purchase Cost",
-        "Receipt URL",
-        "Property Type",
-        "Depreciation Method",
-        "Useful Life Years",
-        "Business Use Percent",
-        "Date Sold",
-        "Sale Price",
-        "Deducted Full Cost",
-        "Active",
-        "Notes",
-    ])
-
-    for e in equipment:
-        writer.writerow([
-            e.name,
-            e.get_equipment_type_display() if hasattr(e, "get_equipment_type_display") else (e.equipment_type or ""),
-            e.brand or "",
-            e.model or "",
-            e.serial_number or "",
-            e.faa_number or "",
-            e.faa_certificate.url if e.faa_certificate else "",
-            e.purchase_date or "",
-            getattr(e, "placed_in_service_date", None) or "",
-            e.purchase_cost or "",
-            e.receipt.url if e.receipt else "",
-            getattr(e, "property_type", "") or "",
-            getattr(e, "depreciation_method", "") or "",
-            getattr(e, "useful_life_years", "") or "",
-            getattr(e, "business_use_percent", "") or "",
-            e.date_sold or "",
-            e.sale_price or "",
-            "Yes" if e.deducted_full_cost else "No",
-            "Yes" if e.active else "No",
-            (e.notes or "").replace("\n", " ").replace("\r", " "),
-        ])
+    for e in equipment_qs:
+        writer.writerow(
+            [
+                e.name,
+                e.get_equipment_type_display()
+                if hasattr(e, "get_equipment_type_display")
+                else (e.equipment_type or ""),
+                e.brand or "",
+                e.model or "",
+                e.serial_number or "",
+                e.faa_number or "",
+                e.faa_certificate.url if e.faa_certificate else "",
+                e.purchase_date or "",
+                getattr(e, "placed_in_service_date", None) or "",
+                e.purchase_cost or "",
+                e.receipt.url if e.receipt else "",
+                getattr(e, "property_type", "") or "",
+                getattr(e, "depreciation_method", "") or "",
+                getattr(e, "useful_life_years", "") or "",
+                getattr(e, "business_use_percent", "") or "",
+                getattr(e, "date_sold", "") or "",
+                getattr(e, "sale_price", "") or "",
+                "Yes" if e.active else "No",
+                (e.notes or "").replace("\n", " ").replace("\r", " "),
+            ]
+        )
 
     return response
 
@@ -360,7 +367,9 @@ def drone_profile_suggest(request: HttpRequest) -> JsonResponse:
     if not profile:
         return JsonResponse({"found": False})
 
-    return JsonResponse({"found": True, "id": str(profile.pk), "full_display_name": profile.full_display_name})
+    return JsonResponse(
+        {"found": True, "id": str(profile.pk), "full_display_name": profile.full_display_name}
+    )
 
 
 # -------------------------------
@@ -381,13 +390,15 @@ def drone_safety_profile_list(request):
     sort_key = sort_map.get(sort, "brand")
     order_by = f"-{sort_key}" if direction == "desc" else sort_key
     direction = "desc" if direction == "desc" else "asc"
-
     profiles = DroneSafetyProfile.objects.all().order_by(order_by)
+    return render(
+        request,
+        "equipment/drone_safety_profile_list.html",
+        {"profiles": profiles, "sort": sort, "dir": direction},
+    )
 
-    return render(request, "equipment/drone_safety_profile_list.html", {"profiles": profiles, "sort": sort, "dir": direction})
 
-
-@login_required
+@staff_member_required
 def drone_safety_profile_create(request):
     if request.method == "POST":
         form = DroneSafetyProfileForm(request.POST)
@@ -399,10 +410,14 @@ def drone_safety_profile_create(request):
     else:
         form = DroneSafetyProfileForm()
 
-    return render(request, "equipment/drone_safety_profile_form.html", {"form": form, "title": "Add Drone Safety Profile"})
+    return render(
+        request,
+        "equipment/drone_safety_profile_form.html",
+        {"form": form, "title": "Create Drone Safety Profile"},
+    )
 
 
-@login_required
+@staff_member_required
 def drone_safety_profile_edit(request, pk):
     profile = get_object_or_404(DroneSafetyProfile, pk=pk)
 
@@ -423,7 +438,7 @@ def drone_safety_profile_edit(request, pk):
     )
 
 
-@login_required
+@staff_member_required
 def drone_safety_profile_delete(request, pk):
     profile = get_object_or_404(DroneSafetyProfile, pk=pk)
 
@@ -433,4 +448,8 @@ def drone_safety_profile_delete(request, pk):
         messages.success(request, f"Deleted drone safety profile: {name}.")
         return redirect("equipment:drone_safety_profile_list")
 
-    return render(request, "equipment/drone_safety_profile_confirm_delete.html", {"profile": profile})
+    return render(
+        request,
+        "equipment/drone_safety_profile_confirm_delete.html",
+        {"profile": profile},
+    )

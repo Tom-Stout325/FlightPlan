@@ -2,7 +2,7 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path
-
+from django.contrib.admin.views.decorators import staff_member_required
 from . import views
 
 app_name = "equipment"
@@ -25,9 +25,10 @@ urlpatterns = [
     # Drone Safety Profiles
     # ------------------------------------------------------------
     path("drone-profiles/", views.drone_safety_profile_list, name="drone_safety_profile_list"),
-    path("drone-profiles/create/", views.drone_safety_profile_create, name="drone_safety_profile_create"),
-    path("drone-profiles/<int:pk>/edit/", views.drone_safety_profile_edit, name="drone_safety_profile_edit"),
-    path("drone-profiles/<int:pk>/delete/", views.drone_safety_profile_delete, name="drone_safety_profile_delete"),
+    
+    path("drone-profiles/create/", staff_member_required(views.drone_safety_profile_create), name="drone_safety_profile_create"),
+    path("drone-profiles/<int:pk>/edit/", staff_member_required(views.drone_safety_profile_edit), name="drone_safety_profile_edit"),
+    path("drone-profiles/<int:pk>/delete/", staff_member_required(views.drone_safety_profile_delete), name="drone_safety_profile_delete"),
 
     # ------------------------------------------------------------
     # API

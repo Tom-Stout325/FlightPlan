@@ -18,7 +18,7 @@ Incident Reporting System
     <div class="container mt-4">
 
         <div>
-          <a href="{% url 'documents:submit_incident_report' %}" class="btn btn-outline-primary mb-3 w-100">Submit New Incident Report</a>
+          <a href="{% url 'documents:incident_report_wizard' %}" class="btn btn-outline-primary mb-3 w-100">Submit New Incident Report</a>
         </div>
       
         <!-- Search form -->
@@ -51,7 +51,7 @@ Incident Reporting System
                     </p>
                   {% endif %}
         
-                  <a href="{% url 'documents:incident_detail' report.id %}" class="btn btn-sm btn-outline-info mt-2">View Full Report</a>
+                  <a href="{% url 'documents:incident_report_detail' report.id %}" class="btn btn-sm btn-outline-info mt-2">View Full Report</a>
                 </div>
               </div>
             </div>

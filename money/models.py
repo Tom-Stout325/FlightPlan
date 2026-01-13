@@ -88,7 +88,8 @@ class OwnedModelMixin(models.Model):
     def clean(self):
         super().clean()
         if not self.user_id:
-            raise ValidationError({"user": "Owner must be set."})
+            raise ValidationError("Owner must be set.")
+
 
     def _assert_owned_fk(self, field_name: str, obj) -> None:
         """
@@ -128,18 +129,8 @@ class Category(OwnedModelMixin):
     ]
 
     category = models.CharField(max_length=500, blank=True, null=True)
-    schedule_c_line = models.CharField(
-        max_length=10,
-        blank=True,
-        null=True,
-        help_text="Enter Schedule C line number (e.g., '8', '9', '27a')",
-    )
-    category_type = models.CharField(
-        max_length=10,
-        choices=CATEGORY_TYPE_CHOICES,
-        default=EXPENSE,
-        help_text="Default accounting nature for this category.",
-    )
+    schedule_c_line = models.CharField(max_length=10, blank=True, null=True, help_text="Enter Schedule C line number (e.g., '8', '9', '27a')",)
+    category_type = models.CharField(max_length=20, choices=CATEGORY_TYPE_CHOICES, default=EXPENSE, help_text="Default accounting nature for this category.",)
     slug = models.SlugField(max_length=255, blank=True, null=True)
 
     class Meta:
@@ -167,27 +158,15 @@ class Category(OwnedModelMixin):
         super().save(*args, **kwargs)
 
 
+
+
 class SubCategory(OwnedModelMixin):
     sub_cat = models.CharField(max_length=500, blank=True, null=True)
-    category = models.ForeignKey(
-        Category,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="subcategories",
-    )
-    # IMPORTANT: allow NULL so multiple blank slugs don't violate uniqueness
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, null=True, blank=True, related_name="subcategories",)
     slug = models.SlugField(max_length=100, blank=True, null=True)
-    schedule_c_line = models.CharField(
-        max_length=10,
-        blank=True,
-        null=True,
-        help_text="Enter Schedule C line number.",
-    )
-    include_in_tax_reports = models.BooleanField(
-        default=True,
-        help_text="If unchecked, this sub-category is excluded from tax-related reports.",
-    )
+    schedule_c_line = models.CharField(max_length=10, blank=True, null=True, help_text="Enter Schedule C line number.",)
+    include_in_tax_reports = models.BooleanField(default=True, help_text="If unchecked, this sub-category is excluded from tax-related reports.",)
+    include_in_pl_reports = models.BooleanField(default=True, help_text="If unchecked, this sub-category is excluded from Profit & Loss reports.",)
 
     class Meta:
         verbose_name_plural = "Sub Categories"
@@ -297,6 +276,7 @@ class Client(OwnedModelMixin):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
 
 
 class Event(OwnedModelMixin):
@@ -429,20 +409,20 @@ class Transaction(OwnedModelMixin):
 
     def clean(self):
         super().clean()
+
+        # If sub_cat exists, force category alignment (single source of truth)
+        if self.sub_cat_id:
+            self.category = self.sub_cat.category
+
+        # Now ownership checks are safe and consistent
         self._assert_owned_fk("category", self.category)
         self._assert_owned_fk("sub_cat", self.sub_cat)
         self._assert_owned_fk("event", self.event)
         self._assert_owned_fk("team", self.team)
 
-        # If both sub_cat and category are set, they must match
-        if self.sub_cat and self.category and self.sub_cat.category_id != self.category_id:
-            raise ValidationError(
-                {"sub_cat": "Sub-Category does not belong to the selected Category."}
-            )
-
     def save(self, *args, **kwargs):
         self.full_clean()
-        super().save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
 
 # -----------------------------------------------------------------------------

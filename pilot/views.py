@@ -1,180 +1,225 @@
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib import messages
-from django.shortcuts import redirect, render
-from django.contrib import messages
-from django.conf import settings
-from datetime import datetime
+# pilot/views.py
+
+from __future__ import annotations
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect
+from django.core.exceptions import FieldError
 from django.db.models import Count, Sum
 from django.db.models.functions import Coalesce
+from django.shortcuts import get_object_or_404, redirect, render
 
-from .models import PilotProfile
-from flightlogs.models import FlightLog 
-import datetime
+from flightlogs.models import FlightLog
 
-from accounts.forms import UserForm
-from .models import *
-from .forms import *
+from .forms import PilotProfileForm, TrainingForm
+from .models import PilotProfile, Training
 
 
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
 
+def _get_pilot_profile(user):
+    """
+    Enforce user-scoped access to the pilot profile.
+    """
+    return get_object_or_404(PilotProfile, user=user)
+
+
+def _flightlogs_for_user(user):
+    """
+    Best-effort user scoping for FlightLog without assuming the exact schema.
+    Prefers an explicit user FK if it exists; falls back to matching pilot name.
+    """
+    # Try the most secure / direct approach first
+    try:
+        return FlightLog.objects.filter(user=user)
+    except FieldError:
+        pass
+
+    # Fallback: match "pilot_in_command" to user's full name (your PilotProfile model uses this too)
+    full_name = f"{user.first_name} {user.last_name}".strip()
+    if full_name:
+        try:
+            return FlightLog.objects.filter(pilot_in_command__iexact=full_name)
+        except FieldError:
+            return FlightLog.objects.none()
+
+    return FlightLog.objects.none()
+
+
+# -----------------------------------------------------------------------------
+# Pilot Profile
+# -----------------------------------------------------------------------------
 
 @login_required
 def profile(request):
-    profile, created = PilotProfile.objects.get_or_create(user=request.user,
-                                                          defaults={"license_number":"",
-                                                                    "license_date": "2020-01-01",
-                                                                    "license_image":""},)
+    profile = _get_pilot_profile(request.user)
 
-    if request.method == 'POST':
-        if 'update_user' in request.POST:
-            user_form = UserForm(request.POST, instance=request.user)
-            form = PilotProfileForm(instance=profile)
-            training_form = TrainingForm()
+    logs = _flightlogs_for_user(request.user)
 
-            if user_form.is_valid():
-                user_form.save()
-                messages.success(request, "User info updated.")
-                return redirect('pilot:profile')
+    # Aggregate stats (defensive if fields are missing)
+    # These are best-effort and won't error if a field doesn't exist.
+    totals = {
+        "flight_count": logs.count(),
+        "total_distance_ft": None,
+        "total_air_time": None,
+        "total_media_count": None,
+    }
 
-        elif 'update_profile' in request.POST:
-            form = PilotProfileForm(request.POST, request.FILES, instance=profile)
-            user_form = UserForm(instance=request.user)
-            training_form = TrainingForm()
+    try:
+        totals["total_distance_ft"] = logs.aggregate(
+            v=Coalesce(Sum("max_distance_ft"), 0)
+        )["v"]
+    except FieldError:
+        pass
 
-            if form.is_valid():
-                form.save()
-                messages.success(request, "Pilot credentials updated.")
-                return redirect('pilot:profile')
+    try:
+        totals["total_air_time"] = logs.aggregate(
+            v=Coalesce(Sum("air_time"), 0)
+        )["v"]
+    except FieldError:
+        pass
 
-        elif 'add_training' in request.POST:
-            training_form = TrainingForm(request.POST, request.FILES)
-            form = PilotProfileForm(instance=profile)
-            user_form = UserForm(instance=request.user)
+    # Optional: if you store media counts in fields
+    try:
+        totals["total_media_count"] = logs.aggregate(
+            v=Coalesce(Sum("media_count"), 0)
+        )["v"]
+    except FieldError:
+        pass
 
-            if training_form.is_valid():
-                training = training_form.save(commit=False)
-                training.pilot = profile
-                training.save()
-                messages.success(request, "Training record added.")
-                return redirect('pilot:profile')
+    # “Top” flights – scoped to the user logs queryset
+    highest_altitude_flight = None
+    fastest_speed_flight = None
+    longest_flight = None
 
-        else:
-            form = PilotProfileForm(instance=profile)
-            user_form = UserForm(instance=request.user)
-            training_form = TrainingForm()
+    try:
+        highest_altitude_flight = logs.order_by("-max_altitude_ft").first()
+    except FieldError:
+        pass
 
-    else:
-        form = PilotProfileForm(instance=profile)
-        user_form = UserForm(instance=request.user)
-        training_form = TrainingForm()
+    try:
+        fastest_speed_flight = logs.order_by("-max_speed_mph").first()
+    except FieldError:
+        pass
 
-    year_filter = request.GET.get('year')
-    trainings = profile.trainings.all()
-    if year_filter:
-        trainings = trainings.filter(date_completed__year=year_filter)
+    try:
+        longest_flight = logs.order_by("-max_distance_ft").first()
+    except FieldError:
+        pass
 
-    training_years = profile.trainings.dates('date_completed', 'year', order='DESC')
-
-    drone_stats_qs = (
-        FlightLog.objects
-        .values('drone_name', 'drone_serial')
-        .annotate(
-            flights=Count('id'),
-            total_air_time=Coalesce(Sum('air_time'), datetime.timedelta(0)),
-        )
-        .order_by('-flights', 'drone_name')
-    )
-
-    drone_stats = []
-    for row in drone_stats_qs:
-        td = row.get('total_air_time') or datetime.timedelta(0)
-        row['total_seconds'] = int(td.total_seconds())
-        drone_stats.append(row)
+    trainings = profile.trainings.all().order_by("-date_completed", "-id")
 
     context = {
-        'profile': profile, 
-        'form': form,
-        'user_form': user_form,
-        'training_form': training_form,
-        'trainings': trainings,
-        'years': [y.year for y in training_years],
-        'current_page': 'pilot:profile',
-        'highest_altitude_flight': FlightLog.objects.order_by('-max_altitude_ft').first(),
-        'fastest_speed_flight':   FlightLog.objects.order_by('-max_speed_mph').first(),
-        'longest_flight':         FlightLog.objects.order_by('-max_distance_ft').first(),
-        'drone_stats': drone_stats,
+        "profile": profile,
+        "trainings": trainings,
+        "logs": logs,  # if your template uses it
+        "totals": totals,
+        "highest_altitude_flight": highest_altitude_flight,
+        "fastest_speed_flight": fastest_speed_flight,
+        "longest_flight": longest_flight,
     }
-    return render(request, 'pilot/profile.html', context)
-
+    return render(request, "pilot/profile.html", context)
 
 
 @login_required
 def edit_profile(request):
-    profile = get_object_or_404(PilotProfile, user=request.user)
-    if request.method == 'POST':
+    profile = _get_pilot_profile(request.user)
+
+    if request.method == "POST":
         form = PilotProfileForm(request.POST, request.FILES, instance=profile)
         if form.is_valid():
             form.save()
-            return redirect('pilot:profile')
+            messages.success(request, "Pilot profile updated.")
+            return redirect("pilot:profile")
+        messages.error(request, "Please correct the errors below.")
     else:
         form = PilotProfileForm(instance=profile)
-    context = {'form': form} 
-    return render(request, 'pilot/edit_profile.html', context)
+
+    return render(request, "pilot/edit_profile.html", {"form": form, "profile": profile})
 
 
-
-@login_required
-def delete_pilot_profile(request):
-    profile = get_object_or_404(PilotProfile, user=request.user)
-    if request.method == 'POST':
-        user = profile.user
-        profile.delete()
-        user.delete()
-        messages.success(request, "Your profile and account have been deleted.")
-        return redirect('accounts:login')
-    context = {'pilot:profile': profile} 
-    return render(request, 'pilot/pilot_profile_delete.html', context)
-
+# -----------------------------------------------------------------------------
+# Training CRUD (fully user-scoped)
+# -----------------------------------------------------------------------------
 
 @login_required
 def training_create(request):
-    profile = get_object_or_404(PilotProfile, user=request.user)
-    if request.method == 'POST':
+    profile = _get_pilot_profile(request.user)
+
+    if request.method == "POST":
         form = TrainingForm(request.POST, request.FILES)
         if form.is_valid():
             training = form.save(commit=False)
+
+            # 🔒 Hard ownership enforcement (prevents forged POSTs)
             training.pilot = profile
+
             training.save()
-            return redirect('pilot:profile')
+            messages.success(request, "Training record added.")
+            return redirect("pilot:profile")
+        messages.error(request, "Please correct the errors below.")
     else:
         form = TrainingForm()
-    context = {'form': form} 
-    return render(request, 'pilot/training_form.html', context)
 
-
-
-@login_required
-def training_edit(request, pk):
-    training = get_object_or_404(Training, pk=pk, pilot__user=request.user)
-    form = TrainingForm(request.POST or None, request.FILES or None, instance=training)
-    if form.is_valid():
-        form.save()
-        return redirect('pilot:profile')
-    context = {'form': form} 
-    return render(request, 'pilot/training_form.html', context)
-
+    return render(
+        request,
+        "pilot/training_form.html",
+        {
+            "form": form,
+            "profile": profile,
+            "mode": "create",
+        },
+    )
 
 
 @login_required
-def training_delete(request, pk):
+def training_edit(request, pk: int):
+    profile = _get_pilot_profile(request.user)
+
+    # 🔒 User-scoped lookup (prevents editing someone else’s record)
     training = get_object_or_404(Training, pk=pk, pilot__user=request.user)
-    if request.method == 'POST':
+
+    if request.method == "POST":
+        form = TrainingForm(request.POST, request.FILES, instance=training)
+        if form.is_valid():
+            updated = form.save(commit=False)
+
+            # 🔒 Keep ownership locked even on edit
+            updated.pilot = profile
+
+            updated.save()
+            messages.success(request, "Training record updated.")
+            return redirect("pilot:profile")
+        messages.error(request, "Please correct the errors below.")
+    else:
+        form = TrainingForm(instance=training)
+
+    return render(
+        request,
+        "pilot/training_form.html",
+        {
+            "form": form,
+            "profile": profile,
+            "training": training,
+            "mode": "edit",
+        },
+    )
+
+
+@login_required
+def training_delete(request, pk: int):
+    # 🔒 User-scoped lookup (prevents deleting someone else’s record)
+    training = get_object_or_404(Training, pk=pk, pilot__user=request.user)
+
+    if request.method == "POST":
         training.delete()
-        return redirect('pilot:profile')
-    context = {'training': training} 
-    return render(request, 'pilot/training_confirm_delete.html', context)
+        messages.success(request, "Training record deleted.")
+        return redirect("pilot:profile")
 
+    return render(
+        request,
+        "pilot/training_confirm_delete.html",
+        {"training": training},
+    )

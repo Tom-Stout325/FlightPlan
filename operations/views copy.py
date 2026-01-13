@@ -16,15 +16,20 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.templatetags.static import static
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
-from django.views import View
 from django.views.decorators.http import require_POST
-from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView
-from django.http import HttpResponseBadRequest
+from django.views.generic import (
+    DeleteView,
+    DetailView,
+    FormView,
+    ListView,
+    TemplateView,
+    UpdateView,
+)
+from django.views import View
 
-from money.models import Event
-
-from .forms import OpsPlanApprovalForm, OpsPlanForm
 from .models import OpsPlan
+from .forms import OpsPlanForm, OpsPlanApprovalForm
+from money.models import Event  # NOTE: Client is referenced via OpsPlan.client FK; no import needed.
 
 try:
     from weasyprint import CSS, HTML
@@ -37,35 +42,6 @@ except Exception:
 # -----------------------------------------------------------------------------
 # Small parsing helpers (safe for messy input)
 # -----------------------------------------------------------------------------
-
-
-
-@login_required
-def ops_plan_create_router(request):
-    """
-    Router endpoint to create an Ops Plan without JS.
-    Accepts:
-      - event_id (required)
-      - year (optional)
-    Redirects to the real create view:
-      /events/<event_id>/ops-plans/new/?year=YYYY
-    """
-    event_id = request.GET.get("event_id") or ""
-    year = request.GET.get("year") or ""
-
-    if not event_id.isdigit():
-        messages.error(request, "Please select an event.")
-        return redirect("operations:ops_plan_index")
-
-    # Optional: validate year
-    year_qs = ""
-    if year and str(year).isdigit():
-        year_qs = f"?year={int(year)}"
-
-    return redirect(
-        f"{reverse('operations:ops_plan_create', kwargs={'event_id': int(event_id)})}{year_qs}"
-    )
-
 def safe_int(value):
     """Parse an int from mixed strings like '85%', ' 1,234 ', or None."""
     try:
@@ -100,36 +76,12 @@ def extract_state(address):
 
 
 # -----------------------------------------------------------------------------
-# User scoping helpers
-# -----------------------------------------------------------------------------
-def _event_qs_for_user(request):
-    """Base Event queryset for the current user."""
-    qs = Event.objects.all()
-    if request.user.is_authenticated and not request.user.is_staff:
-        qs = qs.filter(user=request.user)
-    return qs
-
-
-def _opsplan_qs_for_user(request):
-    """Base OpsPlan queryset for the current user."""
-    qs = OpsPlan.objects.select_related("event", "client")
-    if request.user.is_authenticated and not request.user.is_staff:
-        qs = qs.filter(event__user=request.user)
-    return qs
-
-
-def _get_plan_or_404(request, pk: int) -> OpsPlan:
-    """Fetch an OpsPlan respecting user scoping (staff can see all)."""
-    return get_object_or_404(_opsplan_qs_for_user(request), pk=pk)
-
-
-# -----------------------------------------------------------------------------
 # Create: create draft plan for an Event+Year, then redirect to edit
 # URL: /operations/events/<event_id>/ops-plans/new/?year=YYYY
 # -----------------------------------------------------------------------------
 class OpsPlanCreateView(LoginRequiredMixin, View):
     def get(self, request, event_id: int):
-        event = get_object_or_404(_event_qs_for_user(request), pk=event_id)
+        event = get_object_or_404(Event, pk=event_id)
 
         year_qs = request.GET.get("year")
         try:
@@ -143,14 +95,14 @@ class OpsPlanCreateView(LoginRequiredMixin, View):
                     event=event,
                     event_name=str(event),
                     plan_year=plan_year,
-                    status=OpsPlan.DRAFT,
+                    status=getattr(OpsPlan, "DRAFT", "Draft"),
                     created_by=request.user,
                     updated_by=request.user,
                 )
             messages.success(request, "Draft Ops Plan created.")
         except IntegrityError:
-            # If unique(event, year) exists, take user to it (scoped)
-            plan = _opsplan_qs_for_user(request).filter(event=event, plan_year=plan_year).first()
+            # If you have a unique constraint on (event, plan_year), this catches duplicates.
+            plan = OpsPlan.objects.filter(event=event, plan_year=plan_year).first()
             if plan:
                 messages.info(
                     request,
@@ -172,11 +124,9 @@ class OpsPlanUpdateView(LoginRequiredMixin, UpdateView):
     template_name = "operations/ops_plan_create.html"
     context_object_name = "plan"
 
-    def get_queryset(self):
-        return _opsplan_qs_for_user(self.request)
-
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
+        # Your form can use these to scope dropdowns, etc.
         kwargs["event"] = getattr(self.object, "event", None)
         kwargs["user"] = self.request.user
         return kwargs
@@ -188,7 +138,7 @@ class OpsPlanUpdateView(LoginRequiredMixin, UpdateView):
         if status_choices and isinstance(status_choices[0], (tuple, list)):
             ctx["statuses"] = [label for (_value, label) in status_choices]
         else:
-            ctx["statuses"] = [OpsPlan.DRAFT, OpsPlan.IN_REVIEW, OpsPlan.APPROVED, OpsPlan.ARCHIVED]
+            ctx["statuses"] = ["Draft", "In Review", "Approved", "Archived"]
 
         return ctx
 
@@ -198,7 +148,9 @@ class OpsPlanUpdateView(LoginRequiredMixin, UpdateView):
         return super().form_valid(form)
 
     def get_success_url(self):
-        return self.object.get_absolute_url()
+        if hasattr(self.object, "get_absolute_url"):
+            return self.object.get_absolute_url()
+        return reverse("operations:ops_plan_update", kwargs={"pk": self.object.pk})
 
 
 # -----------------------------------------------------------------------------
@@ -209,12 +161,9 @@ class OpsPlanDeleteView(LoginRequiredMixin, DeleteView):
     template_name = "operations/ops_plan_confirm_delete.html"
     context_object_name = "plan"
 
-    def get_queryset(self):
-        return _opsplan_qs_for_user(self.request)
-
     def get_success_url(self):
         messages.success(self.request, "Ops Plan deleted.")
-        return reverse("operations:ops_plan_index")
+        return reverse("operations:ops_plan_index", kwargs={"event_id": self.object.event_id})
 
 
 # -----------------------------------------------------------------------------
@@ -222,7 +171,7 @@ class OpsPlanDeleteView(LoginRequiredMixin, DeleteView):
 # -----------------------------------------------------------------------------
 @login_required
 def ops_plan_pdf_view(request, pk: int):
-    plan = _get_plan_or_404(request, pk)
+    plan = get_object_or_404(OpsPlan, pk=pk)
 
     if not WEASYPRINT_AVAILABLE:
         return HttpResponse(
@@ -278,11 +227,38 @@ class OpsPlanIndexView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["plans"] = _opsplan_qs_for_user(self.request).order_by("-updated_at")[:50]
-        ctx["events"] = _event_qs_for_user(self.request).order_by("-id")[:200]
+
+        ctx["plans"] = (
+            OpsPlan.objects.select_related("event", "client")
+            .order_by("-updated_at")[:50]
+        )
+        ctx["events"] = Event.objects.order_by("-id")[:200]
         ctx["current_year"] = timezone.now().year
-        ctx["statuses"] = [OpsPlan.DRAFT, OpsPlan.IN_REVIEW, OpsPlan.APPROVED, OpsPlan.ARCHIVED]
+        ctx["statuses"] = [
+            OpsPlan.DRAFT,
+            OpsPlan.IN_REVIEW,
+            OpsPlan.APPROVED,
+            OpsPlan.ARCHIVED,
+        ]
         return ctx
+
+
+# -----------------------------------------------------------------------------
+# List by event
+# -----------------------------------------------------------------------------
+class OpsPlanListView(LoginRequiredMixin, ListView):
+    template_name = "operations/ops_plan_list.html"
+    context_object_name = "plans"
+
+    def get_queryset(self):
+        self.event = get_object_or_404(Event, pk=self.kwargs["event_id"])
+        return OpsPlan.objects.filter(event=self.event).order_by("-updated_at")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["event"] = self.event
+        return ctx
+
 
 # -----------------------------------------------------------------------------
 # Detail
@@ -292,9 +268,6 @@ class OpsPlanDetailView(LoginRequiredMixin, DetailView):
     template_name = "operations/ops_plan_detail.html"
     context_object_name = "plan"
 
-    def get_queryset(self):
-        return _opsplan_qs_for_user(self.request)
-
 
 # -----------------------------------------------------------------------------
 # Status actions
@@ -303,10 +276,13 @@ class OpsPlanDetailView(LoginRequiredMixin, DetailView):
 @login_required
 def ops_plan_submit_view(request, pk: int):
     """Draft -> In Review (author action)"""
-    plan = _get_plan_or_404(request, pk)
+    plan = get_object_or_404(OpsPlan, pk=pk)
 
     if plan.status != OpsPlan.DRAFT:
-        messages.warning(request, f"Only Draft plans can be submitted (current status: {plan.status}).")
+        messages.warning(
+            request,
+            f"Only Draft plans can be submitted (current status: {plan.status}).",
+        )
         return redirect(plan.get_absolute_url())
 
     plan.status = OpsPlan.IN_REVIEW
@@ -321,10 +297,13 @@ def ops_plan_submit_view(request, pk: int):
 @staff_member_required
 def ops_plan_approve_view(request, pk: int):
     """In Review -> Approved (staff action)"""
-    plan = _get_plan_or_404(request, pk)  # staff can see all via qs helper
+    plan = get_object_or_404(OpsPlan, pk=pk)
 
     if plan.status != OpsPlan.IN_REVIEW:
-        messages.warning(request, f"Only plans In Review can be approved (current status: {plan.status}).")
+        messages.warning(
+            request,
+            f"Only plans In Review can be approved (current status: {plan.status}).",
+        )
         return redirect(plan.get_absolute_url())
 
     plan.status = OpsPlan.APPROVED
@@ -339,7 +318,7 @@ def ops_plan_approve_view(request, pk: int):
 @staff_member_required
 def ops_plan_archive_view(request, pk: int):
     """Any -> Archived (staff action)"""
-    plan = _get_plan_or_404(request, pk)  # staff can see all via qs helper
+    plan = get_object_or_404(OpsPlan, pk=pk)
 
     if plan.status == OpsPlan.ARCHIVED:
         messages.info(request, "This Ops Plan is already archived.")
@@ -356,8 +335,10 @@ def ops_plan_archive_view(request, pk: int):
 @require_POST
 @login_required
 def change_ops_plan_status(request, pk: int, new_status: str):
-    """Generic status setter (use carefully; prefer the specific actions above)."""
-    plan = _get_plan_or_404(request, pk)
+    """
+    Generic status setter (use carefully; prefer the specific actions above).
+    """
+    plan = get_object_or_404(OpsPlan, pk=pk)
 
     valid_statuses = [OpsPlan.DRAFT, OpsPlan.IN_REVIEW, OpsPlan.APPROVED, OpsPlan.ARCHIVED]
     if new_status not in valid_statuses:
@@ -369,15 +350,13 @@ def change_ops_plan_status(request, pk: int, new_status: str):
     plan.save(update_fields=["status", "updated_by", "updated_at"])
 
     messages.success(request, f"Ops Plan updated to {new_status}.")
-    return redirect(plan.get_absolute_url())
+    return redirect("operations:ops_plan_index")
 
 
 # -----------------------------------------------------------------------------
 # Digital approval flow (token link)
 # -----------------------------------------------------------------------------
 class OpsPlanApprovalView(FormView):
-    """Public approval link. Token must match; no login required."""
-
     template_name = "operations/ops_plan_approve.html"
     form_class = OpsPlanApprovalForm
 
