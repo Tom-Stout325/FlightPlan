@@ -5,7 +5,7 @@ import os
 
 os.environ.setdefault("CLIENT", "airborne")
 
-from .base import *  # noqa
+from .base import *  
 
 CLIENT = "airborne"
 

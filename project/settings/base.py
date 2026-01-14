@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     'django.contrib.sites',
 
+    "project.common",
     'crispy_bootstrap5',
     'crispy_forms',
     'fontawesomefree',

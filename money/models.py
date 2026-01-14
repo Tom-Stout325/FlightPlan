@@ -1,5 +1,4 @@
 # money/models.py
-
 from __future__ import annotations
 
 from decimal import Decimal
@@ -17,9 +16,11 @@ from django.utils.text import slugify
 try:
     from django.contrib.postgres.indexes import GinIndex
     from django.contrib.postgres.search import SearchVectorField
-except ImportError:  # pragma: no cover
+except ImportError: 
     GinIndex = None
     SearchVectorField = None
+
+from project.common.models import OwnedModelMixin
 
 
 # -----------------------------------------------------------------------------
@@ -67,52 +68,6 @@ def _is_blank(value) -> bool:
 def _quantize_money(value: Decimal) -> Decimal:
     return (value or Decimal("0.00")).quantize(Decimal("0.01"))
 
-
-class OwnedModelMixin(models.Model):
-    """
-    Common owner FK + helper methods.
-
-    View/Form queryset scoping is the FIRST line of defense.
-    This mixin is the SECOND line of defense against cross-user FK injection.
-    """
-
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="%(class)ss",
-    )
-
-    class Meta:
-        abstract = True
-
-    def clean(self):
-        super().clean()
-        if not self.user_id:
-            raise ValidationError("Owner must be set.")
-
-
-    def _assert_owned_fk(self, field_name: str, obj) -> None:
-        """
-        Ensure related object belongs to the same user.
-
-        - Allows global/shared models (no user_id)
-        - Raises if self.user is not set
-        - Raises if ownership mismatch
-        """
-        if obj is None:
-            return
-
-        # Global/shared FK (no user_id on model)
-        if not hasattr(obj, "user_id"):
-            return
-
-        if not self.user_id:
-            raise ValidationError(
-                {field_name: "Owner must be set before validating related objects."}
-            )
-
-        if obj.user_id != self.user_id:
-            raise ValidationError({field_name: _ownership_error()})
 
 
 # -----------------------------------------------------------------------------
@@ -361,30 +316,12 @@ class Transaction(OwnedModelMixin):
     amount = models.DecimalField(max_digits=20, decimal_places=2)
     transaction = models.CharField(max_length=255)
     team = models.ForeignKey("Team", null=True, blank=True, on_delete=models.PROTECT)
-    event = models.ForeignKey(
-        "Event",
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
-        related_name="transactions",
-    )
+    event = models.ForeignKey("Event", null=True, blank=True, on_delete=models.PROTECT, related_name="transactions",)
     receipt = models.FileField(upload_to="receipts/", blank=True, null=True)
     date = models.DateField()
     invoice_number = models.CharField(max_length=25, blank=True, null=True, help_text="Optional")
-    recurring_template = models.ForeignKey(
-        "RecurringTransaction",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="generated_transactions",
-    )
-    transport_type = models.CharField(
-        max_length=30,
-        choices=TRANSPORT_CHOICES,
-        null=True,
-        blank=True,
-        help_text="Used to identify if actual expenses apply",
-    )
+    recurring_template = models.ForeignKey("RecurringTransaction", null=True, blank=True, on_delete=models.SET_NULL, related_name="generated_transactions",)
+    transport_type = models.CharField(max_length=30, choices=TRANSPORT_CHOICES, null=True, blank=True, help_text="Used to identify if actual expenses apply",)
 
     class Meta:
         ordering = ["date"]
@@ -437,22 +374,9 @@ class MileageRate(models.Model):
     - user != NULL means per-user override for that year
     """
 
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="mileage_rates",
-        help_text="Optional: set per-user rates. Leave blank for a global rate.",
-    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name="mileage_rates", help_text="Optional: set per-user rates. Leave blank for a global rate.",)
     year = models.PositiveIntegerField(db_index=True)
-    rate = models.DecimalField(
-        max_digits=6,
-        decimal_places=4,
-        default=Decimal("0.7000"),
-        validators=[MinValueValidator(Decimal("0"))],
-        help_text="Dollars per mile for this year (e.g. 0.6700).",
-    )
+    rate = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal("0.7000"), validators=[MinValueValidator(Decimal("0"))], help_text="Dollars per mile for this year (e.g. 0.6700).",)
 
     class Meta:
         verbose_name = "Mileage Rate"
@@ -600,30 +524,10 @@ class Miles(OwnedModelMixin):
     begin = models.DecimalField(max_digits=10, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
     end = models.DecimalField(max_digits=10, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
     total = models.DecimalField(max_digits=10, decimal_places=1, null=True, blank=True, editable=False)
-
     client = models.ForeignKey("Client", on_delete=models.PROTECT)
-    event = models.ForeignKey(
-        "Event",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        help_text="Event this mileage was associated with (for event-level cost analysis).",
-    )
-    invoice_v2 = models.ForeignKey(
-        "InvoiceV2",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="mileage_entries",
-        help_text="If set, this mileage entry is tied to an Invoice V2.",
-    )
-    invoice_number = models.CharField(
-        max_length=255,
-        null=True,
-        blank=True,
-        db_index=True,
-        help_text="Legacy invoice number string. For new entries, usually mirrors InvoiceV2.invoice_number.",
-    )
+    event = models.ForeignKey("Event", on_delete=models.SET_NULL, null=True, blank=True, help_text="Event this mileage was associated with (for event-level cost analysis).",)
+    invoice_v2 = models.ForeignKey("InvoiceV2", on_delete=models.SET_NULL, null=True, blank=True, related_name="mileage_entries", help_text="If set, this mileage entry is tied to an Invoice V2.",)
+    invoice_number = models.CharField(max_length=255, null=True, blank=True, db_index=True, help_text="Legacy invoice number string. For new entries, usually mirrors InvoiceV2.invoice_number.",)
     vehicle = models.ForeignKey("Vehicle", on_delete=models.PROTECT)
     mileage_type = models.CharField(max_length=20, choices=MILEAGE_TYPE_CHOICES, default="Business")
 
@@ -922,6 +826,7 @@ class InvoiceV2(OwnedModelMixin):
     event_name = models.CharField(max_length=500, blank=True, null=True)
     location = models.CharField(max_length=500, blank=True, null=True)
     service = models.ForeignKey("Service", on_delete=models.PROTECT, related_name="invoices_v2")
+
 
     amount = models.DecimalField(
         default=Decimal("0.00"),
@@ -1342,185 +1247,3 @@ class InvoiceItemV2(OwnedModelMixin):
         if invoice:
             invoice.update_amount(save=True)
 
-
-# -----------------------------------------------------------------------------
-# Legacy Invoices (deprecated — still scoped through Client/Event/Service ownership)
-# -----------------------------------------------------------------------------
-
-class Invoice(models.Model):
-    """
-    Deprecated legacy Invoice.
-    If it remains accessible anywhere, it must be scoped (at minimum through client.user).
-    """
-
-    invoice_number = models.CharField(max_length=25, blank=True, null=True)
-    client = models.ForeignKey("Client", on_delete=models.PROTECT, related_name="legacy_invoices")
-    event_name = models.CharField(max_length=500, blank=True, null=True)
-    location = models.CharField(max_length=500, blank=True, null=True)
-    event = models.ForeignKey("Event", on_delete=models.PROTECT, related_name="legacy_invoices")
-    service = models.ForeignKey("Service", on_delete=models.PROTECT, related_name="legacy_invoices")
-    amount = models.DecimalField(default=Decimal("0.00"), max_digits=12, decimal_places=2, editable=False)
-    date = models.DateField()
-    due = models.DateField()
-    paid_date = models.DateField(null=True, blank=True)
-
-    STATUS_CHOICES = [
-        ("Unpaid", "Unpaid"),
-        ("Paid", "Paid"),
-        ("Partial", "Partial"),
-    ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Unpaid")
-
-    if SearchVectorField is not None:
-        search_vector = SearchVectorField(null=True, blank=True)
-
-    from_name = models.CharField(max_length=255, blank=True)
-    from_address = models.TextField(blank=True)
-    from_phone = models.CharField(max_length=50, blank=True)
-    from_email = models.EmailField(blank=True)
-    from_website = models.URLField(blank=True)
-    from_tax_id = models.CharField(max_length=64, blank=True)
-
-    from_logo_url = models.URLField(blank=True)
-    from_header_logo_max_width_px = models.PositiveIntegerField(default=320)
-
-    from_terms = models.CharField(max_length=100, blank=True)
-    from_net_days = models.PositiveIntegerField(default=30)
-    from_footer_text = models.TextField(blank=True)
-
-    from_currency = models.CharField(max_length=3, default="USD")
-    from_locale = models.CharField(max_length=10, default="en_US")
-    from_timezone = models.CharField(max_length=64, default="America/Indiana/Indianapolis")
-
-    issued_at = models.DateTimeField(null=True, blank=True)
-    version = models.PositiveIntegerField(default=1)
-    pdf_url = models.URLField(blank=True, max_length=1000)
-    pdf_sha256 = models.CharField(max_length=64, blank=True)
-
-    class Meta:
-        ordering = ["invoice_number"]
-        indexes = [
-            models.Index(fields=["date"]),
-            models.Index(fields=["invoice_number"]),
-        ]
-
-    def __str__(self):
-        return self.invoice_number or f"Invoice {self.pk}"
-
-    def clean(self):
-        super().clean()
-
-        errors = {}
-
-        # Client ↔ Event ownership
-        if self.client and self.event:
-            if self.client.user_id != self.event.user_id:
-                errors["event"] = _ownership_error()
-
-        # Client ↔ Service ownership
-        if self.client and self.service:
-            if self.client.user_id != self.service.user_id:
-                errors["service"] = _ownership_error()
-
-        if errors:
-            raise ValidationError(errors)
-
-
-    def update_amount(self):
-        total = (
-            self.items.annotate(
-                line_total=ExpressionWrapper(
-                    F("qty") * F("price"),
-                    output_field=DecimalField(max_digits=12, decimal_places=2),
-                )
-            )
-            .aggregate(sum=Sum("line_total"))
-            .get("sum")
-            or Decimal("0.00")
-        )
-        self.amount = _quantize_money(total)
-        self.save(update_fields=["amount"])
-
-    @property
-    def is_paid(self):
-        return self.paid_date is not None or self.status == "Paid"
-
-    @property
-    def is_locked(self):
-        return bool(self.issued_at)
-
-    @property
-    def days_to_pay(self):
-        if self.paid_date and self.date:
-            return (self.paid_date - self.date).days
-        return None
-
-    @property
-    def net_income(self):
-        # Legacy: avoid cross-user leaks by using client.user
-        TransactionModel = apps.get_model("money", "Transaction")
-        if not self.invoice_number:
-            return Decimal("0.00")
-        qs = TransactionModel.objects.filter(user=self.client.user, invoice_number=self.invoice_number)
-        income = (
-            qs.filter(trans_type=TransactionModel.INCOME).aggregate(total=Sum("amount")).get("total")
-            or Decimal("0.00")
-        )
-        expenses = (
-            qs.filter(trans_type=TransactionModel.EXPENSE).aggregate(total=Sum("amount")).get("total")
-            or Decimal("0.00")
-        )
-        return _quantize_money(income - expenses)
-
-    def has_from_snapshot(self) -> bool:
-        return bool(self.from_name or self.from_logo_url or self.from_address)
-
-    def snapshot_from_profile(self, profile, absolute_logo_url: str | None = None, overwrite: bool = False):
-        if not profile:
-            return
-        if self.has_from_snapshot() and not overwrite:
-            return
-
-        self.from_name = profile.name_for_display
-        self.from_address = "\n".join(profile.full_address_lines())
-        self.from_phone = profile.main_phone or ""
-        self.from_email = profile.invoice_reply_to_email or profile.support_email or ""
-        self.from_website = profile.website or ""
-        self.from_tax_id = profile.tax_id_ein or ""
-
-        if absolute_logo_url:
-            self.from_logo_url = absolute_logo_url
-        else:
-            try:
-                self.from_logo_url = profile.logo.url or ""
-            except Exception:
-                self.from_logo_url = ""
-        self.from_header_logo_max_width_px = profile.header_logo_max_width_px
-
-        self.from_terms = profile.default_terms or ""
-        self.from_net_days = int(getattr(profile, "default_net_days", 30) or 30)
-        self.from_footer_text = profile.default_footer_text or ""
-
-        self.from_currency = profile.default_currency or "USD"
-        self.from_locale = profile.default_locale or "en_US"
-        self.from_timezone = profile.timezone or "America/Indiana/Indianapolis"
-
-
-class InvoiceItem(models.Model):
-    invoice = models.ForeignKey("Invoice", on_delete=models.CASCADE, related_name="items")
-    description = models.CharField(max_length=500)
-    qty = models.IntegerField(default=0, blank=True, null=True)
-    price = models.DecimalField(
-        max_digits=20,
-        decimal_places=2,
-        default=Decimal("0.00"),
-        blank=True,
-        null=True,
-    )
-
-    def __str__(self):
-        return f"{self.description} - {self.qty} x {self.price}"
-
-    @property
-    def total(self):
-        return (self.qty or 0) * (self.price or Decimal("0.00"))

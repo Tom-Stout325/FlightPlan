@@ -35,6 +35,9 @@ class ClientChoiceField(ModelChoiceField):
 # -----------------------------------------------------------------------------
 # Invoice header form
 # -----------------------------------------------------------------------------
+
+
+
 class InvoiceV2Form(forms.ModelForm):
     client = ClientChoiceField(queryset=Client.objects.none())
 
@@ -103,55 +106,118 @@ class InvoiceV2Form(forms.ModelForm):
         return cleaned
 
 
+
+
+
 # -----------------------------------------------------------------------------
 # Line item form
 # -----------------------------------------------------------------------------
+from django import forms
+from django.forms import BaseInlineFormSet, inlineformset_factory
+
+from money.models import InvoiceV2, InvoiceItemV2, SubCategory
+
+
 class InvoiceItemV2Form(forms.ModelForm):
     class Meta:
         model = InvoiceItemV2
-        fields = ["description", "qty", "price", "sub_cat"]
+        fields = ["description", "sub_cat", "qty", "price"]  # category is auto
         widgets = {
-            "description": forms.TextInput(),
-            "qty": forms.NumberInput(),
-            "price": forms.NumberInput(),
+            "description": forms.TextInput(attrs={"class": "form-control"}),
+            "sub_cat": forms.Select(attrs={"class": "form-select"}),
+            "qty": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
+            "price": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
         }
 
-    def __init__(self, *args, user=None, **kwargs):
+    def __init__(self, *args, **kwargs):
+        # support BOTH: formset passing user via kwargs OR via attribute
+        self.user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
 
-        # Table-friendly widgets (your template renders raw fields)
-        self.fields["description"].widget.attrs.update({"class": "form-control"})
-        self.fields["qty"].widget.attrs.update(
-            {"class": "form-control text-end", "inputmode": "decimal", "step": "0.01", "min": "0"}
-        )
-        self.fields["price"].widget.attrs.update(
-            {"class": "form-control text-end", "inputmode": "decimal", "step": "0.01", "min": "0"}
-        )
-        self.fields["sub_cat"].widget.attrs.update({"class": "form-select"})
+        self.fields["sub_cat"].required = True
 
-        # Scope sub-categories by owner (and keep ordering stable)
+        user = self.user or getattr(self, "user", None)
         if user is not None:
             self.fields["sub_cat"].queryset = (
                 SubCategory.objects.filter(user=user)
                 .select_related("category")
                 .order_by("category__category", "sub_cat")
             )
+            self.fields["sub_cat"].label_from_instance = (
+                lambda sc: f"{sc.category.category} — {sc.sub_cat}"
+            )
 
-    def clean_qty(self):
-        qty = self.cleaned_data.get("qty")
-        if qty is None:
-            return qty
-        if qty <= Decimal("0"):
-            raise ValidationError("Qty must be greater than 0.")
-        return qty
+    def clean(self):
+        cleaned = super().clean()
 
-    def clean_price(self):
-        price = self.cleaned_data.get("price")
-        if price is None:
-            return price
-        if price < Decimal("0"):
-            raise ValidationError("Price cannot be negative.")
-        return price
+        if cleaned.get("DELETE"):
+            return cleaned
+
+        sub_cat = cleaned.get("sub_cat")
+        if not sub_cat:
+            raise forms.ValidationError("Please select a sub-category for each line item.")
+
+        # (Optional) validation: ensure sub_cat has a category
+        if not getattr(sub_cat, "category_id", None):
+            raise forms.ValidationError("Selected sub-category is missing a category.")
+
+        return cleaned
+
+
+class BaseInvoiceItemV2FormSet(BaseInlineFormSet):
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop("user", None)
+        super().__init__(*args, **kwargs)
+
+    def get_form_kwargs(self, index):
+        kwargs = super().get_form_kwargs(index)
+        kwargs["user"] = self.user
+        return kwargs
+
+    def clean(self):
+        super().clean()
+
+        for form in self.forms:
+            if not hasattr(form, "cleaned_data"):
+                continue
+            if form.cleaned_data.get("DELETE"):
+                continue
+            if not form.cleaned_data.get("sub_cat"):
+                raise forms.ValidationError("Each line item needs a sub-category.")
+
+    def save(self, commit=True):
+        instances = super().save(commit=False)
+
+        for obj in instances:
+            if self.user is not None:
+                obj.user = self.user
+
+            # Always derive category from sub_cat
+            if obj.sub_cat_id:
+                obj.category = obj.sub_cat.category
+
+            if commit:
+                obj.save()
+
+        # ensure deletions get applied
+        for obj in self.deleted_objects:
+            obj.delete()
+
+        if commit:
+            self.save_m2m()
+
+        return instances
+
+
+InvoiceItemV2FormSet = inlineformset_factory(
+    InvoiceV2,
+    InvoiceItemV2,
+    form=InvoiceItemV2Form,
+    formset=BaseInvoiceItemV2FormSet,
+    extra=1,
+    can_delete=True,
+)
+
 
 
 # -----------------------------------------------------------------------------

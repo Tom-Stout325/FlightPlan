@@ -17,7 +17,7 @@ from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from weasyprint import HTML
 
-from money.models import CompanyProfile, Invoice, InvoiceV2, Transaction
+from money.models import CompanyProfile, InvoiceV2, Transaction
 
 logger = logging.getLogger(__name__)
 
@@ -222,7 +222,6 @@ def _tx_qs_for_user(user, year: int | None):
 
 
 def _base_amount_expr():
-    # ✅ FIX: must be an expression, not a string
     return Coalesce(F("amount"), Value(ZERO), output_field=TWO_DP)
 
 

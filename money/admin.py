@@ -4,8 +4,6 @@ from django.utils.safestring import mark_safe
 from .models import (
     Client,
     CompanyProfile,
-    Invoice,
-    InvoiceItem,
     InvoiceV2,
     InvoiceItemV2,
     MileageRate,
@@ -71,20 +69,6 @@ class TransactionAdmin(admin.ModelAdmin):
 class TeamAdmin(admin.ModelAdmin):
     list_display = ["name", "id"]
     search_fields = ("name",)
-
-
-class InvoiceAdmin(admin.ModelAdmin):
-    """
-    Legacy Invoice admin (keep as-is for historical access).
-    """
-    list_display = ("invoice_number", "client", "amount", "status", "paid_date", "days_to_pay")
-    list_filter = ("status", "client", "date")
-    search_fields = ("invoice_number", "client__business", "event_name")
-
-    def days_to_pay(self, obj):
-        return obj.days_to_pay if getattr(obj, "days_to_pay", None) is not None else "-"
-
-    days_to_pay.short_description = "Days to Pay"
 
 
 class CategoryAdmin(admin.ModelAdmin):
@@ -494,11 +478,9 @@ class MilesAdmin(admin.ModelAdmin):
 # -----------------------------
 
 admin.site.register(Client, ClientAdmin)
-admin.site.register(InvoiceItem)
 admin.site.register(MileageRate)
 admin.site.register(Service)
 admin.site.register(Team, TeamAdmin)
 admin.site.register(Category, CategoryAdmin)
 admin.site.register(RecurringTransaction, RecurringTransactionAdmin)
-admin.site.register(Invoice, InvoiceAdmin)
 admin.site.register(Event, EventAdmin)

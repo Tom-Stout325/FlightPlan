@@ -8,7 +8,7 @@ from django.db import models
 from django.utils.timezone import now
 
 from flightlogs.models import FlightLog
-
+from project.common.models import OwnedModelMixin
 
 # -----------------------------------------------------------------------------
 # Ownership / Scoping
@@ -16,43 +16,6 @@ from flightlogs.models import FlightLog
 
 def _ownership_error():
     return "You do not have permission to access or modify this object."
-
-
-class OwnedModelMixin(models.Model):
-    """
-    Abstract mixin for user-owned rows.
-
-    - Requires a `user` FK on the model.
-    - Provides `_assert_owned_fk()` to validate related objects belong to the same user.
-    - Calls full_clean() on save to enforce clean() and field validation.
-    """
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="%(app_label)s_%(class)s_set",
-    )
-
-    class Meta:
-        abstract = True
-
-    def _assert_owned_fk(self, field_name: str, obj):
-        """
-        Validate that a related FK object's `user_id` matches this object's `user_id`.
-        Adds a form-friendly ValidationError for the field.
-        """
-        if obj is None:
-            return
-        obj_user_id = getattr(obj, "user_id", None)
-        if obj_user_id is None:
-            # Related object does not expose a user_id; can't validate ownership here
-            return
-        if self.user_id and obj_user_id != self.user_id:
-            raise ValidationError({field_name: _ownership_error()})
-
-    def save(self, *args, **kwargs):
-        # Enforce validation consistency (same pattern you use elsewhere)
-        self.full_clean()
-        return super().save(*args, **kwargs)
 
 
 # -----------------------------------------------------------------------------

@@ -19,9 +19,6 @@ from .views.transactions import (
     run_monthly_recurring_view,
 )
 
-# Invoices (Unified + legacy detail routes)
-from .views.invoices_unified import InvoiceUnifiedListView
-from .views.invoices_legacy import LegacyInvoiceDetailView, LegacyFileInvoiceDetailView
 
 from .views.invoices_v2 import (
     InvoiceV2IssueView,
@@ -33,7 +30,7 @@ from .views.invoices_v2 import (
     invoice_v2_pdf_view,
     invoice_v2_send_email,
     invoice_v2_review,
-    invoice_review_router,
+    InvoiceV2ListView,
 )
 
 from .views.clients import (
@@ -130,12 +127,6 @@ urlpatterns = [
     path("run-monthly-recurring/", run_monthly_recurring_view, name="run_monthly_recurring"),
 
     # -------------------------------------------------------------------
-    # Invoices (Unified list: v2 + legacy rows together)
-    # Keep template name you already use: money:invoice_v2_list
-    # -------------------------------------------------------------------
-    path("invoices/", InvoiceUnifiedListView.as_view(), name="invoice_v2_list"),
-
-    # -------------------------------------------------------------------
     # Invoices (V2 invoice CRUD)
     # -------------------------------------------------------------------
     path("invoices/v2/new/", invoice_v2_create, name="invoice_v2_create"),
@@ -147,13 +138,8 @@ urlpatterns = [
     path("invoices/v2/<int:pk>/pdf/", invoice_v2_pdf_view, name="invoice_v2_pdf"),
     path("invoices/v2/<int:pk>/send-email/", invoice_v2_send_email, name="invoice_v2_send_email"),
     path("invoices/v2/<int:pk>/review/", invoice_v2_review, name="invoice_v2_review"),
+    path("invoices/", InvoiceV2ListView.as_view(), name="invoice_list"),
 
-    # Router (optional; handy if you want ONE link from the unified table)
-    path("invoices/<int:pk>/review-any/", invoice_review_router, name="invoice_review_router"),
-
-    # Legacy invoice detail views (DB + file-only)
-    path("invoices/legacy/<int:pk>/", LegacyInvoiceDetailView.as_view(), name="legacy_invoice_detail"),
-    path("invoices/legacy/file/<path:filename>/", LegacyFileInvoiceDetailView.as_view(), name="legacy_file_invoice_detail"),
 
     # ---------------------------------------------------------------------
     # Clients

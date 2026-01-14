@@ -81,14 +81,24 @@ class SubCategoryForm(UserOwnedModelFormMixin, forms.ModelForm):
             )
 
 
+
 class MileageForm(UserOwnedModelFormMixin, forms.ModelForm):
+    """
+    User-scoped Miles form.
+
+    - Accepts `user` kwarg (required for queryset scoping + ownership assignment)
+    - Defaults date to today on create
+    - Validates begin/end
+    - Aligns invoice_number with invoice_v2 when chosen
+    - Ensures obj.user is set before model full_clean() runs in save()
+    """
+
     class Meta:
         model = Miles
         fields = [
             "date",
             "begin",
             "end",
-
             "client",
             "event",
             "invoice_v2",
@@ -100,7 +110,6 @@ class MileageForm(UserOwnedModelFormMixin, forms.ModelForm):
             "date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "begin": forms.NumberInput(attrs={"step": "0.1", "class": "form-control"}),
             "end": forms.NumberInput(attrs={"step": "0.1", "class": "form-control"}),
-            "total": forms.NumberInput(attrs={"step": "0.1", "class": "form-control"}),
             "client": forms.Select(attrs={"class": "form-select"}),
             "event": forms.Select(attrs={"class": "form-select"}),
             "invoice_v2": forms.Select(attrs={"class": "form-select"}),
@@ -109,70 +118,78 @@ class MileageForm(UserOwnedModelFormMixin, forms.ModelForm):
             "mileage_type": forms.Select(attrs={"class": "form-select"}),
         }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, user=user, **kwargs)
 
-        # Helpful default
         if not self.instance.pk and not self.initial.get("date"):
             self.initial["date"] = timezone.localdate()
 
-        if not self.user:
+        if not getattr(self, "user", None):
             return
+
+        self._scope_querysets()
+
+    def _scope_querysets(self) -> None:
+        """Scope FK dropdowns to the current user."""
+        user = self.user
 
         if "vehicle" in self.fields:
             self.fields["vehicle"].queryset = (
-                Vehicle.objects.filter(user=self.user, is_active=True)
+                Vehicle.objects.filter(user=user, is_active=True)
                 .order_by("-is_active", "name")
             )
 
         if "client" in self.fields:
             self.fields["client"].queryset = (
-                Client.objects.filter(user=self.user)
+                Client.objects.filter(user=user)
                 .order_by("business", "last", "first")
             )
 
         if "event" in self.fields:
             self.fields["event"].queryset = (
-                Event.objects.filter(user=self.user)
+                Event.objects.filter(user=user)
                 .order_by("-event_year", "title")
             )
 
         if "invoice_v2" in self.fields:
             self.fields["invoice_v2"].queryset = (
-                InvoiceV2.objects.filter(user=self.user)
+                InvoiceV2.objects.filter(user=user)
                 .order_by("-date", "-invoice_number")
             )
 
     def clean(self):
         cleaned = super().clean()
+
         begin = cleaned.get("begin")
         end = cleaned.get("end")
-        total = cleaned.get("total")
 
         if begin is not None and end is not None and end < begin:
             self.add_error("end", "End mileage must be greater than or equal to Begin mileage.")
 
-        if total is not None and total < 0:
-            self.add_error("total", "Total miles cannot be negative.")
+        invoice_v2 = cleaned.get("invoice_v2")
+        invoice_number = (cleaned.get("invoice_number") or "").strip()
+        if invoice_v2 and not invoice_number and getattr(invoice_v2, "invoice_number", None):
+            cleaned["invoice_number"] = invoice_v2.invoice_number
 
         return cleaned
 
     def save(self, commit=True):
         obj: Miles = super().save(commit=False)
 
-        # Ensure ownership for OwnedModelMixin models
-        if hasattr(obj, "user_id"):
-            self._require_user()
+        self._require_user()
+        if not obj.user_id:
             obj.user = self.user
 
-        # Keep invoice_number aligned with InvoiceV2 selection
-        if obj.invoice_v2 and not obj.invoice_number:
+        if obj.invoice_v2 and not (obj.invoice_number or "").strip():
             obj.invoice_number = obj.invoice_v2.invoice_number
 
         if commit:
             obj.save()
             self.save_m2m()
+
         return obj
+
+
 
 
 class MileageRateForm(forms.ModelForm):

@@ -1,17 +1,10 @@
 Next Steps:
 
-
-Review other apps for user scoping:
-Airspace
-documents
-equipment
-flightlogs
-operations
-pilot
+Miles is not working
+    add mileage log throws Owner must be set error
 
 
 
-convert legacy invoices to v2
 
 
 

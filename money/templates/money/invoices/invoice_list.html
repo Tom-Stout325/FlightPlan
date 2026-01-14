@@ -9,14 +9,14 @@
   <!-- Header -->
   <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-4">
     <div>
-      <h1 class="h3 mb-1">Invoices (v2)</h1>
+      <h1 class="h3 mb-1 text-primary">INVOICES</h1>
       <p class="text-muted mb-0">
-        Browse and filter your new invoice set.
+        Browse and filter invoices.
       </p>
     </div>
     <div>
       <a href="{% url 'money:invoice_v2_create' %}" class="btn btn-primary btn-sm">
-        New Invoice
+       + New Invoice
       </a>
     </div>
   </div>
@@ -69,8 +69,8 @@
           <button type="submit" class="btn btn-primary btn-sm px-4">
             Apply
           </button>
-          <a href="{% url 'money:invoice_v2_list' %}"
-            class="btn btn-outline-secondary btn-sm px-4">
+          <a href="{% url 'money:invoice_list' %}"
+             class="btn btn-outline-secondary btn-sm px-4">
             Reset
           </a>
         </div>
@@ -85,7 +85,7 @@
         <thead class="table-light">
           <tr>
             <th scope="col">Invoice #</th>
-            <th scope="col">Client</th>
+            <th scope="col">Client / Location</th>
             <th scope="col" class="d-none d-sm-table-cell">Event</th>
             <th scope="col">Date</th>
             <th scope="col" class="text-end">Amount</th>
@@ -93,60 +93,95 @@
           </tr>
         </thead>
         <tbody>
-          {% for invoice in invoices %}
+          {% for row in invoices %}
             <tr>
-              <!-- Invoice number -->
+              <!-- Invoice number + quick actions -->
               <td>
-                <a href="{% url 'money:invoice_v2_detail' invoice.pk %}"
-                   class="text-decoration-none">
-                  {{ invoice.invoice_number|default:"(draft)" }}
-                </a>
+                <div class="d-flex flex-column gap-1">
+                  {# Primary link: invoice number goes to DETAILS #}
+                  {% if row.detail_url and row.detail_url != "#" %}
+                    <a href="{{ row.detail_url }}" class="text-decoration-none fw-semibold">
+                      {{ row.invoice_number|default:"(draft)" }}
+                    </a>
+                  {% else %}
+                    <span class="fw-semibold">
+                      {{ row.invoice_number|default:"(draft)" }}
+                    </span>
+                  {% endif %}
+
+                  {# Action buttons: Review (preferred), PDF, Details #}
+                  <div class="d-flex flex-wrap gap-1">
+                    {% if row.review_url %}
+                      <a class="btn btn-sm btn-primary" href="{{ row.review_url }}">Review</a>
+                    {% endif %}
+
+                    {% if row.pdf_url %}
+                      <a class="btn btn-sm btn-outline-secondary" href="{{ row.pdf_url }}" target="_blank" rel="noopener">
+                        PDF
+                      </a>
+                    {% endif %}
+
+                    {% if row.detail_url and row.detail_url != "#" %}
+                      <a class="btn btn-sm btn-outline-secondary" href="{{ row.detail_url }}">Details <span class="text-muted">V2</span> </a>
+                    {% endif %}
+                  </div>
+                </div>
               </td>
 
-              <!-- Client / location -->
+              <!-- Client -->
               <td>
-                {{ invoice.client.business }}
-                {% if invoice.location %}
+                {{ row.client_name|default:"—" }}
+                {% if row.location %}
                   <div class="small text-muted">
-                    {{ invoice.location }}
+                    {{ row.location }}
                   </div>
                 {% endif %}
               </td>
 
               <!-- Event -->
               <td class="d-none d-sm-table-cell">
-                {% if invoice.event %}
-                  {{ invoice.event.title }}
-                {% elif invoice.event_name %}
-                  {{ invoice.event_name }}
+                {% if row.event_name %}
+                  {{ row.event_name }}
                 {% else %}
                   <span class="text-muted small">—</span>
                 {% endif %}
               </td>
 
-              <!-- Dates -->
+              <!-- Date -->
               <td>
-                {{ invoice.date|date:"M j, Y" }}
-                {% if invoice.due %}
+                {% if row.issue_date %}
+                  {{ row.issue_date|date:"M j, Y" }}
+                {% else %}
+                  <span class="text-muted small">—</span>
+                {% endif %}
+                {% if row.due_date %}
                   <div class="small text-muted">
-                    Due {{ invoice.due|date:"M j" }}
+                    Due {{ row.due_date|date:"M j" }}
                   </div>
                 {% endif %}
               </td>
 
               <!-- Amount -->
               <td class="text-end">
-                ${{ invoice.amount|floatformat:2 }}
+                {% if row.total_amount %}
+                  ${{ row.total_amount|floatformat:2 }}
+                {% else %}
+                  —
+                {% endif %}
               </td>
 
               <!-- Status badge -->
               <td class="text-center">
-                {% if invoice.status == "Paid" %}
+                {% if row.status == "Paid" %}
                   <span class="badge bg-success">Paid</span>
-                {% elif invoice.status == "Partial" %}
+                {% elif row.status == "Partial" %}
                   <span class="badge bg-warning text-dark">Partial</span>
-                {% else %}
+                {% elif row.status == "Unpaid" or row.status == "Open" %}
                   <span class="badge bg-secondary">Unpaid</span>
+                {% elif row.status %}
+                  <span class="badge bg-light text-muted">{{ row.status }}</span>
+                {% else %}
+                  <span class="badge bg-light text-muted">—</span>
                 {% endif %}
               </td>
             </tr>

@@ -16,7 +16,7 @@ from django.template.loader import render_to_string
 from django.views.decorators.clickjacking import xframe_options_exempt
 
 try:
-    from weasyprint import CSS, HTML  # noqa: F401
+    from weasyprint import CSS, HTML 
     WEASYPRINT_AVAILABLE = True
 except Exception:
     WEASYPRINT_AVAILABLE = False

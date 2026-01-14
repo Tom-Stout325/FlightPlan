@@ -50,6 +50,7 @@ class CategoryListView(LoginRequiredMixin, ListView):
         return context
 
 
+
 class CategoryCreateView(LoginRequiredMixin, CreateView):
     model = Category
     form_class = CategoryForm
@@ -58,11 +59,10 @@ class CategoryCreateView(LoginRequiredMixin, CreateView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["user"] = self.request.user  # ALWAYS pass user
+        kwargs["user"] = self.request.user
         return kwargs
 
     def form_valid(self, form):
-        # UserOwnedModelFormMixin will set obj.user from kwargs["user"]
         messages.success(self.request, "Category added successfully!")
         return super().form_valid(form)
 
@@ -136,11 +136,10 @@ class SubCategoryCreateView(LoginRequiredMixin, CreateView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["user"] = self.request.user  # ALWAYS pass user
+        kwargs["user"] = self.request.user  
         return kwargs
 
     def form_valid(self, form):
-        # UserOwnedModelFormMixin will set obj.user from kwargs["user"]
         messages.success(self.request, "Sub-Category added successfully!")
         return super().form_valid(form)
 
@@ -162,7 +161,7 @@ class SubCategoryUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["user"] = self.request.user  # ALWAYS pass user
+        kwargs["user"] = self.request.user
         return kwargs
 
     def form_valid(self, form):
@@ -200,6 +199,17 @@ class SubCategoryDeleteView(LoginRequiredMixin, DeleteView):
         context = super().get_context_data(**kwargs)
         context["current_page"] = "categories"
         return context
+
+
+
+
+
+
+
+
+
+
+
 
 
 # =============================================================================
@@ -251,7 +261,7 @@ def _miles_queryset(user, year: int, vehicle_id=None):
 
 
 
-ZERO_MILES = Decimal("0.0")  # matches decimal_places=1
+ZERO_MILES = Decimal("0.0") 
 
 def _vehicle_summary(user, year: int):
     vehicles = (
@@ -371,6 +381,8 @@ def _build_mileage_report_context(request):
 
 
 
+
+
 class MileageCreateView(LoginRequiredMixin, CreateView):
     model = Miles
     form_class = MileageForm
@@ -379,12 +391,21 @@ class MileageCreateView(LoginRequiredMixin, CreateView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["user"] = self.request.user  # ALWAYS pass user
+        kwargs["user"] = self.request.user
         return kwargs
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        # ✅ happens BEFORE form.is_valid()
+        if not form.instance.user_id:
+            form.instance.user = self.request.user
+        return form
 
     def form_valid(self, form):
         messages.success(self.request, "Mileage entry added successfully!")
         return super().form_valid(form)
+
+
 
 
 class MileageUpdateView(LoginRequiredMixin, UpdateView):
@@ -398,12 +419,17 @@ class MileageUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["user"] = self.request.user  # ALWAYS pass user
+        kwargs["user"] = self.request.user
         return kwargs
 
     def form_valid(self, form):
+        form.instance.user = self.request.user
         messages.success(self.request, "Mileage entry updated successfully!")
         return super().form_valid(form)
+
+
+
+
 
 
 class MileageDeleteView(LoginRequiredMixin, DeleteView):

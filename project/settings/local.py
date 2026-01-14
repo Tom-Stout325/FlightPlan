@@ -6,7 +6,7 @@ import os
 # Pick a default client for local dev
 os.environ.setdefault("CLIENT", "airborne")
 
-from .base import *  # noqa
+from .base import *  
 
 CLIENT = os.getenv("CLIENT", "airborne")
 
