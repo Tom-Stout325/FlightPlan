@@ -660,7 +660,7 @@ class Receipt(OwnedModelMixin):
 
 
 # -----------------------------------------------------------------------------
-# Company Profile (deployment-level, not user-owned)
+# Company Profile 
 # -----------------------------------------------------------------------------
 
 PDF_HEADER_LAYOUT_CHOICES = [
@@ -808,36 +808,16 @@ class CompanyProfile(models.Model):
 # -----------------------------------------------------------------------------
 
 class InvoiceV2(OwnedModelMixin):
-    invoice_number = models.CharField(
-        max_length=25,
-        blank=True,
-        null=True,
-        help_text="Human-visible invoice ID (YYNNNN format; auto-generated if blank).",
-    )
-    client = models.ForeignKey("Client", on_delete=models.PROTECT, related_name="invoices_v2")
-    event = models.ForeignKey(
-        "Event",
-        on_delete=models.PROTECT,
-        related_name="invoices_v2",
-        null=True,
-        blank=True,
-        help_text="Optional: link this invoice to a specific event/race.",
-    )
-    event_name = models.CharField(max_length=500, blank=True, null=True)
-    location = models.CharField(max_length=500, blank=True, null=True)
-    service = models.ForeignKey("Service", on_delete=models.PROTECT, related_name="invoices_v2")
-
-
-    amount = models.DecimalField(
-        default=Decimal("0.00"),
-        max_digits=12,
-        decimal_places=2,
-        editable=False,
-        help_text="Total invoice amount, calculated from line items.",
-    )
-    date = models.DateField(help_text="Invoice date.")
-    due = models.DateField(help_text="Due date.")
-    paid_date = models.DateField(null=True, blank=True, help_text="Date fully paid.")
+    invoice_number     = models.CharField(max_length=25, blank=True, null=True, help_text="Human-visible invoice ID (YYNNNN format; auto-generated if blank).",)
+    client             = models.ForeignKey("Client", on_delete=models.PROTECT, related_name="invoices_v2")
+    event              = models.ForeignKey("Event", on_delete=models.PROTECT, related_name="invoices_v2", null=True, blank=True, help_text="Optional: link this invoice to a specific event/race.",)
+    event_name         = models.CharField(max_length=500, blank=True, null=True)
+    location           = models.CharField(max_length=500, blank=True, null=True)
+    service            = models.ForeignKey("Service", on_delete=models.PROTECT, related_name="invoices_v2")
+    amount             = models.DecimalField(default=Decimal("0.00"), max_digits=12, decimal_places=2, editable=False, help_text="Total invoice amount, calculated from line items.",)
+    date               = models.DateField(help_text="Invoice date.")
+    due                = models.DateField(help_text="Due date.")
+    paid_date          = models.DateField(null=True, blank=True, help_text="Date fully paid.")
 
     STATUS_UNPAID = "Unpaid"
     STATUS_PAID = "Paid"
@@ -847,46 +827,39 @@ class InvoiceV2(OwnedModelMixin):
         (STATUS_PAID, "Paid"),
         (STATUS_PARTIAL, "Partial"),
     ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_UNPAID)
+    status             = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_UNPAID)
+    issued_at          = models.DateTimeField(null=True, blank=True)
+    version            = models.PositiveIntegerField(default=1)
+    pdf_url            = models.URLField(blank=True, max_length=1000)
+    pdf_sha256         = models.CharField(max_length=64, blank=True)
 
-    issued_at = models.DateTimeField(null=True, blank=True)
-    version = models.PositiveIntegerField(default=1)
-    pdf_url = models.URLField(blank=True, max_length=1000)
-    pdf_sha256 = models.CharField(max_length=64, blank=True)
-
-    sent_at = models.DateTimeField(null=True, blank=True)
-    sent_to = models.EmailField(null=True, blank=True)
-    sent_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="invoice_v2_emails_sent",
-    )
+    sent_at            = models.DateTimeField(null=True, blank=True)
+    sent_to            = models.EmailField(null=True, blank=True)
+    sent_by            = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="invoice_v2_emails_sent",)
 
     if SearchVectorField is not None:
         search_vector = SearchVectorField(null=True, blank=True)
 
     # Snapshot fields (“From”)
-    from_name = models.CharField(max_length=255, blank=True)
-    from_address = models.TextField(blank=True)
-    from_phone = models.CharField(max_length=50, blank=True)
-    from_email = models.EmailField(blank=True)
-    from_website = models.URLField(blank=True)
-    from_tax_id = models.CharField(max_length=64, blank=True)
+    from_name          = models.CharField(max_length=255, blank=True)
+    from_address       = models.TextField(blank=True)
+    from_phone         = models.CharField(max_length=50, blank=True)
+    from_email         = models.EmailField(blank=True)
+    from_website       = models.URLField(blank=True)
+    from_tax_id        = models.CharField(max_length=64, blank=True)
 
-    from_logo_url = models.URLField(blank=True)
+    from_logo_url      = models.URLField(blank=True)
     from_header_logo_max_width_px = models.PositiveIntegerField(default=320)
 
-    from_terms = models.CharField(max_length=100, blank=True)
-    from_net_days = models.PositiveIntegerField(default=30)
-    from_footer_text = models.TextField(blank=True)
+    from_terms         = models.CharField(max_length=100, blank=True)
+    from_net_days      = models.PositiveIntegerField(default=30)
+    from_footer_text   = models.TextField(blank=True)
 
-    from_currency = models.CharField(max_length=3, default="USD")
-    from_locale = models.CharField(max_length=10, default="en_US")
-    from_timezone = models.CharField(max_length=64, default="America/Indiana/Indianapolis")
+    from_currency      = models.CharField(max_length=3, default="USD")
+    from_locale        = models.CharField(max_length=10, default="en_US")
+    from_timezone      = models.CharField(max_length=64, default="America/Indiana/Indianapolis")
 
-    pdf_snapshot = models.FileField(upload_to="invoices_v2/", blank=True, null=True)
+    pdf_snapshot       = models.FileField(upload_to="invoices_v2/", blank=True, null=True)
     pdf_snapshot_created_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -957,12 +930,10 @@ class InvoiceV2(OwnedModelMixin):
         return str(last_number + 1)
 
     def save(self, *args, **kwargs):
-        # Validate ownership consistency
         self.full_clean()
 
         if not self.invoice_number and self.date:
             with transaction.atomic():
-                # Guard against changes during atomic section
                 self.full_clean()
                 self.invoice_number = self._generate_invoice_number()
                 super().save(*args, **kwargs)
