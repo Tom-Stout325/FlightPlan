@@ -6,38 +6,24 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Sum, Q
-from django.http import HttpResponseRedirect, HttpResponse
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import ListView, TemplateView
-from formtools.wizard.views import SessionWizardView
-from django.template.loader import render_to_string
-from dal import autocomplete
 
-from .utils import dms_to_decimal, generate_short_description
-from .utils import decimal_to_dms  
+from dal import autocomplete
+from weasyprint import HTML
 
 from equipment.models import Equipment
 from flightlogs.models import FlightLog
 from pilot.models import PilotProfile
+
 from .constants.conops import CONOPS_SECTIONS
-
-logger = logging.getLogger(__name__)
-
 from .forms import TIMEFRAME_CHOICES
-
-from .forms import (
-    WaiverApplicationDescriptionForm, 
-    WaiverPlanningForm
-)
-
-from .models import (
-        ConopsSection, 
-        WaiverApplication, 
-        WaiverPlanning, 
-        Airport
-)
+from .forms import WaiverApplicationDescriptionForm, WaiverPlanningForm
+from .models import ConopsSection, WaiverApplication, WaiverPlanning, Airport
 from .services import (
     ensure_conops_sections,
     generate_conops_section_text,
@@ -45,18 +31,22 @@ from .services import (
     validate_conops_section,
     planning_aircraft_summary,
 )
+from .utils import decimal_to_dms, dms_to_decimal, generate_short_description  # keep imported if used elsewhere
+
+logger = logging.getLogger(__name__)
 
 
-from weasyprint import HTML
+# -----------------------------------------------------------------------------
+# Debug helper (keeps your diagnostics without noisy print() in production)
+# -----------------------------------------------------------------------------
+def _dbg(*args):
+    if getattr(settings, "DEBUG", False):
+        logger.debug("AIRSPACE DEBUG: %s", " ".join(str(a) for a in args))
 
 
-from django.db import transaction 
-
-
-
-
-
-
+# -----------------------------------------------------------------------------
+# Standalone printable checklist
+# -----------------------------------------------------------------------------
 class WaiverEquipmentChecklistView(LoginRequiredMixin, TemplateView):
     """
     Standalone printable checklist of required on-site equipment
@@ -65,10 +55,9 @@ class WaiverEquipmentChecklistView(LoginRequiredMixin, TemplateView):
     template_name = "airspace/waiver_equipment_checklist.html"
 
 
-
-
-
-
+# -----------------------------------------------------------------------------
+# Portal
+# -----------------------------------------------------------------------------
 class AirspacePortalView(LoginRequiredMixin, TemplateView):
     template_name = "airspace/airspace_portal.html"
 
@@ -87,7 +76,13 @@ class AirspacePortalView(LoginRequiredMixin, TemplateView):
         ctx["total_flight_time"] = total_flight_time  # can be None if no flights
 
         # ---- Equipment stats ----
-        ctx["active_drones"] = Equipment.objects.filter(
+        # NOTE: If your Equipment model is user-owned, scope it.
+        # If it is global/shared, remove user=user.
+        equipment_qs = Equipment.objects.all()
+        if hasattr(Equipment, "user_id"):
+            equipment_qs = equipment_qs.filter(user=user)
+
+        ctx["active_drones"] = equipment_qs.filter(
             equipment_type="Drone",
             active=True,
         ).count()
@@ -100,16 +95,14 @@ class AirspacePortalView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-
-
-
 @login_required
 def airspace_helper(request):
     return render(request, "airspace/airspace_guide.html")
 
 
-
-
+# -----------------------------------------------------------------------------
+# Waiver Planning (Create/Edit)
+# -----------------------------------------------------------------------------
 @login_required
 def waiver_planning_new(request):
     """
@@ -125,8 +118,9 @@ def waiver_planning_new(request):
         form = WaiverPlanningForm(request.POST, request.FILES, user=request.user, instance=planning)
 
         is_valid = form.is_valid()
-      
-        print(
+
+        # Keep your DMS debugging (but via logger)
+        _dbg(
             "DMS cleaned:",
             form.cleaned_data.get("lat_deg"),
             form.cleaned_data.get("lat_min"),
@@ -137,75 +131,72 @@ def waiver_planning_new(request):
             form.cleaned_data.get("lon_sec"),
             form.cleaned_data.get("lon_dir"),
         )
-        if not is_valid:
-            print("FORM errors:", form.errors)
 
+        if not is_valid:
+            _dbg("FORM errors:", form.errors)
         else:
             planning_obj = form.save(commit=False)
             planning_obj.user = request.user
 
             # ---------------------------------------------------------
-            # Force-assign BOTH ways (object + _id) so we can isolate why
-            # something is ending up as None.
+            # Preserve your diagnostic dual-assign path (object + _id)
             # ---------------------------------------------------------
-
-            # Assign via cleaned objects (normal path)
             planning_obj.pilot_profile = form.cleaned_data.get("pilot_profile")
             planning_obj.aircraft = form.cleaned_data.get("aircraft")
 
-            # Also assign via raw ids (diagnostic path)
             planning_obj.pilot_profile_id = request.POST.get("pilot_profile") or None
             planning_obj.aircraft_id = request.POST.get("aircraft") or None
+
             planning_obj.save()
             form.save_m2m()
-            
-            
+
             planning_obj.refresh_from_db()
-            print(
+            _dbg(
                 "AFTER SAVE coords:",
                 "location_latitude=", planning_obj.location_latitude,
                 "location_longitude=", planning_obj.location_longitude,
-)
+            )
 
             WaiverApplication.objects.get_or_create(
                 planning=planning_obj,
                 user=request.user,
             )
-            
-
 
             return redirect("airspace:waiver_application_overview", planning_id=planning_obj.id)
 
     else:
         form = WaiverPlanningForm(user=request.user, instance=planning)
-        
-    profiles = PilotProfile.objects.select_related("user").all()
+
+    # HARDEN: This was unscoped in your original (select_related user + all()).
+    profiles = PilotProfile.objects.filter(user=request.user).select_related("user")
 
     pilot_profile_data = []
     for p in profiles:
         seconds = p.flight_time_total() or 0
         hours = round(seconds / 3600, 1) if seconds else ""
-        pilot_profile_data.append({
-            "id": p.id,
-            "license_number": p.license_number or "",
-            "flight_hours": hours,
-        })
+        pilot_profile_data.append(
+            {
+                "id": p.id,
+                "license_number": p.license_number or "",
+                "flight_hours": hours,
+            }
+        )
 
     context = {
         "form": form,
         "planning": planning,
-        "pilot_profile_data": pilot_profile_data, 
+        "pilot_profile_data": pilot_profile_data,
         "planning_mode": "edit" if planning else "new",
     }
-    
-    print("pilot_profile_data type:", type(context["pilot_profile_data"]), "value:", context["pilot_profile_data"][:1])
 
+    _dbg("pilot_profile_data sample:", context["pilot_profile_data"][:1])
 
     return render(request, "airspace/waiver_planning_form.html", context)
 
 
-
-
+# -----------------------------------------------------------------------------
+# Description page uses a slimmed planning form
+# -----------------------------------------------------------------------------
 class WaiverPlanningDescriptionForm(WaiverPlanningForm):
     """
     Slimmed-down version of WaiverPlanningForm used on the Description page.
@@ -221,11 +212,9 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
             "operates_under_107145",
             "mv_waiver_document",
             "mv_waiver_number",
-
             # Purpose of operations
             "purpose_operations",
             "purpose_operations_details",
-
             # Location / venue
             "venue_name",
             "street_address",
@@ -233,7 +222,6 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
             "location_state",
             "zip_code",
             "launch_location",
-
             # Safety / insurance
             "uses_drone_detection",
             "uses_flight_tracking",
@@ -241,7 +229,6 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
             "insurance_provider",
             "insurance_coverage_limit",
             "safety_features_notes",
-
             # Operational profile
             "aircraft_count",
             "flight_duration",
@@ -250,6 +237,7 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
             "estimated_crowd_size",
             "prepared_procedures",
         ]
+
 
 @login_required
 def waiver_application_description(request, pk):
@@ -300,16 +288,15 @@ def waiver_application_description(request, pk):
                         "application": application,
                         "planning_form": planning_form,
                         "app_form": app_form,
-                        "aircraft_ctx": planning_aircraft_summary(planning),
+                        "aircraft_ctx": planning_aircraft_summary(planning, user=request.user),
                     },
                 )
 
             apply_posted_fields_to_instance(planning_form, planning, request.POST, request.FILES)
 
-            # ✅ Use the function that worked before
-            generated_text = generate_waiver_description_text(planning)
+            # HARDEN: service requires user
+            generated_text = generate_waiver_description_text(planning, user=request.user)
 
-            # ✅ Persist to the field your template renders: app_form.description
             application.description = generated_text
             application.save(update_fields=["description"])
 
@@ -328,7 +315,7 @@ def waiver_application_description(request, pk):
     # GET
     planning_form = WaiverPlanningDescriptionForm(instance=planning, user=request.user)
     app_form = WaiverApplicationDescriptionForm(instance=application)
-    aircraft_ctx = planning_aircraft_summary(planning)
+    aircraft_ctx = planning_aircraft_summary(planning, user=request.user)
 
     return render(
         request,
@@ -343,12 +330,9 @@ def waiver_application_description(request, pk):
     )
 
 
-
-
-
-
-
-
+# -----------------------------------------------------------------------------
+# Application overview
+# -----------------------------------------------------------------------------
 @login_required
 def waiver_application_overview(request, planning_id):
     """
@@ -365,7 +349,7 @@ def waiver_application_overview(request, planning_id):
     # ----- Build timeframe label list from stored codes -----
     timeframe_labels = []
     if planning.timeframe:
-        code_to_label = dict(TIMEFRAME_CHOICES)  
+        code_to_label = dict(TIMEFRAME_CHOICES)
         timeframe_labels = [code_to_label.get(code, code) for code in planning.timeframe]
 
     lat_dms = decimal_to_dms(planning.location_latitude, is_lat=True) if planning.location_latitude else None
@@ -387,15 +371,9 @@ def waiver_application_overview(request, planning_id):
     return render(request, "airspace/waiver_application_overview.html", context)
 
 
-
-
-
-
-
-
-
-
-
+# -----------------------------------------------------------------------------
+# Planning list
+# -----------------------------------------------------------------------------
 class WaiverPlanningListView(LoginRequiredMixin, ListView):
     """
     Lists all WaiverPlanning entries for the logged-in user.
@@ -406,14 +384,12 @@ class WaiverPlanningListView(LoginRequiredMixin, ListView):
     paginate_by = 20
 
     def get_queryset(self):
-        return (
-            WaiverPlanning.objects.filter(user=self.request.user).order_by("-created_at")
-        )
+        return WaiverPlanning.objects.filter(user=self.request.user).order_by("-created_at")
 
 
-
-
-
+# -----------------------------------------------------------------------------
+# Planning delete
+# -----------------------------------------------------------------------------
 @login_required
 def waiver_planning_delete(request, pk):
     """
@@ -437,9 +413,9 @@ def waiver_planning_delete(request, pk):
     )
 
 
-
-
-
+# -----------------------------------------------------------------------------
+# CONOPS Overview
+# -----------------------------------------------------------------------------
 @login_required
 def conops_overview(request, pk):
     """
@@ -452,7 +428,7 @@ def conops_overview(request, pk):
         user=request.user,
     )
 
-    ensure_conops_sections(application)
+    ensure_conops_sections(application, user=request.user)
     sections = application.conops_sections.order_by("id")
 
     return render(
@@ -466,8 +442,9 @@ def conops_overview(request, pk):
     )
 
 
-
-
+# -----------------------------------------------------------------------------
+# CONOPS Section Edit
+# -----------------------------------------------------------------------------
 @login_required
 def conops_section_edit(request, pk, section_key):
     application = get_object_or_404(
@@ -476,10 +453,13 @@ def conops_section_edit(request, pk, section_key):
         user=request.user,
     )
 
+    # If you have ConopsSection.user, keep user=request.user.
+    # If not yet migrated, comment out `user=request.user` temporarily.
     section = get_object_or_404(
         ConopsSection,
         application=application,
         section_key=section_key,
+        user=request.user,
     )
 
     if request.method == "POST":
@@ -504,6 +484,7 @@ def conops_section_edit(request, pk, section_key):
                 text = generate_conops_section_text(
                     application=application,
                     section=section,
+                    user=request.user,
                     model=model,
                 )
 
@@ -514,7 +495,7 @@ def conops_section_edit(request, pk, section_key):
                 section.generated_at = timezone.now()
                 section.save(update_fields=["content", "generated_at"])
 
-                validate_conops_section(section)
+                validate_conops_section(section, user=request.user)
 
                 messages.success(request, f"{section.title} generated.")
             except Exception as exc:
@@ -533,7 +514,7 @@ def conops_section_edit(request, pk, section_key):
             section.content = request.POST.get("content", "")
             section.save(update_fields=["content"])
 
-            validate_conops_section(section)
+            validate_conops_section(section, user=request.user)
 
             messages.success(request, "Section saved.")
             return redirect(
@@ -552,9 +533,9 @@ def conops_section_edit(request, pk, section_key):
     )
 
 
-
-
-
+# -----------------------------------------------------------------------------
+# CONOPS Review (Mobile accordion)
+# -----------------------------------------------------------------------------
 @login_required
 def conops_review(request, application_id):
     """
@@ -571,11 +552,13 @@ def conops_review(request, application_id):
         user=request.user,
     )
 
-    ensure_conops_sections(application)
+    ensure_conops_sections(application, user=request.user)
 
     AUTO_ONLY = {"cover_page", "compliance_statement", "appendices"}
 
     # Pull all sections once
+    # If you have ConopsSection.user, you may also filter by user to be extra strict:
+    # sections_qs = application.conops_sections.filter(user=request.user)
     sections_qs = application.conops_sections.all()
     sections_by_key = {s.section_key: s for s in sections_qs}
 
@@ -584,7 +567,7 @@ def conops_review(request, application_id):
         Normalizes validate_conops_section to:
           (ok: bool, missing: list[str], fix_url_name: str|None)
         """
-        res = validate_conops_section(section_obj)
+        res = validate_conops_section(section_obj, user=request.user)
 
         if isinstance(res, dict):
             return bool(res.get("ok")), list(res.get("missing") or []), res.get("fix_url")
@@ -601,8 +584,8 @@ def conops_review(request, application_id):
     # POST actions
     # -------------------------
     if request.method == "POST":
-        print("CONOPS POST action =", request.POST.get("action"))   
-        print("CONOPS POST keys =", list(request.POST.keys())[:30], "... total =", len(request.POST.keys()))
+        _dbg("CONOPS POST action =", request.POST.get("action"))
+        _dbg("CONOPS POST keys sample =", list(request.POST.keys())[:30], "... total =", len(request.POST.keys()))
 
         action = request.POST.get("action", "save")
 
@@ -614,7 +597,6 @@ def conops_review(request, application_id):
                 if sec.locked != lock_value:
                     sec.locked = lock_value
                     sec.save(update_fields=["locked"])
-  
 
             messages.success(
                 request,
@@ -625,8 +607,7 @@ def conops_review(request, application_id):
         # --- Regenerate unlocked sections ---
         if action == "regenerate":
             regenerated = 0
-            print("CONOPS regenerate: starting")
-
+            _dbg("CONOPS regenerate: starting")
 
             for section_key, _title in CONOPS_SECTIONS:
                 sec = sections_by_key.get(section_key)
@@ -647,6 +628,7 @@ def conops_review(request, application_id):
                     generate_conops_section_text(
                         application=application,
                         section=sec,
+                        user=request.user,
                         model=model,
                     )
                     regenerated += 1
@@ -738,9 +720,11 @@ def conops_review(request, application_id):
 
     all_ready = bool(sections) and all(s["ok"] for s in sections)
     all_locked = bool(sections) and all(s["obj"].locked for s in sections)
-    can_export = all_ready and all_locked  
-    aircraft_ctx = planning_aircraft_summary
-    
+    can_export = all_ready and all_locked
+
+    # FIX: your original assigned the function, not its result.
+    aircraft_ctx = planning_aircraft_summary(application.planning, user=request.user)
+
     return render(
         request,
         "airspace/conops_review.html",
@@ -755,23 +739,22 @@ def conops_review(request, application_id):
             "all_ready": all_ready,
             "all_locked": all_locked,
             "can_export": can_export,
-            "aircraft_ctx": aircraft_ctx
+            "aircraft_ctx": aircraft_ctx,
         },
     )
 
 
-
-
-
-
-def get_conops_sections(application):
+# -----------------------------------------------------------------------------
+# PDF Export helpers (preserved)
+# -----------------------------------------------------------------------------
+def get_conops_sections(application, *, user):
     """
     Build export-ready sections in canonical order using:
       - CONOPS_SECTIONS (order + titles)
       - application.conops_sections (DB content + locked)
     Returns list of dicts compatible with conops_pdf.html
     """
-    ensure_conops_sections(application)
+    ensure_conops_sections(application, user=user)
 
     sections_qs = application.conops_sections.all()
     sections_by_key = {s.section_key: s for s in sections_qs}
@@ -782,15 +765,17 @@ def get_conops_sections(application):
         if not sec:
             continue
 
-        out.append({
-            "key": section_key,
-            "title": title,
-            "locked": bool(sec.locked),
-            "ready": bool(_safe_ok(validate_conops_section(sec), sec)),
-            "template": f"airspace/pdf/sections/{section_key}.html",
-            "obj": sec,               
-            "content": sec.content or "",
-        })
+        out.append(
+            {
+                "key": section_key,
+                "title": title,
+                "locked": bool(sec.locked),
+                "ready": bool(_safe_ok(validate_conops_section(sec, user=user), sec)),
+                "template": f"airspace/pdf/sections/{section_key}.html",
+                "obj": sec,
+                "content": sec.content or "",
+            }
+        )
 
     return out
 
@@ -810,14 +795,11 @@ def _safe_ok(validation_result, section_obj):
     return bool(getattr(section_obj, "is_complete", True))
 
 
-
-
-
 @login_required
 def conops_pdf_export(request, application_id):
     application = get_object_or_404(WaiverApplication, pk=application_id, user=request.user)
 
-    sections = get_conops_sections(application)
+    sections = get_conops_sections(application, user=request.user)
 
     export_sections = sections
 
@@ -841,7 +823,9 @@ def conops_pdf_export(request, application_id):
     return response
 
 
-
+# -----------------------------------------------------------------------------
+# Airport autocomplete (kept as original behavior)
+# -----------------------------------------------------------------------------
 class AirportAutocomplete(autocomplete.Select2QuerySetView):
     def get_queryset(self):
         if not self.request.user.is_authenticated:
@@ -852,10 +836,10 @@ class AirportAutocomplete(autocomplete.Select2QuerySetView):
         if self.q:
             q = self.q.strip()
             qs = qs.filter(
-                Q(icao__icontains=q) |
-                Q(name__icontains=q) |
-                Q(city__icontains=q) |
-                Q(state__icontains=q)
+                Q(icao__icontains=q)
+                | Q(name__icontains=q)
+                | Q(city__icontains=q)
+                | Q(state__icontains=q)
             )
 
         return qs.order_by("icao")

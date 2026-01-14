@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Optional, List, Dict, Any
 
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 import re
 from openai import OpenAI
@@ -15,8 +16,35 @@ from .forms import (
     PURPOSE_OPERATIONS_CHOICES,
     GROUND_ENVIRONMENT_CHOICES,
     PREPARED_PROCEDURES_CHOICES,
-    GROUND_ENVIRONMENT_CHOICES,
 )
+
+
+# ==========================================================
+# USER-SCOPING GUARDS
+# ==========================================================
+
+def _assert_owned_planning(planning: Any, user: Any) -> None:
+    if planning is None or user is None:
+        raise PermissionDenied("Unauthorized.")
+    if getattr(planning, "user_id", None) != getattr(user, "id", None):
+        raise PermissionDenied("You do not have permission to access this waiver planning record.")
+
+
+def _assert_owned_application(application: Any, user: Any) -> None:
+    if application is None or user is None:
+        raise PermissionDenied("Unauthorized.")
+    if getattr(application, "user_id", None) != getattr(user, "id", None):
+        raise PermissionDenied("You do not have permission to access this waiver application.")
+
+
+def _assert_owned_section(section: Any, user: Any) -> None:
+    if section is None or user is None:
+        raise PermissionDenied("Unauthorized.")
+    app = getattr(section, "application", None)
+    if app is None:
+        raise PermissionDenied("Unauthorized.")
+    if getattr(app, "user_id", None) != getattr(user, "id", None):
+        raise PermissionDenied("You do not have permission to access this CONOPS section.")
 
 
 # ==========================================================
@@ -71,11 +99,13 @@ def _has_aircraft(planning: Any, section: Any) -> bool:
         "drone:",
     ))
 
+
 def _has_flight_hours(planning: Any, section: Any) -> bool:
     hours = getattr(planning, "pilot_flight_hours", None)
     if hours not in (None, ""):
         return True
     return "flight hour" in ((getattr(section, "content", "") or "").lower())
+
 
 def _has_pilot_name(planning: Any, section: Any) -> bool:
     """
@@ -95,6 +125,7 @@ def _has_pilot_name(planning: Any, section: Any) -> bool:
         r"RPIC\s*:\s*\S+",
     ]
     return any(re.search(p, text, flags=re.IGNORECASE) for p in patterns)
+
 
 def _line(label: str, value: Any) -> str:
     """
@@ -182,7 +213,9 @@ Paragraph 2: Safety posture and waiver dependency.
 """.strip()
 
 
-def generate_waiver_description_text(planning, *, model=None) -> str:
+def generate_waiver_description_text(planning, *, user, model=None) -> str:
+    _assert_owned_planning(planning, user)
+
     client = get_openai_client()
     prompt = build_waiver_description_prompt(planning)
 
@@ -203,12 +236,18 @@ def generate_waiver_description_text(planning, *, model=None) -> str:
 # CONOPS INITIALIZATION
 # ==========================================================
 
-def ensure_conops_sections(application) -> None:
+def ensure_conops_sections(application, *, user) -> None:
+    _assert_owned_application(application, user)
+
     existing = set(application.conops_sections.values_list("section_key", flat=True))
 
+    # IMPORTANT:
+    # This assumes ConopsSection has a `user` FK and your models enforce alignment to application.user.
+    # If you haven't added ConopsSection.user yet, remove the user=... line temporarily.
     new_sections = [
         ConopsSection(
             application=application,
+            user=application.user,
             section_key=key,
             title=title,
         )
@@ -232,14 +271,12 @@ def build_conops_section_prompt(*, application, planning, section) -> str:
     using _line() blocks so the generated CONOPS stays clean.
     """
 
-
     if section.section_key == "cover_page":
         aircraft = _clean(planning.aircraft_display())
         pilot_name = _clean(planning.pilot_display_name())
         pilot_cert = _clean(planning.pilot_cert_display())
         pilot_hours = getattr(planning, "pilot_flight_hours", None)
 
-        # If you want these always present even when missing, change _line -> _line_or_tbd
         cover_block = (
             _line("Unmanned Aircraft System", aircraft)
             + _line("Remote Pilot in Command", pilot_name)
@@ -265,21 +302,18 @@ def build_conops_section_prompt(*, application, planning, section) -> str:
         ).strip()
 
         return f"""
-    You are generating the CONOPS Cover Page section.
+You are generating the CONOPS Cover Page section.
 
-    OUTPUT RULES (MUST FOLLOW):
-    - Output ONLY the label lines provided in PLANNING DATA.
-    - Do NOT add paragraphs, explanations, or extra sentences.
-    - Do NOT reword labels.
-    - Do NOT invent or infer missing values.
-    - If a line is not present in PLANNING DATA, omit it.
+OUTPUT RULES (MUST FOLLOW):
+- Output ONLY the label lines provided in PLANNING DATA.
+- Do NOT add paragraphs, explanations, or extra sentences.
+- Do NOT reword labels.
+- Do NOT invent or infer missing values.
+- If a line is not present in PLANNING DATA, omit it.
 
-    PLANNING DATA:
-    {cover_block}
-    """.strip()
-
-
-
+PLANNING DATA:
+{cover_block}
+""".strip()
 
     # ---- Choice label helpers ----
     timeframe_labels = _labels_from_choices(planning.timeframe_codes(), TIMEFRAME_CHOICES)
@@ -370,26 +404,29 @@ SPECIAL INSTRUCTIONS FOR THIS SECTION:
     # Build "only-if-present" blocks
     # ==========================================================
 
-    # Core operation info
     operation_block = (
         _line("Operation Title", _clean(getattr(planning, "operation_title", "")))
-        + _line("Dates", f"{getattr(planning, 'start_date', None)} to {getattr(planning, 'end_date', None) or getattr(planning, 'start_date', None)}"
-                if getattr(planning, "start_date", None) else "")
+        + _line(
+            "Dates",
+            f"{getattr(planning, 'start_date', None)} to {getattr(planning, 'end_date', None) or getattr(planning, 'start_date', None)}"
+            if getattr(planning, "start_date", None) else ""
+        )
         + _line("Timeframes", ", ".join(timeframe_labels) if timeframe_labels else "")
         + _line("Frequency", _clean(getattr(planning, "frequency", "")))
         + _line("Local Time Zone", _clean(getattr(planning, "local_time_zone", "")))
         + _line("Max Altitude AGL", getattr(planning, "proposed_agl", None))
     )
 
-    # Location / airspace
     location_block = (
         _line("Venue Name", _clean(getattr(planning, "venue_name", "")))
         + _line("Address", address)
         + _line("Launch Location", _clean(getattr(planning, "launch_location", "")))
-        + _line("Latitude/Longitude",
-                f"{getattr(planning, 'location_latitude', None)}, {getattr(planning, 'location_longitude', None)}"
-                if (getattr(planning, "location_latitude", None) is not None and getattr(planning, "location_longitude", None) is not None)
-                else "")
+        + _line(
+            "Latitude/Longitude",
+            f"{getattr(planning, 'location_latitude', None)}, {getattr(planning, 'location_longitude', None)}"
+            if (getattr(planning, "location_latitude", None) is not None and getattr(planning, "location_longitude", None) is not None)
+            else ""
+        )
         + _line("Operational Radius", _clean(getattr(planning, "location_radius", "")))
         + _line("Airspace Class", _clean(getattr(planning, "airspace_class", "")))
         + _line("Nearest Airport (ICAO)", airport_icao)
@@ -398,7 +435,6 @@ SPECIAL INSTRUCTIONS FOR THIS SECTION:
         + _line("Responsible ARTCC", f"{artcc_name} ({artcc_id})" if (artcc_name or artcc_id) else "")
     )
 
-    # Aircraft
     aircraft = _clean(planning.aircraft_display())
     aircraft_count = getattr(planning, "aircraft_count", None)
     aircraft_block = (
@@ -408,50 +444,58 @@ SPECIAL INSTRUCTIONS FOR THIS SECTION:
         + _line("Flights Per Day", getattr(planning, "flights_per_day", None))
     )
 
-    # Pilot
     pilot_name = _clean(planning.pilot_display_name())
     pilot_cert = _clean(planning.pilot_cert_display())
     pilot_hours = getattr(planning, "pilot_flight_hours", None)
 
-    # Use "Remote Pilot in Command" label for cover-page friendliness
     pilot_name_label = "Remote Pilot in Command" if section.section_key == "cover_page" else "RPIC Name"
 
     pilot_block = (
         _line(pilot_name_label, pilot_name)
         + _line("RPIC Certificate", pilot_cert)
         + _line("RPIC Flight Hours", pilot_hours)
-        + _line("Visual Observer Used", _bool_text(getattr(planning, "has_visual_observer", False))
-                if getattr(planning, "has_visual_observer", None) in (True, False) else "")
+        + _line(
+            "Visual Observer Used",
+            _bool_text(getattr(planning, "has_visual_observer", False))
+            if getattr(planning, "has_visual_observer", None) in (True, False) else ""
+        )
     )
 
-    # Ops profile / safety
     ops_block = (
         _line("Purpose of Operations", ", ".join(purpose_labels) if purpose_labels else "")
         + _line("Purpose Details", _clean(getattr(planning, "purpose_operations_details", "")))
         + _line("Ground Environment", ", ".join(ground_labels) if ground_labels else "")
         + _line("Ground Environment Other", _clean(getattr(planning, "ground_environment_other", "")))
         + _line("Estimated Crowd Size", _clean(getattr(planning, "estimated_crowd_size", "")))
-        + _line("Drone Detection Used", _bool_text(getattr(planning, "uses_drone_detection", False))
-                if getattr(planning, "uses_drone_detection", None) in (True, False) else "")
-        + _line("Flight Tracking Used", _bool_text(getattr(planning, "uses_flight_tracking", False))
-                if getattr(planning, "uses_flight_tracking", None) in (True, False) else "")
+        + _line(
+            "Drone Detection Used",
+            _bool_text(getattr(planning, "uses_drone_detection", False))
+            if getattr(planning, "uses_drone_detection", None) in (True, False) else ""
+        )
+        + _line(
+            "Flight Tracking Used",
+            _bool_text(getattr(planning, "uses_flight_tracking", False))
+            if getattr(planning, "uses_flight_tracking", None) in (True, False) else ""
+        )
         + _line("Safety Features Notes", _clean(getattr(planning, "safety_features_notes", "")))
         + _line("Prepared Procedures", ", ".join(procedure_labels) if procedure_labels else "")
     )
 
-    # Waivers
     waiver_block = (
-        _line("Operating under §107.39 waiver", _bool_text(getattr(planning, "operates_under_10739", False))
-              if getattr(planning, "operates_under_10739", None) in (True, False) else "")
+        _line(
+            "Operating under §107.39 waiver",
+            _bool_text(getattr(planning, "operates_under_10739", False))
+            if getattr(planning, "operates_under_10739", None) in (True, False) else ""
+        )
         + _line("107.39 Waiver Number", _clean(getattr(planning, "oop_waiver_number", "")))
-        + _line("Operating under §107.145 waiver", _bool_text(getattr(planning, "operates_under_107145", False))
-              if getattr(planning, "operates_under_107145", None) in (True, False) else "")
+        + _line(
+            "Operating under §107.145 waiver",
+            _bool_text(getattr(planning, "operates_under_107145", False))
+            if getattr(planning, "operates_under_107145", None) in (True, False) else ""
+        )
         + _line("107.145 Waiver Number", _clean(getattr(planning, "mv_waiver_number", "")))
     )
 
-    # ==========================================================
-    # Final prompt
-    # ==========================================================
     return f"""
 You are writing a professional FAA Concept of Operations (CONOPS) section.
 
@@ -479,10 +523,6 @@ WRITE THE SECTION BODY TEXT ONLY.
 """.strip()
 
 
-
-
-
-
 # ==========================================================
 # CONOPS VALIDATION
 # ==========================================================
@@ -505,17 +545,15 @@ MIN_WORDS_BY_SECTION = {
 }
 
 
-
-
-
-
-def validate_conops_section(section) -> dict:
+def validate_conops_section(section, *, user) -> dict:
     """
     Data-driven section validation.
 
     Returns:
       {"ok": bool, "missing": [str], "fix_url": "airspace:waiver_planning_new"}
     """
+    _assert_owned_section(section, user)
+
     application = section.application
     planning = application.planning
     key = section.section_key
@@ -547,7 +585,6 @@ def validate_conops_section(section) -> dict:
             ),
         )
         _require("Pilot name", _has_pilot_name(planning, section))
-
         _require("Pilot certificate number", _has_text(planning.pilot_cert_display()))
         _require("Approximate UAS flight hours", _has_flight_hours(planning, section))
         _require("Aircraft", _has_aircraft(planning, section))
@@ -581,7 +618,6 @@ def validate_conops_section(section) -> dict:
 
     elif key == "crew_roles_responsibilities":
         _require("Pilot name", _has_pilot_name(planning, section))
-
         _require("Pilot certificate number", _has_text(planning.pilot_cert_display()))
         _require("Pilot flight hours", _has_flight_hours(planning, section))
         _require("VO usage selected (yes/no)", getattr(planning, "has_visual_observer", None) in (True, False))
@@ -669,7 +705,10 @@ def validate_conops_section(section) -> dict:
     }
 
 
-def generate_conops_section_text(*, application, section, model=None) -> str:
+def generate_conops_section_text(*, application, section, user, model=None) -> str:
+    _assert_owned_application(application, user)
+    _assert_owned_section(section, user)
+
     planning = application.planning
     client = get_openai_client()
 
@@ -694,14 +733,16 @@ def generate_conops_section_text(*, application, section, model=None) -> str:
     section.generated_at = timezone.now()
     section.save(update_fields=["content", "generated_at", "updated_at"])
 
-    validate_conops_section(section)
+    validate_conops_section(section, user=user)
     return result
 
 
-def planning_aircraft_summary(planning) -> dict:
+def planning_aircraft_summary(planning, *, user) -> dict:
     """
     Returns normalized aircraft strings for narrative sections.
     """
+    _assert_owned_planning(planning, user)
+
     primary = ""
     if getattr(planning, "aircraft", None):
         primary = str(planning.aircraft).strip()
