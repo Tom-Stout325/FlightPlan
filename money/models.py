@@ -551,11 +551,9 @@ class Miles(OwnedModelMixin):
         self._assert_owned_fk("invoice_v2", self.invoice_v2)
         self._assert_owned_fk("vehicle", self.vehicle)
 
-        # Keep invoice_number aligned when invoice_v2 is selected
         if self.invoice_v2 and self.invoice_v2.invoice_number and _is_blank(self.invoice_number):
             self.invoice_number = self.invoice_v2.invoice_number
 
-        # Validate + compute total
         if self.begin is not None and self.end is not None:
             if self.end < self.begin:
                 raise ValidationError({"end": "End mileage must be >= begin mileage."})
@@ -683,76 +681,50 @@ class CompanyProfile(models.Model):
         (VEHICLE_EXPENSE_METHOD_ACTUAL, "Actual vehicle expenses"),
     ]
 
-    slug = models.SlugField(unique=True, help_text="Short identifier (e.g., 'airborne-images', 'skyguy').")
-    legal_name = models.CharField(max_length=255, help_text="Registered legal name used on invoices.")
-    display_name = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Trade name; falls back to legal name if blank.",
-    )
+    slug                     = models.SlugField(unique=True, help_text="Short identifier (e.g., 'airborne-images', 'skyguy').")
+    legal_name               = models.CharField(max_length=255, help_text="Registered legal name used on invoices.")
+    display_name             = models.CharField(max_length=255, blank=True, help_text="Trade name; falls back to legal name if blank.",)
+    logo                     = models.ImageField(upload_to=logo_upload_path, validators=[validate_image_extension_no_svg], help_text="Primary logo used in invoice header.",)
+    logo_light               = models.ImageField(upload_to=logo_upload_path, blank=True, null=True, validators=[validate_image_extension_no_svg], help_text="Optional light-mode logo variation.",)
+    logo_dark                = models.ImageField(upload_to=logo_upload_path, blank=True, null=True, validators=[validate_image_extension_no_svg], help_text="Optional dark-mode logo variation.",)
+    logo_alt_text            = models.CharField(max_length=255, blank=True)
+    brand_color_primary      = models.CharField(max_length=7, blank=True, validators=[HEX_COLOR_VALIDATOR])
+    brand_color_secondary    = models.CharField(max_length=7, blank=True, validators=[HEX_COLOR_VALIDATOR])
+    website                  = models.URLField(blank=True)
 
-    logo = models.ImageField(
-        upload_to=logo_upload_path,
-        validators=[validate_image_extension_no_svg],
-        help_text="Primary logo used in invoice header.",
-    )
-    logo_light = models.ImageField(
-        upload_to=logo_upload_path,
-        blank=True,
-        null=True,
-        validators=[validate_image_extension_no_svg],
-        help_text="Optional light-mode logo variation.",
-    )
-    logo_dark = models.ImageField(
-        upload_to=logo_upload_path,
-        blank=True,
-        null=True,
-        validators=[validate_image_extension_no_svg],
-        help_text="Optional dark-mode logo variation.",
-    )
-    logo_alt_text = models.CharField(max_length=255, blank=True)
-    brand_color_primary = models.CharField(max_length=7, blank=True, validators=[HEX_COLOR_VALIDATOR])
-    brand_color_secondary = models.CharField(max_length=7, blank=True, validators=[HEX_COLOR_VALIDATOR])
-    website = models.URLField(blank=True)
+    address_line1            = models.CharField(max_length=255)
+    address_line2            = models.CharField(max_length=255, blank=True)
+    city                     = models.CharField(max_length=100)
+    state_province           = models.CharField(max_length=100)
+    postal_code              = models.CharField(max_length=20)
+    country                  = models.CharField(max_length=100, default="United States")
+    main_phone               = models.CharField(max_length=50, blank=True)
+    support_email            = models.EmailField(blank=True)
+    invoice_reply_to_email   = models.EmailField(blank=True)
 
-    address_line1 = models.CharField(max_length=255)
-    address_line2 = models.CharField(max_length=255, blank=True)
-    city = models.CharField(max_length=100)
-    state_province = models.CharField(max_length=100)
-    postal_code = models.CharField(max_length=20)
-    country = models.CharField(max_length=100, default="United States")
-    main_phone = models.CharField(max_length=50, blank=True)
-    support_email = models.EmailField(blank=True)
-    invoice_reply_to_email = models.EmailField(blank=True)
+    billing_contact_name     = models.CharField(max_length=255, blank=True)
+    billing_contact_email    = models.EmailField(blank=True)
 
-    billing_contact_name = models.CharField(max_length=255, blank=True)
-    billing_contact_email = models.EmailField(blank=True)
+    tax_id_ein               = models.CharField(max_length=64, blank=True, help_text="EIN / Tax ID displayed on invoices.")
+    vehicle_expense_method   = models.CharField(max_length=20, choices=VEHICLE_EXPENSE_METHOD_CHOICES, default=VEHICLE_EXPENSE_METHOD_MILEAGE, help_text="Tax reporting method for vehicle costs.",)
 
-    tax_id_ein = models.CharField(max_length=64, blank=True, help_text="EIN / Tax ID displayed on invoices.")
-    vehicle_expense_method = models.CharField(
-        max_length=20,
-        choices=VEHICLE_EXPENSE_METHOD_CHOICES,
-        default=VEHICLE_EXPENSE_METHOD_MILEAGE,
-        help_text="Tax reporting method for vehicle costs.",
-    )
+    pay_to_name              = models.CharField(max_length=255, blank=True)
+    remittance_address       = models.TextField(blank=True)
 
-    pay_to_name = models.CharField(max_length=255, blank=True)
-    remittance_address = models.TextField(blank=True)
+    default_terms            = models.CharField(max_length=100, blank=True, help_text='e.g., "Net 30".')
+    default_net_days         = models.PositiveIntegerField(default=30)
+    default_late_fee_policy  = models.CharField(max_length=255, blank=True)
+    default_footer_text      = models.TextField(blank=True)
 
-    default_terms = models.CharField(max_length=100, blank=True, help_text='e.g., "Net 30".')
-    default_net_days = models.PositiveIntegerField(default=30)
-    default_late_fee_policy = models.CharField(max_length=255, blank=True)
-    default_footer_text = models.TextField(blank=True)
-
-    pdf_header_layout = models.CharField(max_length=20, choices=PDF_HEADER_LAYOUT_CHOICES, default="inline-left")
+    pdf_header_layout        = models.CharField(max_length=20, choices=PDF_HEADER_LAYOUT_CHOICES, default="inline-left")
     header_logo_max_width_px = models.PositiveIntegerField(default=320)
-    default_currency = models.CharField(max_length=3, default="USD")
-    default_locale = models.CharField(max_length=10, default="en_US")
-    timezone = models.CharField(max_length=64, default="America/Indiana/Indianapolis")
+    default_currency         = models.CharField(max_length=3, default="USD")
+    default_locale           = models.CharField(max_length=10, default="en_US")
+    timezone                 = models.CharField(max_length=64, default="America/Indiana/Indianapolis")
 
-    is_active = models.BooleanField(default=False, help_text="Only one active profile allowed per deployment.")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    is_active                = models.BooleanField(default=False, help_text="Only one active profile allowed per deployment.")
+    created_at               = models.DateTimeField(auto_now_add=True)
+    updated_at               = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-is_active", "slug"]
@@ -877,7 +849,6 @@ class InvoiceV2(OwnedModelMixin):
             models.Index(fields=["user", "event", "date"]),
             models.Index(fields=["user", "status"]),
         ]
-
 
     def __str__(self):
         if self.invoice_number:
@@ -1156,12 +1127,12 @@ class InvoiceV2(OwnedModelMixin):
 
 
 class InvoiceItemV2(OwnedModelMixin):
-    invoice = models.ForeignKey(InvoiceV2, on_delete=models.CASCADE, related_name="items")
+    invoice     = models.ForeignKey(InvoiceV2, on_delete=models.CASCADE, related_name="items")
     description = models.CharField(max_length=255)
-    qty = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("1.00"), help_text="Quantity (hours, days, units, etc.).",)
-    price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Unit price.")
-    sub_cat = models.ForeignKey("SubCategory", on_delete=models.PROTECT, null=True, blank=True, related_name="invoice_items_v2", help_text="Choose the sub-category; category will be set automatically.",)
-    category = models.ForeignKey("Category", on_delete=models.PROTECT, null=True, blank=True, related_name="invoice_items_v2", editable=False, help_text="Set automatically from sub-category.",)
+    qty         = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("1.00"), help_text="Quantity (hours, days, units, etc.).",)
+    price       = models.DecimalField(max_digits=10, decimal_places=2, help_text="Unit price.")
+    sub_cat     = models.ForeignKey("SubCategory", on_delete=models.PROTECT, null=True, blank=True, related_name="invoice_items_v2", help_text="Choose the sub-category; category will be set automatically.",)
+    category    = models.ForeignKey("Category", on_delete=models.PROTECT, null=True, blank=True, related_name="invoice_items_v2", editable=False, help_text="Set automatically from sub-category.",)
 
     class Meta:
         ordering = ["pk"]

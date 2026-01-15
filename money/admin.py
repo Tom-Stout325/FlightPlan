@@ -1,34 +1,128 @@
+# money/admin.py
+
+from __future__ import annotations
+
 from django.contrib import admin, messages
+from django.core.exceptions import FieldDoesNotExist
 from django.utils.safestring import mark_safe
 
 from .models import (
+    Category,
     Client,
     CompanyProfile,
-    InvoiceV2,
+    Event,
     InvoiceItemV2,
+    InvoiceV2,
     MileageRate,
     Miles,
-    Vehicle,
-    VehicleYear,
-    VehicleExpense,
     RecurringTransaction,
     Service,
-    Team,
-    Category,
     SubCategory,
+    Team,
     Transaction,
-    Event,
+    Vehicle,
+    VehicleExpense,
+    VehicleYear,
 )
 
 
-# -----------------------------
-# Core money app admin classes
-# -----------------------------
+# ------------------------------------------------------------------------------
+# Shared helpers / mixins
+# ------------------------------------------------------------------------------
 
+class UserScopedAdminMixin:
+    """
+    Ensures:
+    - list_display includes a "User" column (via user_display)
+    - non-superusers only see their own rows (when we can infer ownership)
+    """
+
+    # If a model does NOT have `user`, you can set a relation path here (e.g. "invoice__user")
+    owner_rel: str | None = None
+
+    def _model_has_field(self, field_name: str) -> bool:
+        try:
+            self.model._meta.get_field(field_name)
+            return True
+        except FieldDoesNotExist:
+            return False
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+
+        if request.user.is_superuser:
+            return qs
+
+        # Direct user FK
+        if self._model_has_field("user"):
+            return qs.filter(user=request.user)
+
+        # Related-owner path
+        if self.owner_rel:
+            return qs.filter(**{self.owner_rel: request.user})
+
+        # No scoping possible (e.g. truly global config)
+        return qs
+
+    @admin.display(description="User")
+    def user_display(self, obj):
+        """
+        Best-effort display of ownership:
+        - obj.user if present
+        - common related patterns (invoice.user, vehicle.user, client.user, event.user)
+        - if no user exists, show em dash
+        """
+        # direct
+        u = getattr(obj, "user", None)
+        if u:
+            return u
+
+        # common relations
+        for attr in ("invoice", "vehicle", "client", "event"):
+            rel = getattr(obj, attr, None)
+            if rel is not None:
+                rel_user = getattr(rel, "user", None)
+                if rel_user:
+                    return rel_user
+
+        return "—"
+
+
+class UserScopedFKMixin(UserScopedAdminMixin):
+    """
+    Additionally scopes common FK dropdowns by request.user for non-superusers.
+    Override `fk_user_map` to add/adjust field->queryset mapping.
+    """
+
+    fk_user_map: dict[str, tuple[object, dict]] = {}
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if request.user.is_superuser:
+            return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+        if db_field.name in self.fk_user_map:
+            model_cls, extra_filters = self.fk_user_map[db_field.name]
+            base = {"user": request.user}
+            base.update(extra_filters or {})
+            kwargs["queryset"] = model_cls.objects.filter(**base)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+# ------------------------------------------------------------------------------
+# Transactions
+# ------------------------------------------------------------------------------
 
 @admin.register(Transaction)
-class TransactionAdmin(admin.ModelAdmin):
+class TransactionAdmin(UserScopedFKMixin, admin.ModelAdmin):
+    fk_user_map = {
+        "category": (Category, {}),
+        "sub_cat": (SubCategory, {}),
+        "event": (Event, {}),
+        "team": (Team, {}),
+    }
+
     list_display = (
+        "user_display",
         "date",
         "trans_type",
         "category",
@@ -40,7 +134,7 @@ class TransactionAdmin(admin.ModelAdmin):
         "deductible_amount_display",
     )
     list_filter = ("trans_type", "category", "sub_cat", "event", "date")
-    search_fields = ("transaction", "invoice_number")
+    search_fields = ("transaction", "invoice_number", "user__username", "user__email")
     date_hierarchy = "date"
     ordering = ("-date",)
 
@@ -52,70 +146,83 @@ class TransactionAdmin(admin.ModelAdmin):
         """
         Admin UX polish:
         - If a category is selected (on add/edit), only show subcategories in that category.
+        - Still user-scoped for non-superusers.
         """
         if db_field.name == "sub_cat":
-            # Try to pull category from:
-            # 1) POST (when form submits/changes)
-            # 2) GET (when adding with params)
             category_id = request.POST.get("category") or request.GET.get("category")
 
+            qs = SubCategory.objects.all()
+            if not request.user.is_superuser and hasattr(SubCategory, "user"):
+                qs = qs.filter(user=request.user)
+
             if category_id and str(category_id).isdigit():
-                kwargs["queryset"] = SubCategory.objects.filter(category_id=int(category_id)).order_by("sub_cat")
+                qs = qs.filter(category_id=int(category_id)).order_by("sub_cat")
             else:
-                kwargs["queryset"] = SubCategory.objects.all().order_by("category__category", "sub_cat")
+                qs = qs.order_by("category__category", "sub_cat")
+
+            kwargs["queryset"] = qs
 
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
-class TeamAdmin(admin.ModelAdmin):
-    list_display = ["name", "id"]
-    search_fields = ("name",)
+
+# ------------------------------------------------------------------------------
+# Lookup models
+# ------------------------------------------------------------------------------
+
+@admin.register(Team)
+class TeamAdmin(UserScopedAdminMixin, admin.ModelAdmin):
+    list_display = ("user_display", "name", "id")
+    search_fields = ("name", "user__username", "user__email")
+    ordering = ("name",)
 
 
-class CategoryAdmin(admin.ModelAdmin):
-    list_display = ["category", "id", "schedule_c_line"]
-    search_fields = ("category",)
+@admin.register(Service)
+class ServiceAdmin(UserScopedAdminMixin, admin.ModelAdmin):
+    list_display = ("user_display", "service", "id")
+    search_fields = ("service", "user__username", "user__email")
+    ordering = ("service",)
+
+
+@admin.register(Event)
+class EventAdmin(UserScopedAdminMixin, admin.ModelAdmin):
+    list_display = ("user_display", "id", "title", "event_year", "event_type")
+    search_fields = ("title", "user__username", "user__email")
+    list_filter = ("event_year", "event_type")
+    ordering = ("-event_year", "title")
+
+
+@admin.register(Category)
+class CategoryAdmin(UserScopedAdminMixin, admin.ModelAdmin):
+    list_display = ("user_display", "category", "category_type", "schedule_c_line", "id")
+    list_filter = ("category_type", "schedule_c_line")
+    search_fields = ("category", "user__username", "user__email")
+    ordering = ("category_type", "category")
 
 
 @admin.register(SubCategory)
-class SubCategoryAdmin(admin.ModelAdmin):
-    list_display = ("sub_cat", "category", "include_in_tax_reports")
-    list_filter = ("include_in_tax_reports", "category")
-    search_fields = ("sub_cat", "slug")
+class SubCategoryAdmin(UserScopedAdminMixin, admin.ModelAdmin):
+    list_display = ("user_display", "sub_cat", "category", "include_in_tax_reports", "schedule_c_line")
+    list_filter = ("include_in_tax_reports", "category", "schedule_c_line")
+    search_fields = ("sub_cat", "slug", "user__username", "user__email")
+    ordering = ("category__category", "sub_cat")
 
 
-class RecurringTransactionAdmin(admin.ModelAdmin):
-    list_display = (
-        "transaction",
-        "id",
-        "amount",
-        "day",
-        "category",
-        "sub_cat",
-        "user",
-        "active",
-        "last_created",
-    )
-    list_filter = ("active", "day", "category", "sub_cat")
-    search_fields = ("transaction", "user__username")
+@admin.register(Client)
+class ClientAdmin(UserScopedAdminMixin, admin.ModelAdmin):
+    list_display = ("user_display", "id", "business", "email", "first", "last")
+    search_fields = ("business", "email", "first", "last", "user__username", "user__email")
+    ordering = ("business", "last", "first")
 
 
-class ClientAdmin(admin.ModelAdmin):
-    list_display = ("id", "business", "email", "first", "last")
-    search_fields = ("business", "email", "first", "last")
-
-
-class EventAdmin(admin.ModelAdmin):
-    list_display = ("id", "title")
-    search_fields = ("title",)
-
-
-# -----------------------------
-# CompanyProfile admin (branding)
-# -----------------------------
+# ------------------------------------------------------------------------------
+# CompanyProfile (branding)
+# NOTE: If CompanyProfile is deployment-level and has no user FK, user_display will show "—".
+# ------------------------------------------------------------------------------
 
 @admin.register(CompanyProfile)
-class CompanyProfileAdmin(admin.ModelAdmin):
+class CompanyProfileAdmin(UserScopedAdminMixin, admin.ModelAdmin):
     list_display = (
+        "user_display",
         "display_name_or_legal",
         "slug",
         "is_active",
@@ -189,7 +296,7 @@ class CompanyProfileAdmin(admin.ModelAdmin):
 
     @admin.display(description="Logo preview")
     def logo_preview(self, obj: CompanyProfile):
-        if not obj or not obj.logo:
+        if not obj or not getattr(obj, "logo", None):
             return "—"
         return mark_safe(
             f'<img src="{obj.logo.url}" '
@@ -218,9 +325,9 @@ class CompanyProfileAdmin(admin.ModelAdmin):
             CompanyProfile.objects.exclude(pk=obj.pk).update(is_active=False)
 
 
-# -----------------------------
-# InvoiceV2 + InvoiceItemV2 admin
-# -----------------------------
+# ------------------------------------------------------------------------------
+# InvoiceV2 + InvoiceItemV2
+# ------------------------------------------------------------------------------
 
 class InvoiceItemV2Inline(admin.TabularInline):
     model = InvoiceItemV2
@@ -237,10 +344,17 @@ class InvoiceItemV2Inline(admin.TabularInline):
 
 
 @admin.register(InvoiceV2)
-class InvoiceV2Admin(admin.ModelAdmin):
+class InvoiceV2Admin(UserScopedFKMixin, admin.ModelAdmin):
+    fk_user_map = {
+        "client": (Client, {}),
+        "event": (Event, {}),
+        "service": (Service, {}),
+    }
+
     inlines = [InvoiceItemV2Inline]
 
     list_display = (
+        "user_display",
         "invoice_number",
         "client",
         "event",
@@ -257,6 +371,8 @@ class InvoiceV2Admin(admin.ModelAdmin):
         "client__business",
         "client__first",
         "client__last",
+        "user__username",
+        "user__email",
     )
     date_hierarchy = "date"
     ordering = ("-date", "invoice_number")
@@ -363,13 +479,25 @@ class InvoiceV2Admin(admin.ModelAdmin):
                 f"{skipped_count} invoice(s) were already marked as Paid and were skipped.",
                 level=messages.INFO,
             )
+        if error_count and not success_count:
+            self.message_user(request, "No invoices were updated due to errors.", level=messages.ERROR)
 
 
 @admin.register(InvoiceItemV2)
-class InvoiceItemV2Admin(admin.ModelAdmin):
-    list_display = ("invoice", "description", "qty", "price", "line_total_display", "sub_cat", "category")
+class InvoiceItemV2Admin(UserScopedAdminMixin, admin.ModelAdmin):
+    # InvoiceItemV2 is owned via invoice.user
+    owner_rel = "invoice__user"
+
+    list_display = ("user_display", "invoice", "description", "qty", "price", "line_total_display", "sub_cat", "category")
     list_filter = ("invoice__client", "sub_cat", "category")
-    search_fields = ("description", "invoice__invoice_number")
+    search_fields = ("description", "invoice__invoice_number", "invoice__user__username", "invoice__user__email")
+    ordering = ("invoice", "id")
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request).select_related("invoice", "invoice__user", "sub_cat", "category")
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(invoice__user=request.user)
 
     def line_total_display(self, obj):
         return obj.line_total
@@ -377,9 +505,17 @@ class InvoiceItemV2Admin(admin.ModelAdmin):
     line_total_display.short_description = "Line total"
 
 
-# -----------------------------
+# ------------------------------------------------------------------------------
 # Mileage models
-# -----------------------------
+# ------------------------------------------------------------------------------
+
+@admin.register(MileageRate)
+class MileageRateAdmin(UserScopedAdminMixin, admin.ModelAdmin):
+    list_display = ("user_display", "year", "rate", "id")
+    list_filter = ("year",)
+    search_fields = ("year", "user__username", "user__email")
+    ordering = ("-year",)
+
 
 class VehicleYearInline(admin.TabularInline):
     model = VehicleYear
@@ -397,24 +533,33 @@ class VehicleExpenseInline(admin.TabularInline):
 
 
 @admin.register(Vehicle)
-class VehicleAdmin(admin.ModelAdmin):
-    list_display = ("name", "user", "year", "make", "model", "plate", "is_active", "placed_in_service_date", "placed_in_service_mileage")
+class VehicleAdmin(UserScopedAdminMixin, admin.ModelAdmin):
+    list_display = (
+        "user_display",
+        "name",
+        "year",
+        "make",
+        "model",
+        "plate",
+        "is_active",
+        "placed_in_service_date",
+        "placed_in_service_mileage",
+    )
     list_filter = ("is_active", "year", "make")
-    search_fields = ("name", "plate", "vin", "make", "model")
+    search_fields = ("name", "plate", "vin", "make", "model", "user__username", "user__email")
     inlines = [VehicleYearInline, VehicleExpenseInline]
-
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        if request.user.is_superuser:
-            return qs
-        return qs.filter(user=request.user)
+    ordering = ("-is_active", "name")
 
 
 @admin.register(VehicleYear)
-class VehicleYearAdmin(admin.ModelAdmin):
-    list_display = ("vehicle", "tax_year", "begin_mileage", "end_mileage")
+class VehicleYearAdmin(UserScopedFKMixin, admin.ModelAdmin):
+    owner_rel = "vehicle__user"
+    fk_user_map = {"vehicle": (Vehicle, {})}
+
+    list_display = ("user_display", "vehicle", "tax_year", "begin_mileage", "end_mileage")
     list_filter = ("tax_year",)
-    search_fields = ("vehicle__name", "vehicle__plate", "vehicle__vin")
+    search_fields = ("vehicle__name", "vehicle__plate", "vehicle__vin", "vehicle__user__username", "vehicle__user__email")
+    ordering = ("-tax_year", "vehicle")
 
     def get_queryset(self, request):
         qs = super().get_queryset(request).select_related("vehicle", "vehicle__user")
@@ -422,49 +567,45 @@ class VehicleYearAdmin(admin.ModelAdmin):
             return qs
         return qs.filter(vehicle__user=request.user)
 
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if not request.user.is_superuser and db_field.name == "vehicle":
-            kwargs["queryset"] = Vehicle.objects.filter(user=request.user)
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
-
 
 @admin.register(VehicleExpense)
-class VehicleExpenseAdmin(admin.ModelAdmin):
-    list_display = ("date", "vehicle", "expense_type", "description", "vendor", "amount", "odometer", "is_tax_related")
+class VehicleExpenseAdmin(UserScopedFKMixin, admin.ModelAdmin):
+    fk_user_map = {"vehicle": (Vehicle, {})}
+
+    list_display = ("user_display", "date", "vehicle", "expense_type", "description", "vendor", "amount", "odometer", "is_tax_related")
     list_filter = ("expense_type", "is_tax_related")
-    search_fields = ("vehicle__name", "description", "vendor", "vehicle__plate", "vehicle__vin")
-    date_hierarchy = "date"
-
-    def get_queryset(self, request):
-        qs = super().get_queryset(request).select_related("vehicle", "user")
-        if request.user.is_superuser:
-            return qs
-        return qs.filter(user=request.user)
-
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if not request.user.is_superuser and db_field.name == "vehicle":
-            kwargs["queryset"] = Vehicle.objects.filter(user=request.user)
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
-
-
-@admin.register(Miles)
-class MilesAdmin(admin.ModelAdmin):
-    list_display = ("date", "vehicle", "client", "event", "invoice_display", "begin", "end", "total", "mileage_type")
-    list_filter = ("mileage_type", "vehicle", "client")
-    search_fields = ("invoice_number", "event__title", "vehicle__name", "vehicle__plate")
+    search_fields = ("vehicle__name", "description", "vendor", "vehicle__plate", "vehicle__vin", "user__username", "user__email")
     date_hierarchy = "date"
     ordering = ("-date",)
 
     def get_queryset(self, request):
-        qs = super().get_queryset(request).select_related("vehicle", "client", "event", "invoice_v2", "user")
+        qs = super().get_queryset(request).select_related("vehicle", "user", "vehicle__user")
+        if request.user.is_superuser:
+            return qs
+        # VehicleExpense appears to have a direct user FK in your existing admin;
+        # keep that behavior.
+        return qs.filter(user=request.user)
+
+
+@admin.register(Miles)
+class MilesAdmin(UserScopedFKMixin, admin.ModelAdmin):
+    fk_user_map = {
+        "vehicle": (Vehicle, {"is_active": True}),
+        "client": (Client, {}),
+        "event": (Event, {}),
+    }
+
+    list_display = ("user_display", "date", "vehicle", "client", "event", "invoice_display", "begin", "end", "total", "mileage_type")
+    list_filter = ("mileage_type", "vehicle", "client")
+    search_fields = ("invoice_number", "event__title", "vehicle__name", "vehicle__plate", "user__username", "user__email")
+    date_hierarchy = "date"
+    ordering = ("-date",)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request).select_related("vehicle", "client", "event", "invoice_v2", "user", "vehicle__user")
         if request.user.is_superuser:
             return qs
         return qs.filter(user=request.user)
-
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if not request.user.is_superuser and db_field.name == "vehicle":
-            kwargs["queryset"] = Vehicle.objects.filter(user=request.user, is_active=True)
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     @admin.display(description="Invoice")
     def invoice_display(self, obj):
@@ -473,14 +614,30 @@ class MilesAdmin(admin.ModelAdmin):
         return obj.invoice_number or ""
 
 
-# -----------------------------
-# Register remaining models
-# -----------------------------
+# ------------------------------------------------------------------------------
+# Recurring transactions
+# ------------------------------------------------------------------------------
 
-admin.site.register(Client, ClientAdmin)
-admin.site.register(MileageRate)
-admin.site.register(Service)
-admin.site.register(Team, TeamAdmin)
-admin.site.register(Category, CategoryAdmin)
-admin.site.register(RecurringTransaction, RecurringTransactionAdmin)
-admin.site.register(Event, EventAdmin)
+@admin.register(RecurringTransaction)
+class RecurringTransactionAdmin(UserScopedAdminMixin, admin.ModelAdmin):
+    list_display = (
+        "user_display",
+        "transaction",
+        "id",
+        "amount",
+        "day",
+        "category",
+        "sub_cat",
+        "active",
+        "last_created",
+    )
+    list_filter = ("active", "day", "category", "sub_cat")
+    search_fields = ("transaction", "user__username", "user__email")
+    ordering = ("-active", "day", "id")
+
+
+# ------------------------------------------------------------------------------
+# (Optional) If you want absolutely everything registered explicitly
+# ------------------------------------------------------------------------------
+# All models above are registered via @admin.register, so no trailing admin.site.register(...)
+# is necessary.
