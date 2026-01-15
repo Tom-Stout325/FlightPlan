@@ -14,8 +14,6 @@
 
     <div class="collapse navbar-collapse" id="navbarContent">
       <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-
-        {# Money Portal dropdown #}
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" id="moneyDropdown" role="button"
              data-bs-toggle="dropdown" aria-expanded="false">
@@ -27,6 +25,15 @@
                 💰 Money Dashboard
               </a>
             </li>
+            <li><hr class="dropdown-divider"></li>
+            {% if request.user.is_staff %}
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <a class="dropdown-item" href="{% url 'money:companyprofile_list' %}">
+                  <i class="fa-solid fa-user-shield me-2"></i>Owner Portal
+                </a>
+              </li>
+            {% endif %}
             <li><hr class="dropdown-divider"></li>
             <li>
               <a class="dropdown-item" href="{% url 'money:transactions' %}">

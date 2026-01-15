@@ -1,0 +1,12 @@
+
+
+Include for header logo:
+
+{% include "money/pdf/_brand_header.html" with pdf_title="TRAVEL SUMMARY" pdf_subtitle=selected_year %}
+
+{{ BRAND_PROFILE.name_for_display }}
+
+
+in the PDF context builder, add:
+
+ctx.update(_brand_pdf_context(request))

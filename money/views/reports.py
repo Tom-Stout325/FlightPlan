@@ -16,7 +16,7 @@ from django.template.loader import render_to_string
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from weasyprint import HTML
-
+from typing import Any
 from money.models import CompanyProfile, InvoiceV2, Transaction
 
 logger = logging.getLogger(__name__)
@@ -292,6 +292,18 @@ def _build_statement_context(request: HttpRequest, year: int | None) -> dict:
     return ctx
 
 
+def _brand_pdf_context(request: HttpRequest) -> dict[str, Any]:
+    profile = None
+    try:
+        profile = CompanyProfile.get_active()
+    except Exception:
+        profile = None
+
+    return {
+        "BRAND_PROFILE": profile,
+        "BRAND_LOGO_URL": _absolute_logo_url(request, profile),
+    }
+
 # -----------------------------------------------------------------------------
 # Reports landing page
 # -----------------------------------------------------------------------------
@@ -309,15 +321,27 @@ def reports_page(request: HttpRequest) -> HttpResponse:
 
 
 # -----------------------------------------------------------------------------
-# Financial Statement (non-tax)
+# Profit and Loss (non-tax)
 # -----------------------------------------------------------------------------
+
 
 @login_required
 def profit_loss(request: HttpRequest) -> HttpResponse:
     year = _selected_year_from_request(request)
+
+    # Default to the most recent year with data (not the calendar year)
+    if year is None:
+        choices = _year_choices_for_user(request.user)  # already returns desc years
+        year = choices[0] if choices else timezone.localdate().year
+
     ctx = _build_statement_context(request, year)
+    ctx["pl_mode"] = "single"
     ctx["current_page"] = "profit_loss"
+    ctx.update(_brand_pdf_context(request))
+
     return render(request, "money/reports/profit_loss.html", ctx)
+
+
 
 
 @login_required
@@ -327,15 +351,243 @@ def profit_loss_pdf(request: HttpRequest, year: int) -> HttpResponse:
     except (TypeError, ValueError):
         selected_year = timezone.localdate().year
 
+    # Build report context first
     ctx = _build_statement_context(request, selected_year)
     ctx["now"] = timezone.now()
 
-    html = render_to_string("money/reports/financial_statement_pdf.html", ctx, request=request)
-    pdf = HTML(string=html, base_url=request.build_absolute_uri("/")).write_pdf()
+    # Inject shared brand context (logo + profile)
+    ctx.update(_brand_pdf_context(request))
+
+    html = render_to_string(
+        "money/reports/profit_loss_pdf.html",
+        ctx,
+        request=request,
+    )
+
+    pdf = HTML(
+        string=html,
+        base_url=request.build_absolute_uri("/"),
+    ).write_pdf()
+
+    preview_flag = (request.GET.get("preview") or "").strip().lower()
+    is_preview = preview_flag in {"1", "true", "yes", "y", "on"}
+
+    filename = f"Profit_Loss_Statement_{selected_year}.pdf"
+    disposition = "inline" if is_preview else "attachment"
 
     resp = HttpResponse(pdf, content_type="application/pdf")
-    resp["Content-Disposition"] = f'attachment; filename="financial_statement_{selected_year}.pdf"'
+    resp["Content-Disposition"] = f'{disposition}; filename="{filename}"'
     return resp
+
+
+
+# Profit and Loss - YOY
+
+@dataclass(frozen=True)
+class YoYSubRow:
+    name: str
+    schedule_c_line: str
+    values: list[Decimal]  # aligned with years
+
+
+@dataclass(frozen=True)
+class YoYCategoryRow:
+    category: str
+    values: list[Decimal]  # aligned with years
+    subrows: list[YoYSubRow]
+
+
+def _pick_last_three_years(request: HttpRequest, selected_year: int | None) -> list[int]:
+    """
+    3 most recent years ending at selected_year (or current year).
+    Example: 2025 -> [2023, 2024, 2025]
+    """
+    end = selected_year or timezone.localdate().year
+    return [end - 2, end - 1, end]
+
+
+def _dec(v: Any) -> Decimal:
+    if isinstance(v, Decimal):
+        return v
+    if v is None:
+        return ZERO
+    try:
+        return Decimal(str(v))
+    except Exception:
+        return ZERO
+
+
+def _index_statement(ctx: dict[str, Any], key: str) -> tuple[dict[str, Decimal], dict[str, dict[str, tuple[Decimal, str]]]]:
+    """
+    Builds:
+      cat_totals[category] -> total
+      subs[category][sub_name] -> (amount, schedule_c_line)
+    From your ctx["income_category_totals"] or ctx["expense_category_totals"] list.
+    """
+    cat_totals: dict[str, Decimal] = {}
+    subs: dict[str, dict[str, tuple[Decimal, str]]] = defaultdict(dict)
+
+    for row in ctx.get(key, []):
+        cat = (row.get("category") or "Uncategorized").strip() or "Uncategorized"
+        cat_totals[cat] = _dec(row.get("total")).quantize(Decimal("0.01"))
+
+        for sub_name, amount, sched in (row.get("subcategories") or []):
+            sub = (sub_name or "").strip()
+            if not sub:
+                continue
+            subs[cat][sub] = (_dec(amount).quantize(Decimal("0.01")), (sched or "").strip())
+
+    return cat_totals, subs
+
+
+
+
+def _build_statement_yoy_context(request: HttpRequest, selected_year: int | None = None) -> dict[str, Any]:
+    years = _pick_last_three_years(request, selected_year)
+
+    # Build the existing single-year contexts (this preserves your current totals logic)
+    per_year: list[dict[str, Any]] = [_build_statement_context(request, y) for y in years]
+
+    # Index each year for quick lookup
+    income_cat_maps: list[dict[str, Decimal]] = []
+    income_sub_maps: list[dict[str, dict[str, tuple[Decimal, str]]]] = []
+    expense_cat_maps: list[dict[str, Decimal]] = []
+    expense_sub_maps: list[dict[str, dict[str, tuple[Decimal, str]]]] = []
+
+    for ctx in per_year:
+        ic, isubs = _index_statement(ctx, "income_category_totals")
+        ec, esubs = _index_statement(ctx, "expense_category_totals")
+        income_cat_maps.append(ic)
+        income_sub_maps.append(isubs)
+        expense_cat_maps.append(ec)
+        expense_sub_maps.append(esubs)
+
+    # Union of categories across the 3 years
+    income_categories = sorted(set().union(*[m.keys() for m in income_cat_maps]))
+    expense_categories = sorted(set().union(*[m.keys() for m in expense_cat_maps]))
+
+    def build_section(
+        categories: list[str],
+        cat_maps: list[dict[str, Decimal]],
+        sub_maps: list[dict[str, dict[str, tuple[Decimal, str]]]],
+    ) -> list[YoYCategoryRow]:
+        rows: list[YoYCategoryRow] = []
+
+        for cat in categories:
+            cat_vals = [(cat_maps[i].get(cat, ZERO)).quantize(Decimal("0.01")) for i in range(len(years))]
+
+            # Union subcategory names for this category across years
+            all_subs: set[str] = set()
+            for i in range(len(years)):
+                all_subs |= set(sub_maps[i].get(cat, {}).keys())
+
+            subrows: list[YoYSubRow] = []
+            for sub in sorted(all_subs):
+                vals: list[Decimal] = []
+                sched_line = ""
+                for i in range(len(years)):
+                    amt, sched = sub_maps[i].get(cat, {}).get(sub, (ZERO, ""))
+                    vals.append(amt.quantize(Decimal("0.01")))
+                    # Prefer latest non-empty schedule line
+                    if sched and not sched_line:
+                        sched_line = sched
+                subrows.append(YoYSubRow(name=sub, schedule_c_line=sched_line, values=vals))
+
+            rows.append(YoYCategoryRow(category=cat, values=cat_vals, subrows=subrows))
+
+        return rows
+
+    income_rows = build_section(income_categories, income_cat_maps, income_sub_maps)
+    expense_rows = build_section(expense_categories, expense_cat_maps, expense_sub_maps)
+
+    # Year totals (use the existing totals from each single-year ctx)
+    income_totals = [(_dec(c.get("income_category_total")).quantize(Decimal("0.01"))) for c in per_year]
+    expense_totals = [(_dec(c.get("expense_category_total")).quantize(Decimal("0.01"))) for c in per_year]
+    net_profits = [(_dec(c.get("net_profit")).quantize(Decimal("0.01"))) for c in per_year]
+
+    ctx: dict[str, Any] = {
+        "selected_year": years[-1],
+        "years": years,
+        "year_choices": _year_choices_for_user(request.user),  # still useful if you want a dropdown
+        "income_rows": income_rows,
+        "expense_rows": expense_rows,
+        "income_totals": income_totals,
+        "expense_totals": expense_totals,
+        "net_profits": net_profits,
+        "now": timezone.now(),
+    }
+    ctx.update(_company_context())
+
+    if "_brand_pdf_context" in globals():
+        ctx.update(_brand_pdf_context(request))
+
+    return ctx
+
+
+@login_required
+def profit_loss_yoy(request: HttpRequest) -> HttpResponse:
+    try:
+        ending_year = int(request.GET.get("year") or 0) or timezone.localdate().year
+    except (TypeError, ValueError):
+        ending_year = timezone.localdate().year
+
+    ctx = _build_statement_yoy_context(request, ending_year)
+    ctx["pl_mode"] = "yoy"
+    ctx["current_page"] = "profit_loss"
+    return render(request, "money/reports/profit_loss_yoy.html", ctx)
+
+
+
+
+@login_required
+def profit_loss_yoy_pdf(request: HttpRequest) -> HttpResponse:
+    """
+    PDF for Profit & Loss YOY (3 most recent years).
+    ?preview=1 -> inline (new tab)
+    otherwise  -> attachment (download)
+    Optional: ?year=2025 to set ending year
+    """
+    try:
+        ending_year = int(request.GET.get("year") or 0) or timezone.localdate().year
+    except (TypeError, ValueError):
+        ending_year = timezone.localdate().year
+
+    ctx = _build_statement_yoy_context(request, ending_year)
+    ctx["now"] = timezone.now()
+
+    html = render_to_string(
+        "money/reports/profit_loss_yoy_pdf.html",
+        ctx,
+        request=request,
+    )
+
+    pdf = HTML(
+        string=html,
+        base_url=request.build_absolute_uri("/"),
+    ).write_pdf()
+
+    preview_flag = (request.GET.get("preview") or "").strip().lower()
+    is_preview = preview_flag in {"1", "true", "yes", "y", "on"}
+
+    years = ctx.get("years") or [ending_year - 2, ending_year - 1, ending_year]
+    filename = f"Profit_Loss_YOY_{years[0]}_{years[-1]}.pdf"
+    disposition = "inline" if is_preview else "attachment"
+
+    resp = HttpResponse(pdf, content_type="application/pdf")
+    resp["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+    return resp
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 @login_required
@@ -574,97 +826,174 @@ def travel_expense_analysis_pdf(request: HttpRequest) -> HttpResponse:
     return resp
 
 
+
+
+
 # -----------------------------------------------------------------------------
-# Travel Summary (invoice + transaction rollup)
+# Travel Summary (InvoiceV2 + primary travel expense rollup by invoice_number)
 # -----------------------------------------------------------------------------
+def _absolute_logo_url(request: HttpRequest, profile: CompanyProfile | None) -> str | None:
+    if not profile:
+        return None
+    logo = getattr(profile, "logo", None)
+    if not logo:
+        return None
+    try:
+        return request.build_absolute_uri(logo.url)
+    except Exception:
+        return None
+
+ZERO = Decimal("0.00")
+TWO_DP = DecimalField(max_digits=12, decimal_places=2)
+
+# Primary travel buckets only
+TRAVEL_SLUGS = ("airfare", "hotels", "car-rental", "fuel")
+
 
 @dataclass(frozen=True)
-class _InvoiceRow:
-    invoice_number: str
-    date: object
-    client: str
-    amount: Decimal
-    status: str
-    model: str  # "Invoice" or "InvoiceV2"
+class TravelRow:
+    invoice: InvoiceV2
+    invoice_amount: Decimal
+    airfare: Decimal
+    hotels: Decimal
+    car_rental: Decimal
+    fuel: Decimal
+    total_expense: Decimal
+    net_amount: Decimal
 
 
-def _iter_invoices_for_year(user, year: int):
-    for inv in (
-        Invoice.objects.filter(client__user=user, date__year=year)
-        .select_related("client")
-        .only("invoice_number", "date", "amount", "status", "client__business", "client__first", "client__last")
-        .order_by("date", "invoice_number")
-    ):
-        client_name = ""
-        if getattr(inv, "client", None):
-            business = (inv.client.business or "").strip()
-            first = (inv.client.first or "").strip()
-            last = (inv.client.last or "").strip()
-            client_name = business or " ".join([first, last]).strip()
-
-        yield _InvoiceRow(
-            invoice_number=str(inv.invoice_number or ""),
-            date=inv.date,
-            client=client_name,
-            amount=inv.amount or ZERO,
-            status=str(getattr(inv, "status", "") or ""),
-            model="Invoice",
-        )
-
-    for inv in (
-        InvoiceV2.objects.filter(user=user, date__year=year)
-        .select_related("client")
-        .only("invoice_number", "date", "amount", "status", "client__business", "client__first", "client__last")
-        .order_by("date", "invoice_number")
-    ):
-        business = (inv.client.business or "").strip()
-        first = (inv.client.first or "").strip()
-        last = (inv.client.last or "").strip()
-        client_name = business or " ".join([first, last]).strip()
-
-        yield _InvoiceRow(
-            invoice_number=str(inv.invoice_number or ""),
-            date=inv.date,
-            client=client_name,
-            amount=inv.amount or ZERO,
-            status=str(inv.status or ""),
-            model="InvoiceV2",
-        )
+def _avg(total: Decimal, n: int) -> Decimal:
+    return (total / n) if n else ZERO
 
 
-def build_travel_summary_context(request: HttpRequest) -> dict:
+def build_travel_summary_context(request: HttpRequest) -> dict[str, Any]:
     current_year = timezone.localdate().year
     year = _selected_year_int(request)
 
-    tx_base = Transaction.objects.filter(user=request.user, date__year=year).select_related("sub_cat", "category")
-    income_total = (
-        tx_base.filter(trans_type=Transaction.INCOME)
-        .aggregate(total=Coalesce(Sum("amount"), Value(ZERO), output_field=TWO_DP))
-        .get("total")
-        or ZERO
-    )
-    expense_total = (
-        tx_base.filter(trans_type=Transaction.EXPENSE)
-        .aggregate(total=Coalesce(Sum("amount"), Value(ZERO), output_field=TWO_DP))
-        .get("total")
-        or ZERO
+    invoices = (
+        InvoiceV2.objects.filter(user=request.user, date__year=year)
+        .select_related("event")
+        .only("id", "invoice_number", "date", "amount", "event__title", "event_name")
+        .order_by("date", "invoice_number")
     )
 
-    invoices = list(_iter_invoices_for_year(request.user, year))
-    invoice_total = sum((r.amount for r in invoices), start=ZERO)
+    invoice_numbers = [i.invoice_number for i in invoices if i.invoice_number]
+    invoice_set = set(invoice_numbers)
 
-    ctx = {
+    # ---------------------------------
+    # Aggregate expenses by invoice + slug
+    # ---------------------------------
+    expense_map: dict[str, dict[str, Decimal]] = {}
+
+    if invoice_set:
+        qs = (
+            Transaction.objects.filter(
+                user=request.user,
+                trans_type=Transaction.EXPENSE,
+                date__year=year,
+                invoice_number__in=invoice_set,
+                sub_cat__slug__in=TRAVEL_SLUGS,
+            )
+            .values("invoice_number", "sub_cat__slug")
+            .annotate(total=Coalesce(Sum("amount"), Value(ZERO), output_field=TWO_DP))
+        )
+
+        for row in qs:
+            inv_no = row["invoice_number"]
+            slug = row["sub_cat__slug"]
+            total = row["total"] or ZERO
+            expense_map.setdefault(inv_no, {})[slug] = total
+
+    rows: list[TravelRow] = []
+
+    totals = {
+        "invoice_amount": ZERO,
+        "airfare": ZERO,
+        "hotels": ZERO,
+        "car_rental": ZERO,
+        "fuel": ZERO,
+        "total_expense": ZERO,
+        "net_amount": ZERO,
+    }
+
+    # ---------------------------------
+    # Build rows + totals
+    # ---------------------------------
+    for inv in invoices:
+        inv_no = inv.invoice_number or ""
+        buckets = expense_map.get(inv_no, {})
+
+        airfare = buckets.get("airfare", ZERO)
+        hotels = buckets.get("hotels", ZERO)
+        car_rental = buckets.get("car-rental", ZERO)
+        fuel = buckets.get("fuel", ZERO)
+
+        total_expense = airfare + hotels + car_rental + fuel
+        invoice_amount = inv.amount or ZERO
+        net_amount = invoice_amount - total_expense
+
+        rows.append(
+            TravelRow(
+                invoice=inv,
+                invoice_amount=invoice_amount,
+                airfare=airfare,
+                hotels=hotels,
+                car_rental=car_rental,
+                fuel=fuel,
+                total_expense=total_expense,
+                net_amount=net_amount,
+            )
+        )
+
+        totals["invoice_amount"] += invoice_amount
+        totals["airfare"] += airfare
+        totals["hotels"] += hotels
+        totals["car_rental"] += car_rental
+        totals["fuel"] += fuel
+        totals["total_expense"] += total_expense
+        totals["net_amount"] += net_amount
+
+    # ---------------------------------
+    # Averages
+    # ---------------------------------
+    total_invoices = len(rows)
+    expense_n = sum(1 for r in rows if r.total_expense > ZERO)
+
+    averages = {
+        "invoice_amount": _avg(totals["invoice_amount"], total_invoices),
+        "total_expense": _avg(totals["total_expense"], expense_n),
+        "net_amount": _avg(totals["net_amount"], total_invoices),
+        "airfare": _avg(totals["airfare"], sum(1 for r in rows if r.airfare > ZERO)),
+        "hotels": _avg(totals["hotels"], sum(1 for r in rows if r.hotels > ZERO)),
+        "car_rental": _avg(totals["car_rental"], sum(1 for r in rows if r.car_rental > ZERO)),
+        "fuel": _avg(totals["fuel"], sum(1 for r in rows if r.fuel > ZERO)),
+    }
+
+    # ---------------------------------
+    # Context
+    # ---------------------------------
+    ctx: dict[str, Any] = {
         "current_page": "travel_summary",
         "selected_year": year,
-        "year_choices": list(range(2023, current_year + 1)),
-        "income_total": income_total,
-        "expense_total": expense_total,
-        "net_total": income_total - expense_total,
-        "invoice_total": invoice_total,
-        "invoices": invoices,
+        "years": list(range(2023, current_year + 1)),
+        "rows": rows,
+        "totals": totals,
+        "averages": averages,
     }
+
     ctx.update(_company_context())
+
+    profile = None
+    try:
+        profile = CompanyProfile.get_active()
+    except Exception:
+        profile = None
+
+    ctx["BRAND_PROFILE"] = profile
+    ctx["BRAND_LOGO_URL"] = _absolute_logo_url(request, profile)
+
     return ctx
+
 
 
 @login_required
@@ -678,9 +1007,7 @@ def travel_summary_pdf_preview(request: HttpRequest) -> HttpResponse:
     ctx["now"] = timezone.now()
     html = render_to_string("money/reports/travel_summary_pdf.html", ctx, request=request)
     pdf = HTML(string=html, base_url=request.build_absolute_uri("/")).write_pdf()
-    resp = HttpResponse(pdf, content_type="application/pdf")
-    resp["Content-Disposition"] = f'inline; filename="travel-summary-{ctx["selected_year"]}.pdf"'
-    return resp
+    return HttpResponse(pdf, content_type="application/pdf")
 
 
 @login_required
@@ -689,6 +1016,8 @@ def travel_summary_pdf_download(request: HttpRequest) -> HttpResponse:
     ctx["now"] = timezone.now()
     html = render_to_string("money/reports/travel_summary_pdf.html", ctx, request=request)
     pdf = HTML(string=html, base_url=request.build_absolute_uri("/")).write_pdf()
-    resp = HttpResponse(pdf, content_type="application/pdf")
-    resp["Content-Disposition"] = f'attachment; filename="travel-summary-{ctx["selected_year"]}.pdf"'
-    return resp
+    return HttpResponse(
+        pdf,
+        content_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="travel-summary-{ctx["selected_year"]}.pdf"'},
+    )

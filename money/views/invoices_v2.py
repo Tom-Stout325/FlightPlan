@@ -65,15 +65,26 @@ def _render_invoice_v2_pdf_bytes(request: HttpRequest, invoice: InvoiceV2) -> by
     if not WEASYPRINT_AVAILABLE:
         raise RuntimeError("WeasyPrint is not available.")
 
+    profile = _get_active_profile()
+    brand_logo_url = _absolute_logo_url(request, profile)
+
+    # optional: if you already have a phone formatter helper, use it here
+    formatted_brand_phone = getattr(profile, "main_phone", "") if profile else ""
+
     html = render_to_string(
         "money/invoices/invoice_v2_pdf.html",
         {
             "invoice": invoice,
             "items": invoice.items.select_related("sub_cat", "category").all(),
-            "profile": _get_active_profile(),
+
+            # ✅ match what the template expects
+            "BRAND_PROFILE": profile,
+            "BRAND_LOGO_URL": brand_logo_url,
+            "formatted_brand_phone": formatted_brand_phone,
         },
         request=request,
     )
+
     return HTML(string=html, base_url=request.build_absolute_uri("/")).write_pdf()
 
 

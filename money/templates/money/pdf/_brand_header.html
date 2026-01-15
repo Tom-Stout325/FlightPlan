@@ -1,0 +1,32 @@
+{# money/pdf/_brand_header.html #}
+{# Expects: BRAND_PROFILE, BRAND_LOGO_URL #}
+{# Optional: pdf_title, pdf_subtitle, pdf_logo_max_height #}
+
+{% with logo_h=pdf_logo_max_height|default:"90px" %}
+  <div style="width:100%; border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 10px;">
+    <div style="text-align:center;">
+      {% if BRAND_LOGO_URL %}
+        <img
+          src="{{ BRAND_LOGO_URL }}"
+          alt="{{ BRAND_PROFILE.name_for_display|default:'Brand Logo' }}"
+          style="max-height: {{ logo_h }}; width: auto;"
+        >
+      {% elif BRAND_PROFILE %}
+        <strong style="font-size: 18px;">
+          {{ BRAND_PROFILE.name_for_display }}
+        </strong>
+      {% endif %}
+    </div>
+
+    {% if pdf_title or pdf_subtitle %}
+      <div style="text-align:center; margin-top: 6px;">
+        {% if pdf_title %}
+          <div style="font-size: 12px; font-weight: 700;">{{ pdf_title }}</div>
+        {% endif %}
+        {% if pdf_subtitle %}
+          <div style="font-size: 10px; color:#555;">{{ pdf_subtitle }}</div>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+{% endwith %}

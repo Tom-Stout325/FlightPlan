@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 class CategoryListView(LoginRequiredMixin, ListView):
     model = Category
-    template_name = "money/taxes/category_page.html"
+    template_name = "money/reports/category_page.html"
     context_object_name = "categories"
 
     def get_queryset(self):
@@ -54,7 +54,7 @@ class CategoryListView(LoginRequiredMixin, ListView):
 class CategoryCreateView(LoginRequiredMixin, CreateView):
     model = Category
     form_class = CategoryForm
-    template_name = "money/taxes/category_form.html"
+    template_name = "money/reports/category_form.html"
     success_url = reverse_lazy("money:category_page")
 
     def get_form_kwargs(self):
@@ -75,7 +75,7 @@ class CategoryCreateView(LoginRequiredMixin, CreateView):
 class CategoryUpdateView(LoginRequiredMixin, UpdateView):
     model = Category
     form_class = CategoryForm
-    template_name = "money/taxes/category_form.html"
+    template_name = "money/reports/category_form.html"
     success_url = reverse_lazy("money:category_page")
 
     def get_queryset(self):
@@ -98,7 +98,7 @@ class CategoryUpdateView(LoginRequiredMixin, UpdateView):
 
 class CategoryDeleteView(LoginRequiredMixin, DeleteView):
     model = Category
-    template_name = "money/taxes/category_confirm_delete.html"
+    template_name = "money/reports/category_confirm_delete.html"
     success_url = reverse_lazy("money:category_page")
 
     def get_queryset(self):
@@ -131,7 +131,7 @@ class CategoryDeleteView(LoginRequiredMixin, DeleteView):
 class SubCategoryCreateView(LoginRequiredMixin, CreateView):
     model = SubCategory
     form_class = SubCategoryForm
-    template_name = "money/taxes/sub_category_form.html"
+    template_name = "money/reports/sub_category_form.html"
     success_url = reverse_lazy("money:category_page")
 
     def get_form_kwargs(self):
@@ -152,7 +152,7 @@ class SubCategoryCreateView(LoginRequiredMixin, CreateView):
 class SubCategoryUpdateView(LoginRequiredMixin, UpdateView):
     model = SubCategory
     form_class = SubCategoryForm
-    template_name = "money/taxes/sub_category_form.html"
+    template_name = "money/reports/sub_category_form.html"
     success_url = reverse_lazy("money:category_page")
     context_object_name = "sub_cat"
 
@@ -176,7 +176,7 @@ class SubCategoryUpdateView(LoginRequiredMixin, UpdateView):
 
 class SubCategoryDeleteView(LoginRequiredMixin, DeleteView):
     model = SubCategory
-    template_name = "money/taxes/sub_category_confirm_delete.html"
+    template_name = "money/reports/sub_category_confirm_delete.html"
     success_url = reverse_lazy("money:category_page")
 
     def get_queryset(self):
@@ -199,14 +199,6 @@ class SubCategoryDeleteView(LoginRequiredMixin, DeleteView):
         context = super().get_context_data(**kwargs)
         context["current_page"] = "categories"
         return context
-
-
-
-
-
-
-
-
 
 
 

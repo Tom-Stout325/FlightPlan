@@ -132,19 +132,8 @@
 
     <!-- LEFT COLUMN: Invoice + event -->
     <div class="col" style="flex: 1;">
-      <h1 style="margin-bottom: 4px;">Invoice</h1>
-      <p class="text-muted mb-0" style="font-size: 13px;">
-        {% if invoice.event %}
-          {{ invoice.event.title }}
-        {% elif invoice.event_name %}
-          {{ invoice.event_name }}
-        {% else %}
-          {{ invoice.service }}
-        {% endif %}
-      </p>
+      <h1 style="margin-bottom: 4px;">INVOICE</h1>
     </div>
-
-
 
     <!-- CENTER COLUMN: LOGO (or brand name) -->
     <div class="col" style="flex: 1; text-align: center;">
@@ -162,8 +151,6 @@
       {% endif %}
     </div>
 
-
-
     <!-- RIGHT COLUMN: Invoice # + date -->
     <div class="col text-right" style="flex: 1; text-align: right;">
       <h3 style="margin-bottom: 4px;">
@@ -178,13 +165,7 @@
         {% endif %}
       </p>
     </div>
-
   </div>
-
-
-
-
-
 
     <!-- Client / Meta card -->
     <div class="card">
@@ -197,22 +178,26 @@
             {% if invoice.client.email %}
               <span class="text-muted small">{{ invoice.client.email }}</span><br>
             {% endif %}
+            {% if invoice.client.street %}
+              {{ invoice.client.street }} <br>
+              {{ invoice.client.address2 }}
+            {% endif %}
           </p>
         </div>
         <div class="col">
           <div class="card-title">Details</div>
           <p class="mb-1 small">
-            {% if invoice.location %}
-              <strong>Location:</strong> {{ invoice.location }}<br>
-            {% endif %}
             {% if invoice.event %}
               <strong>Event:</strong> {{ invoice.event.title }}<br>
             {% elif invoice.event_name %}
               <strong>Event:</strong> {{ invoice.event_name }}<br>
             {% endif %}
-            {% if invoice.service %}
-              <strong>Service:</strong> {{ invoice.service }}<br>
+            {% if invoice.location %}
+              <strong>Location:</strong> {{ invoice.location }}<br>
             {% endif %}
+            <br>
+            <br>
+            <br>
           </p>
         </div>
       </div>
@@ -256,7 +241,7 @@
       <table>
         <tbody>
           <tr>
-            <td><strong>Invoice Amount</strong></td>
+            <td class="text-end"><strong>Invoice Amount</strong></td>
             <td class="text-end">
               ${{ invoice.amount|floatformat:2|intcomma }}
             </td>

@@ -1,3 +1,4 @@
+{# money/reports/travel_summary_pdf.html #}
 {% load humanize %}
 
 <!doctype html>
@@ -8,11 +9,6 @@
   <style>
     @page { size: Letter; margin: 18mm 14mm; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-size: 11px; color:#111; }
-    .header { display:flex; align-items:center; justify-content:space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #ddd; }
-    .brand { display:flex; align-items:center; gap: 10px; }
-    .logo { height: 38px; }
-    h1 { font-size: 16px; margin:0; }
-    .meta { text-align:right; font-size: 10px; color:#555; }
     table { width:100%; border-collapse: collapse; margin-top: 10px; }
     th, td { padding: 6px 6px; border-bottom: 1px solid #e6e6e6; }
     th { text-align:left; background:#f3f4f6; font-weight: 700; }
@@ -24,24 +20,16 @@
 </head>
 
 <body>
-  <div class="header">
-    <div style="text-align: center; margin-bottom: 12px;">
-      {% if BRAND_LOGO_URL %}
-        <img src="{{ BRAND_LOGO_URL }}"
-            alt="{{ BRAND_PROFILE.name|default:'Brand Logo' }}"
-            style="max-height: 90px; width: auto;">
-      {% elif BRAND_PROFILE %}
-        <strong style="font-size: 18px;">
-          {{ BRAND_PROFILE.name }}
-        </strong>
-      {% endif %}
-    </div>
 
-    <div class="meta">
-      Generated: {% now "M j, Y g:i A" %}<br>
-      Invoices: {{ invoice_count }}
+{% include "money/pdf/_brand_header.html" with pdf_title="NHRA INVOICES" pdf_logo_max_height="120px" %}
+
+
+    <div style="text-align:center; margin-top: 6px; font-size: 12px; font-weight: 600;">
+      Travel Summary — {{ selected_year }}
     </div>
   </div>
+
+  {# ... KEEP THE REST OF YOUR TABLE/REPORT EXACTLY THE SAME ... #}
 
   <table>
     <thead>
@@ -90,7 +78,7 @@
       </tr>
 
       <tr class="avg">
-        <td colspan="2" class="num">Average (only where present):</td>
+        <td colspan="2" class="num">Average:</td>
         <td class="num">${{ averages.invoice_amount|floatformat:2|intcomma }}</td>
         <td class="num">${{ averages.airfare|floatformat:2|intcomma }}</td>
         <td class="num">${{ averages.hotels|floatformat:2|intcomma }}</td>
@@ -100,5 +88,6 @@
       </tr>
     </tfoot>
   </table>
+
 </body>
 </html>

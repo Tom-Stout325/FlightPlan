@@ -19,7 +19,6 @@ from .views.transactions import (
     run_monthly_recurring_view,
 )
 
-
 from .views.invoices_v2 import (
     InvoiceV2IssueView,
     InvoiceV2MarkPaidView,
@@ -44,6 +43,8 @@ from .views.reports import (
     reports_page,
     profit_loss,
     profit_loss_pdf,
+    profit_loss_yoy,
+    profit_loss_yoy_pdf,
     category_summary,
     category_summary_pdf,
     nhra_summary,
@@ -97,6 +98,15 @@ from .views.events import (
     EventDeleteView,
 )
 
+from .views.company_profiles import (
+    CompanyProfileCreateView,
+    CompanyProfileDeleteView,
+    CompanyProfileDetailView,
+    CompanyProfileListView,
+    CompanyProfileUpdateView,
+    companyprofile_activate,
+)
+
 app_name = "money"
 
 urlpatterns = [
@@ -126,9 +136,9 @@ urlpatterns = [
     path("recurring/report/", recurring_report_view, name="recurring_report"),
     path("run-monthly-recurring/", run_monthly_recurring_view, name="run_monthly_recurring"),
 
-    # -------------------------------------------------------------------
+    # ---------------------------------------------------------------------
     # Invoices (V2 invoice CRUD)
-    # -------------------------------------------------------------------
+    # ---------------------------------------------------------------------
     path("invoices/v2/new/", invoice_v2_create, name="invoice_v2_create"),
     path("invoices/v2/<int:pk>/", InvoiceV2DetailView.as_view(), name="invoice_v2_detail"),
     path("invoices/v2/<int:pk>/edit/", invoice_v2_update, name="invoice_v2_edit"),
@@ -140,7 +150,6 @@ urlpatterns = [
     path("invoices/v2/<int:pk>/review/", invoice_v2_review, name="invoice_v2_review"),
     path("invoices/", InvoiceV2ListView.as_view(), name="invoice_list"),
 
-
     # ---------------------------------------------------------------------
     # Clients
     # ---------------------------------------------------------------------
@@ -151,17 +160,26 @@ urlpatterns = [
 
     # ---------------------------------------------------------------------
     # Reports (landing + business reports)
+    # Canonical routes live under /reports/...
     # ---------------------------------------------------------------------
     path("reports/", reports_page, name="reports"),
-    path("financial-statement/", profit_loss, name="profit_loss"),
-    path("financial-statement/pdf/<int:year>/", profit_loss_pdf, name="profit_loss_pdf"),
-    path("category-summary/", category_summary, name="category_summary"),
-    path("category-summary/pdf/", category_summary_pdf, name="category_summary_pdf"),
 
-    path("nhra-summary/", nhra_summary, name="nhra_summary"),
-    path("race-expense-report/", nhra_summary_report, name="nhra_summary_report"),
-    path("race-expense-report/pdf/", nhra_summary_report_pdf, name="nhra_summary_report_pdf"),
+    # Profit & Loss
+    path("reports/profit-loss/", profit_loss, name="profit_loss"),
+    path("reports/profit-loss/pdf/<int:year>/", profit_loss_pdf, name="profit_loss_pdf"),
+    path("reports/profit-loss/yoy/", profit_loss_yoy, name="profit_loss_yoy"),
+    path("reports/profit-loss/yoy/pdf/", profit_loss_yoy_pdf, name="profit_loss_yoy_pdf"),
 
+    # Category Summary
+    path("reports/category-summary/", category_summary, name="category_summary"),
+    path("reports/category-summary/pdf/", category_summary_pdf, name="category_summary_pdf"),
+
+    # NHRA / Race Expense
+    path("reports/nhra-summary/", nhra_summary, name="nhra_summary"),
+    path("reports/race-expense-report/", nhra_summary_report, name="nhra_summary_report"),
+    path("reports/race-expense-report/pdf/", nhra_summary_report_pdf, name="nhra_summary_report_pdf"),
+
+    # Travel
     path("reports/travel-analysis/", travel_expense_analysis, name="travel_expense_analysis"),
     path("reports/travel-analysis/pdf/", travel_expense_analysis_pdf, name="travel_expense_analysis_pdf"),
     path("reports/travel-summary/", travel_summary, name="travel_summary"),
@@ -169,9 +187,22 @@ urlpatterns = [
     path("reports/travel-summary/pdf/download/", travel_summary_pdf_download, name="travel_summary_pdf_download"),
 
     # ---------------------------------------------------------------------
+    # Legacy report aliases (safe to keep while migrating templates / bookmarks)
+    # IMPORTANT: Do not use these in templates going forward.
+    # ---------------------------------------------------------------------
+    path("category-summary/", category_summary, name="legacy_category_summary"),
+    path("category-summary/pdf/", category_summary_pdf, name="legacy_category_summary_pdf"),
+    path("nhra-summary/", nhra_summary, name="legacy_nhra_summary"),
+    path("race-expense-report/", nhra_summary_report, name="legacy_race_expense_report"),
+    path("race-expense-report/pdf/", nhra_summary_report_pdf, name="legacy_race_expense_report_pdf"),
+
+    # If you previously used these naming conventions for PDFs:
+    path("financial-statement/pdf/<int:year>/", profit_loss_pdf, name="legacy_financial_statement_pdf"),
+
+    # ---------------------------------------------------------------------
     # Tax reports (tax-adjusted)
     # ---------------------------------------------------------------------
-    path("tax/financial-statement/", tax_profit_loss, name="tax_profit_loss"),
+    path("tax/profit-loss/", tax_profit_loss, name="tax_profit_loss"),
     path("tax/category-summary/", tax_category_summary, name="tax_category_summary"),
     path("taxes/schedule-c/", schedule_c_summary, name="schedule_c_summary"),
     path("form-4797/", form_4797_view, name="form_4797"),
@@ -218,8 +249,12 @@ urlpatterns = [
     path("events/<int:pk>/delete/", EventDeleteView.as_view(), name="event_delete"),
 
     # ---------------------------------------------------------------------
-    # OPTIONAL CLEAN ALIASES (safe to keep while migrating templates)
+    # Company Profiles
     # ---------------------------------------------------------------------
-    path("financial-statement/pdf/<int:year>/", profit_loss_pdf, name="profit_loss_pdf_clean"),
-    path("category-summary/pdf/", category_summary_pdf, name="category_summary_pdf_clean"),
+    path("company-profiles/", CompanyProfileListView.as_view(), name="companyprofile_list"),
+    path("company-profiles/new/", CompanyProfileCreateView.as_view(), name="companyprofile_create"),
+    path("company-profiles/<int:pk>/", CompanyProfileDetailView.as_view(), name="companyprofile_detail"),
+    path("company-profiles/<int:pk>/edit/", CompanyProfileUpdateView.as_view(), name="companyprofile_update"),
+    path("company-profiles/<int:pk>/delete/", CompanyProfileDeleteView.as_view(), name="companyprofile_delete"),
+    path("company-profiles/<int:pk>/activate/", companyprofile_activate, name="companyprofile_activate"),
 ]

@@ -23,6 +23,7 @@ except ImportError:
 from project.common.models import OwnedModelMixin
 
 
+
 # -----------------------------------------------------------------------------
 # Helpers / Validators
 # -----------------------------------------------------------------------------
@@ -310,18 +311,18 @@ class Transaction(OwnedModelMixin):
         (EXPENSE, "Expense"),
     ]
 
-    trans_type = models.CharField(max_length=10, choices=TRANS_TYPE_CHOICES, default=EXPENSE)
-    category = models.ForeignKey("Category", on_delete=models.PROTECT)
-    sub_cat = models.ForeignKey("SubCategory", on_delete=models.PROTECT, null=True, blank=True)
-    amount = models.DecimalField(max_digits=20, decimal_places=2)
-    transaction = models.CharField(max_length=255)
-    team = models.ForeignKey("Team", null=True, blank=True, on_delete=models.PROTECT)
-    event = models.ForeignKey("Event", null=True, blank=True, on_delete=models.PROTECT, related_name="transactions",)
-    receipt = models.FileField(upload_to="receipts/", blank=True, null=True)
-    date = models.DateField()
-    invoice_number = models.CharField(max_length=25, blank=True, null=True, help_text="Optional")
+    trans_type         = models.CharField(max_length=10, choices=TRANS_TYPE_CHOICES, default=EXPENSE)
+    category           = models.ForeignKey("Category", on_delete=models.PROTECT)
+    sub_cat            = models.ForeignKey("SubCategory", on_delete=models.PROTECT, null=True, blank=True)
+    amount             = models.DecimalField(max_digits=20, decimal_places=2)
+    transaction        = models.CharField(max_length=255)
+    team               = models.ForeignKey("Team", null=True, blank=True, on_delete=models.PROTECT)
+    event              = models.ForeignKey("Event", null=True, blank=True, on_delete=models.PROTECT, related_name="transactions",)
+    receipt            = models.FileField(upload_to="receipts/", blank=True, null=True)
+    date               = models.DateField()
+    invoice_number     = models.CharField(max_length=25, blank=True, null=True, help_text="Optional")
     recurring_template = models.ForeignKey("RecurringTransaction", null=True, blank=True, on_delete=models.SET_NULL, related_name="generated_transactions",)
-    transport_type = models.CharField(max_length=30, choices=TRANSPORT_CHOICES, null=True, blank=True, help_text="Used to identify if actual expenses apply",)
+    transport_type     = models.CharField(max_length=30, choices=TRANSPORT_CHOICES, null=True, blank=True, help_text="Used to identify if actual expenses apply",)
 
     class Meta:
         ordering = ["date"]
@@ -744,8 +745,26 @@ class CompanyProfile(models.Model):
         return f"{self.display_name or self.legal_name} ({self.slug})"
 
     @property
-    def name_for_display(self):
-        return self.display_name or self.legal_name
+    def name_for_display(self) -> str:
+        """
+        Canonical brand display name used across PDFs and UI.
+
+        Priority:
+        1) display_name (if non-empty after stripping whitespace)
+        2) legal_name (if non-empty after stripping whitespace)
+        3) empty string
+        """
+        display = (self.display_name or "").strip()
+        if display:
+            return display
+
+        legal = (self.legal_name or "").strip()
+        return legal
+
+    @property
+    def logo_alt(self) -> str:
+        alt = (self.logo_alt_text or "").strip()
+        return alt or self.name_for_display or "Brand Logo"
 
     def full_address_lines(self):
         lines = [self.address_line1]

@@ -24,6 +24,8 @@ urlpatterns = [
     path("money/", include(("money.urls", "money"), namespace="money")),
 
     path("accounts/", include("accounts.urls", namespace="accounts")),
+    
+
 ]
 
 if settings.DEBUG and not getattr(settings, "USE_S3", False):

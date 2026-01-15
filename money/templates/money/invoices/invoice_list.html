@@ -111,18 +111,13 @@
 
                   {# Action buttons: Review (preferred), PDF, Details #}
                   <div class="d-flex flex-wrap gap-1">
-                    {% if row.review_url %}
-                      <a class="btn btn-sm btn-primary" href="{{ row.review_url }}">Review</a>
+                    {% if row.detail_url and row.detail_url != "#" %}
+                      <a class="btn btn-sm btn-outline-primary" href="{{ row.detail_url }}">Review</span> </a>
                     {% endif %}
-
                     {% if row.pdf_url %}
-                      <a class="btn btn-sm btn-outline-secondary" href="{{ row.pdf_url }}" target="_blank" rel="noopener">
+                      <a class="btn btn-sm btn-outline-danger" href="{{ row.pdf_url }}" target="_blank" rel="noopener">
                         PDF
                       </a>
-                    {% endif %}
-
-                    {% if row.detail_url and row.detail_url != "#" %}
-                      <a class="btn btn-sm btn-outline-secondary" href="{{ row.detail_url }}">Details <span class="text-muted">V2</span> </a>
                     {% endif %}
                   </div>
                 </div>

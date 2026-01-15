@@ -1,0 +1,118 @@
+{% extends "index.html" %}
+
+{% block title %}Owner Portal{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+    <div>
+      <h1 class="h4 mb-0">Owner Portal</h1>
+      <div class="text-muted small">Company Profiles</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-primary" href="{% url 'money:companyprofile_create' %}">
+        <i class="fa-solid fa-plus me-1"></i> New
+      </a>
+    </div>
+  </div>
+
+  <!-- Mobile cards -->
+  <div class="d-md-none">
+    <div class="d-grid gap-2">
+      {% for p in profiles %}
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <div class="d-flex justify-content-between gap-2">
+              <div class="min-w-0">
+                <div class="fw-semibold text-truncate">
+                  {{ p.name_for_display }}
+                  {% if p.is_active %}
+                    <span class="badge text-bg-success ms-1">Active</span>
+                  {% endif %}
+                </div>
+                <div class="small text-muted text-truncate">Slug: {{ p.slug }}</div>
+                <div class="small text-muted text-truncate">{{ p.city }}, {{ p.state_province }}</div>
+              </div>
+              {% if p.logo %}
+                <img src="{{ p.logo.url }}" alt="{{ p.logo_alt_text|default:p.name_for_display }}"
+                     class="img-fluid rounded" style="max-height:44px; max-width:120px;">
+              {% endif %}
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 mt-3">
+              <a class="btn btn-outline-primary btn-sm" href="{% url 'money:companyprofile_detail' p.pk %}">View</a>
+              <a class="btn btn-outline-secondary btn-sm" href="{% url 'money:companyprofile_update' p.pk %}">Edit</a>
+              <a class="btn btn-outline-danger btn-sm" href="{% url 'money:companyprofile_delete' p.pk %}">Delete</a>
+
+              {% if not p.is_active %}
+                <form method="post" action="{% url 'money:companyprofile_activate' p.pk %}" class="ms-auto">
+                  {% csrf_token %}
+                  <button class="btn btn-success btn-sm" type="submit">Activate</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% empty %}
+        <div class="alert alert-light border">No company profiles yet.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Desktop table -->
+  <div class="d-none d-md-block">
+    <div class="card shadow-sm">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Name</th>
+              <th>Slug</th>
+              <th>Location</th>
+              <th>Status</th>
+              <th class="text-end" style="width: 320px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in profiles %}
+              <tr>
+                <td class="fw-semibold">
+                  <a class="text-decoration-none" href="{% url 'money:companyprofile_detail' p.pk %}">
+                    {{ p.name_for_display }}
+                  </a>
+                </td>
+                <td class="text-muted">{{ p.slug }}</td>
+                <td class="text-muted">{{ p.city }}, {{ p.state_province }}</td>
+                <td>
+                  {% if p.is_active %}
+                    <span class="badge text-bg-success">Active</span>
+                  {% else %}
+                    <span class="badge text-bg-secondary">Inactive</span>
+                  {% endif %}
+                </td>
+                <td class="text-end">
+                  <div class="d-inline-flex gap-2">
+                    <a class="btn btn-outline-primary btn-sm" href="{% url 'money:companyprofile_detail' p.pk %}">View</a>
+                    <a class="btn btn-outline-secondary btn-sm" href="{% url 'money:companyprofile_update' p.pk %}">Edit</a>
+                    <a class="btn btn-outline-danger btn-sm" href="{% url 'money:companyprofile_delete' p.pk %}">Delete</a>
+                    {% if not p.is_active %}
+                      <form method="post" action="{% url 'money:companyprofile_activate' p.pk %}">
+                        {% csrf_token %}
+                        <button class="btn btn-success btn-sm" type="submit">Activate</button>
+                      </form>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5" class="text-center text-muted py-4">No company profiles yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

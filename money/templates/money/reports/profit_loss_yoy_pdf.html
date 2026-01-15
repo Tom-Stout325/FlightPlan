@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Profit &amp; Loss – Year Over Year</title>
+
+  <style>
+  @page {
+    size: Letter;
+    margin: .5in;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 Roboto, Helvetica, Arial, sans-serif;
+    font-size: 11px;
+    color: #111;
+  }
+
+  h1 {
+    font-size: 18px;
+    margin: 6px 0 2px 0;
+  }
+
+  h2 {
+    font-size: 13px;
+    margin: 2px 0;
+    font-weight: normal;
+    color: #444;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .header img {
+    max-height: 50px;
+    margin-bottom: 8px;
+  }
+
+  .meta {
+    font-size: 10px;
+    color: #555;
+    margin-top: 6px;
+  }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+
+    thead th {
+      border-bottom: 2px solid #000;
+      padding: 6px 4px;
+      font-weight: bold;
+      text-align: right;
+    }
+
+    thead th:first-child {
+      text-align: left;
+    }
+
+    tbody td {
+      padding: 4px 4px;
+      vertical-align: top;
+      text-align: right;
+    }
+
+    tbody td:first-child {
+      text-align: left;
+    }
+
+    .section {
+      font-weight: bold;
+      border-top: 1px solid #000;
+      padding-top: 8px;
+    }
+
+    .category {
+      font-weight: bold;
+      padding-top: 6px;
+    }
+
+    .subcategory {
+      padding-left: 16px;
+      color: #444;
+      font-size: 10px;
+    }
+
+    .total {
+      font-weight: bold;
+      border-top: 1px solid #000;
+      border-bottom: 1px solid #000;
+      padding-top: 6px;
+    }
+
+    .net {
+      font-weight: bold;
+      border-top: 2px solid #000;
+      padding-top: 8px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Header -->
+  <div class="header">
+
+  {% if BRAND_LOGO_URL %}
+    <img src="{{ BRAND_LOGO_URL }}" alt="{{ BRAND_PROFILE.name_for_display }}">
+  {% endif %}
+
+  <h1>Profit &amp; Loss Statement</h1>
+
+  {% if BRAND_PROFILE %}
+    <h2>{{ BRAND_PROFILE.name_for_display }}</h2>
+  {% endif %}
+
+  <h2>
+    Year Over Year: {{ years.0 }} – {{ years|last }}
+  </h2>
+
+  <div class="meta">
+    Generated {{ now|date:"M j, Y g:i A" }}
+  </div>
+
+</div>
+
+
+  <!-- Report Table -->
+  <table>
+    <thead>
+      <tr>
+        <th>Line Item</th>
+        {% for y in years %}
+          <th>{{ y }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+
+    <tbody>
+      <!-- Income -->
+      <tr>
+        <td class="section">Revenue</td>
+        {% for y in years %}<td></td>{% endfor %}
+      </tr>
+
+      {% for cat in income_rows %}
+        <tr>
+          <td class="category">{{ cat.category }}</td>
+          {% for v in cat.values %}
+            <td>${{ v|floatformat:2 }}</td>
+          {% endfor %}
+        </tr>
+
+        {% for sub in cat.subrows %}
+          <tr>
+            <td class="subcategory">
+              {{ sub.name }}
+              {% if sub.schedule_c_line %}
+                ({{ sub.schedule_c_line }})
+              {% endif %}
+            </td>
+            {% for v in sub.values %}
+              <td>${{ v|floatformat:2 }}</td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      {% endfor %}
+
+      <tr>
+        <td class="total">Total Income</td>
+        {% for v in income_totals %}
+          <td class="total">${{ v|floatformat:2 }}</td>
+        {% endfor %}
+      </tr>
+
+      <!-- Expenses -->
+      <tr>
+        <td class="section">Operating Expenses</td>
+        {% for y in years %}<td></td>{% endfor %}
+      </tr>
+
+      {% for cat in expense_rows %}
+        <tr>
+          <td class="category">{{ cat.category }}</td>
+          {% for v in cat.values %}
+            <td>${{ v|floatformat:2 }}</td>
+          {% endfor %}
+        </tr>
+
+        {% for sub in cat.subrows %}
+          <tr>
+            <td class="subcategory">
+              {{ sub.name }}
+              {% if sub.schedule_c_line %}
+                ({{ sub.schedule_c_line }})
+              {% endif %}
+            </td>
+            {% for v in sub.values %}
+              <td>${{ v|floatformat:2 }}</td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      {% endfor %}
+
+      <tr>
+        <td class="total">Total Expenses</td>
+        {% for v in expense_totals %}
+          <td class="total">${{ v|floatformat:2 }}</td>
+        {% endfor %}
+      </tr>
+
+      <!-- Net -->
+      <tr>
+        <td class="net">Net Profit</td>
+        {% for v in net_profits %}
+          <td class="net">${{ v|floatformat:2 }}</td>
+        {% endfor %}
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>
