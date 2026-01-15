@@ -1,46 +1,35 @@
 from django.contrib import admin
-from .models import *
-from .forms import EquipmentForm
-from .models import DroneSafetyProfile
-
+from .models import DroneSafetyProfile, Equipment
 
 
 
 @admin.register(Equipment)
 class EquipmentAdmin(admin.ModelAdmin):
-    list_display = ("name", "equipment_type", "brand", "model", "active")
-    list_filter = ("equipment_type", "active", "property_type")
-    search_fields = ("name", "brand", "model", "serial_number", "faa_number")
+    list_display = ("user", "name", "brand", "model")
 
-    fieldsets = (
-        ("Core", {
-            "fields": (
-                "name", "equipment_type", "brand", "model", "serial_number",
-                "active", "notes",
-            )
-        }),
-        ("Purchase / Sale", {
-            "fields": (
-                "purchase_date", "purchase_cost", "receipt",
-                "date_sold", "sale_price",
-            )
-        }),
-        ("Tax / Depreciation", {
-            "fields": (
-                "property_type",
-                "placed_in_service_date",
-                "depreciation_method",
-                "useful_life_years",
-                "business_use_percent",
-                "deducted_full_cost",
-            )
-        }),
-        ("Drone-only (FAA)", {
-            "fields": (
-                "faa_number", "faa_certificate", "drone_safety_profile",
-            )
-        }),
-    )
+    def get_fields(self, request, obj=None):
+        fields = list(super().get_fields(request, obj))
+        if request.user.is_superuser and "user" not in fields:
+            fields.insert(0, "user")
+        return fields
+
+    def get_readonly_fields(self, request, obj=None):
+        ro = list(super().get_readonly_fields(request, obj))
+        if not request.user.is_superuser:
+            ro.append("user")
+        return ro
+
+    def save_model(self, request, obj, form, change):
+        # Default owner when missing
+        if not obj.user_id:
+            obj.user = request.user
+        super().save_model(request, obj, form, change)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(user=request.user)
 
 
 

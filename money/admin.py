@@ -636,8 +636,3 @@ class RecurringTransactionAdmin(UserScopedAdminMixin, admin.ModelAdmin):
     ordering = ("-active", "day", "id")
 
 
-# ------------------------------------------------------------------------------
-# (Optional) If you want absolutely everything registered explicitly
-# ------------------------------------------------------------------------------
-# All models above are registered via @admin.register, so no trailing admin.site.register(...)
-# is necessary.
