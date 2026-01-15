@@ -59,7 +59,6 @@ def _attach_drone_flight_stats(request, equipment_qs):
     if drone_serials:
         flight_qs = FlightLog.objects.filter(drone_serial__in=drone_serials)
 
-        # If FlightLog has `user`, scope it. Safe no-op if it doesn't.
         if hasattr(FlightLog, "user"):
             flight_qs = flight_qs.filter(user=request.user)
 
@@ -67,7 +66,7 @@ def _attach_drone_flight_stats(request, equipment_qs):
             flight_qs.values("drone_serial")
             .annotate(
                 flights_count=Count("id"),
-                total_duration=Sum("flight_duration"),
+                total_duration=Sum("air_time"),
             )
         )
         stats_map = {
