@@ -2,6 +2,78 @@
 {% load static %}
 {% block title %}MoneyPortal{% endblock %}
 
+
+{% block extra_css %}
+<style>
+:root {
+  --accent-indigo: #6610f2;
+  --accent-purple: #6f42c1;
+  --accent-teal: #20c997;
+  --accent-orange: #fd7e14;
+  --accent-pink: #d63384;
+  --accent-slate: #6c757d;
+  --accent-brown: #795548;
+  --accent-deepblue: #0d6efd;
+}
+
+.hover-scale:hover {
+  transform: scale(1.02);
+  transition: all 0.2s ease-in-out;
+}
+
+/* Generic helpers */
+[class^="border-accent-"] { border-width: 1px; }
+[class^="card-accent-"] { border-top-width: 4px !important; }
+
+/* Indigo */
+.border-accent-indigo { border-color: var(--accent-indigo) !important; }
+.text-accent-indigo { color: var(--accent-indigo) !important; }
+.btn-accent-indigo { background: var(--accent-indigo); color: #fff; }
+
+/* Purple */
+.border-accent-purple { border-color: var(--accent-purple) !important; }
+.text-accent-purple { color: var(--accent-purple) !important; }
+.btn-accent-purple { background: var(--accent-purple); color: #fff; }
+
+/* Teal */
+.border-accent-teal { border-color: var(--accent-teal) !important; }
+.text-accent-teal { color: var(--accent-teal) !important; }
+.btn-accent-teal { background: var(--accent-teal); color: #fff; }
+
+/* Orange */
+.border-accent-orange { border-color: var(--accent-orange) !important; }
+.text-accent-orange { color: var(--accent-orange) !important; }
+.btn-accent-orange { background: var(--accent-orange); color: #fff; }
+
+/* Pink */
+.border-accent-pink { border-color: var(--accent-pink) !important; }
+.text-accent-pink { color: var(--accent-pink) !important; }
+.btn-accent-pink { background: var(--accent-pink); color: #fff; }
+
+/* Slate */
+.border-accent-slate { border-color: var(--accent-slate) !important; }
+.text-accent-slate { color: var(--accent-slate) !important; }
+.btn-accent-slate { background: var(--accent-slate); color: #fff; }
+
+/* Brown */
+.border-accent-brown { border-color: var(--accent-brown) !important; }
+.text-accent-brown { color: var(--accent-brown) !important; }
+.btn-accent-brown { background: var(--accent-brown); color: #fff; }
+
+/* Deep blue */
+.border-accent-deepblue { border-color: var(--accent-deepblue) !important; }
+.text-accent-deepblue { color: var(--accent-deepblue) !important; }
+.btn-accent-deepblue { background: var(--accent-deepblue); color: #fff; }
+
+
+
+  .hover-scale:hover {
+    transform: scale(1.02);
+    transition: all 0.2s ease-in-out;
+  }
+  </style>
+{% endblock %}
+
 {% block content %}
 <div class="container py-4">
   <!-- Header -->
@@ -139,12 +211,20 @@
         </div>
       </a>
     </div>
+    <div class="col">
+      <a href="{% url 'money:contractor_list' %}" class="text-decoration-none">
+        <div class="card shadow-sm h-100 border-accent-purple hover-scale card-accent-purple">
+          <div class="card-body d-flex flex-column text-center">
+            <h5 class="card-title text-accent-purple">🧾 Contractors</h5>
+            <p class="card-text mb-3">Track W-9s and prep 1099s.</p>
+            <div class="mt-auto">
+              <span class="btn btn-accent-purple w-100">Manage Contractors</span>
+            </div>
+          </div>
+        </div>
+      </a>
+    </div>
+
 </div>
 
-<style>
-.hover-scale:hover {
-  transform: scale(1.02);
-  transition: all 0.2s ease-in-out;
-}
-</style>
 {% endblock %}

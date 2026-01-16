@@ -1,0 +1,181 @@
+{# money/templates/money/taxes/profit_loss_tax.html #}
+{% extends "index.html" %}
+{% load humanize %}
+
+{% block title %}Tax Profit & Loss{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+
+  {# Header: title + toggle + year selector #}
+  <div class="d-flex flex-column flex-md-row justify-content-md-between align-items-md-center gap-2 mb-3">
+    <div>
+      <h3 class="mb-1">Profit &amp; Loss (Tax)</h3>
+      <div class="text-muted small">Single Year Statement</div>
+    </div>
+
+    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-md-end">
+
+      <div class="btn-group" role="group" aria-label="P&L View">
+        <a
+          class="btn btn-sm {% if pl_mode != 'yoy' %}btn-dark{% else %}btn-outline-dark{% endif %}"
+          href="{% url 'money:tax_profit_loss' %}?year={{ selected_year }}"
+        >
+          Single Year
+        </a>
+        <a
+          class="btn btn-sm {% if pl_mode == 'yoy' %}btn-dark{% else %}btn-outline-dark{% endif %}"
+          href="{% url 'money:tax_profit_loss_yoy' %}?year={{ selected_year }}"
+        >
+          YOY (3-Year)
+        </a>
+      </div>
+
+      <form method="get" action="{% url 'money:tax_profit_loss' %}" class="d-flex align-items-center gap-2 m-0">
+        <label for="year" class="small text-muted mb-0">Year</label>
+        <select
+          id="year"
+          name="year"
+          class="form-select form-select-sm"
+          onchange="this.form.submit()"
+        >
+          {% for y in year_choices %}
+            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </form>
+
+    </div>
+  </div>
+
+  {# PDF Buttons #}
+  <div class="d-flex justify-content-end gap-2 mb-3">
+    {% if selected_year %}
+      <a
+        href="{% url 'money:tax_profit_loss_pdf' selected_year %}?preview=1"
+        target="_blank"
+        class="btn btn-sm btn-outline-danger"
+      >
+        <i class="fa-solid fa-eye"></i> Preview PDF
+      </a>
+      <a
+        href="{% url 'money:tax_profit_loss_pdf' selected_year %}"
+        class="btn btn-sm btn-outline-danger"
+      >
+        <i class="fa-solid fa-file-pdf"></i> Download PDF
+      </a>
+    {% endif %}
+  </div>
+
+  {# Minimalist report card #}
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+
+      <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
+        <div>
+          <div class="h5 mb-0">Profit &amp; Loss Statement (Tax)</div>
+          <div class="text-muted small">
+            {% if BRAND_PROFILE %}
+              {{ BRAND_PROFILE.name_for_display }}
+            {% endif %}
+          </div>
+        </div>
+        <div class="text-muted small text-md-end">
+          <div><strong>Year:</strong> {{ selected_year }}</div>
+          <div><strong>Generated:</strong> {{ now|date:"M j, Y g:i A" }}</div>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="min-width: 260px;">Line Item</th>
+              <th class="text-end" style="min-width: 140px;">Amount</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {# Income header #}
+            <tr>
+              <td class="fw-bold">Revenue</td>
+              <td></td>
+            </tr>
+
+            {% for row in income_category_totals %}
+              <tr class="fw-semibold">
+                <td>{{ row.category }}</td>
+                <td class="text-end">${{ row.total|floatformat:2|intcomma }}</td>
+              </tr>
+
+              {% for sub_cat, amount, schedule_line in row.subcategories %}
+                <tr>
+                  <td class="ps-4 text-muted">
+                    {{ sub_cat }}
+                    {% if schedule_line %}
+                      <span class="small">({{ schedule_line }})</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end text-muted">${{ amount|floatformat:2|intcomma }}</td>
+                </tr>
+              {% endfor %}
+            {% empty %}
+              <tr>
+                <td colspan="2" class="text-center text-muted py-3">No income transactions found.</td>
+              </tr>
+            {% endfor %}
+
+            <tr class="table-light">
+              <td class="fw-bold" style="background: #d1e5f9;">Total Revenue</td>
+              <td class="text-end fw-bold" style="background: #d1e5f9;">${{ income_category_total|floatformat:2|intcomma }}</td>
+            </tr>
+
+            <tr><td colspan="2" style="height:10px; border:0;"></td></tr>
+
+            {# Expenses header #}
+            <tr>
+              <td class="fw-bold">Expenses</td>
+              <td></td>
+            </tr>
+
+            {% for row in expense_category_totals %}
+              <tr class="fw-semibold">
+                <td>{{ row.category }}</td>
+                <td class="text-end">${{ row.total|floatformat:2|intcomma }}</td>
+              </tr>
+
+              {% for sub_cat, amount, schedule_line in row.subcategories %}
+                <tr>
+                  <td class="ps-4 text-muted">
+                    {{ sub_cat }}
+                    {% if schedule_line %}
+                      <span class="small">({{ schedule_line }})</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end text-muted">${{ amount|floatformat:2|intcomma }}</td>
+                </tr>
+              {% endfor %}
+            {% empty %}
+              <tr>
+                <td colspan="2" class="text-center text-muted py-3">No expense transactions found.</td>
+              </tr>
+            {% endfor %}
+
+            <tr class="table-light">
+              <td class="fw-semibold" style="background: #d1e5f9;">Total Expenses</td>
+              <td class="text-end fw-semibold" style="background: #d1e5f9;">${{ expense_category_total|floatformat:2|intcomma }}</td>
+            </tr>
+
+            <tr class="table-dark">
+              <td class="fw-semibold" style="background: #769cc2;">Net Profit</td>
+              <td class="text-end fw-semibold" style="background: #769cc2;">${{ net_profit|floatformat:2|intcomma }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}

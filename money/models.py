@@ -168,6 +168,8 @@ class SubCategory(OwnedModelMixin):
         super().save(*args, **kwargs)
 
 
+
+
 class Team(OwnedModelMixin):
     name = models.CharField(max_length=50, blank=True, null=True)
 
@@ -323,7 +325,9 @@ class Transaction(OwnedModelMixin):
     invoice_number     = models.CharField(max_length=25, blank=True, null=True, help_text="Optional")
     recurring_template = models.ForeignKey("RecurringTransaction", null=True, blank=True, on_delete=models.SET_NULL, related_name="generated_transactions",)
     transport_type     = models.CharField(max_length=30, choices=TRANSPORT_CHOICES, null=True, blank=True, help_text="Used to identify if actual expenses apply",)
-
+    contractor         = models.ForeignKey("Contractor", null=True, blank=True, on_delete=models.SET_NULL, related_name="transactions")
+    
+    
     class Meta:
         ordering = ["date"]
         indexes = [
@@ -348,6 +352,7 @@ class Transaction(OwnedModelMixin):
     def clean(self):
         super().clean()
 
+
         # If sub_cat exists, force category alignment (single source of truth)
         if self.sub_cat_id:
             self.category = self.sub_cat.category
@@ -357,6 +362,8 @@ class Transaction(OwnedModelMixin):
         self._assert_owned_fk("sub_cat", self.sub_cat)
         self._assert_owned_fk("event", self.event)
         self._assert_owned_fk("team", self.team)
+        self._assert_owned_fk("contractor", self.contractor)
+
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -1208,3 +1215,180 @@ class InvoiceItemV2(OwnedModelMixin):
         if invoice:
             invoice.update_amount(save=True)
 
+
+
+
+
+
+# ------------------------------------------------------------------
+# CONTRACTORS
+# ------------------------------------------------------------------
+
+
+class Contractor(OwnedModelMixin):
+    """
+    Contractor / Subcontractor for W-9 tracking and 1099 preparation.
+
+    Security posture:
+    - Store only TIN last-4 (optional) + TIN type (SSN/EIN).
+    - Store the W-9 PDF as a document (S3), do NOT store full TIN in DB.
+    """
+
+    # ------------------------------------------------------------------
+    # Human-friendly ID (optional)
+    # ------------------------------------------------------------------
+    contractor_number = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="Optional human-friendly ID, e.g. C-00023",
+    )
+
+    # ------------------------------------------------------------------
+    # Identity
+    # ------------------------------------------------------------------
+    first_name = models.CharField(max_length=80)
+    last_name = models.CharField(max_length=80)
+    business_name = models.CharField(max_length=200, blank=True)
+
+    # ------------------------------------------------------------------
+    # Contact
+    # ------------------------------------------------------------------
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+
+    # ------------------------------------------------------------------
+    # Mailing address (for 1099 delivery fallback)
+    # ------------------------------------------------------------------
+    address1 = models.CharField(max_length=200, blank=True)
+    address2 = models.CharField(max_length=200, blank=True)
+    city = models.CharField(max_length=120, blank=True)
+    state = models.CharField(
+        max_length=2,
+        blank=True,
+        validators=[RegexValidator(r"^[A-Z]{2}$", "Use 2-letter state code (e.g., IN).")],
+        help_text="2-letter state code",
+    )
+    zip_code = models.CharField(
+        max_length=10,
+        blank=True,
+        validators=[RegexValidator(r"^\d{5}(-\d{4})?$", "Use ZIP format 12345 or 12345-6789.")],
+    )
+
+    # ------------------------------------------------------------------
+    # Tax classification
+    # ------------------------------------------------------------------
+    INDIVIDUAL_SOLEPROP = "individual_soleprop"
+    SINGLE_MEMBER_LLC = "single_member_llc"
+    PARTNERSHIP_LLC = "partnership_llc"
+    C_CORP = "c_corp"
+    S_CORP = "s_corp"
+    TRUST_ESTATE = "trust_estate"
+    OTHER = "other"
+
+    ENTITY_TYPE_CHOICES = [
+        (INDIVIDUAL_SOLEPROP, "Individual / Sole proprietor"),
+        (SINGLE_MEMBER_LLC, "Single-member LLC"),
+        (PARTNERSHIP_LLC, "Partnership / Multi-member LLC"),
+        (C_CORP, "C Corporation"),
+        (S_CORP, "S Corporation"),
+        (TRUST_ESTATE, "Trust / Estate"),
+        (OTHER, "Other"),
+    ]
+
+    entity_type = models.CharField(max_length=30, choices=ENTITY_TYPE_CHOICES)
+
+    SSN = "ssn"
+    EIN = "ein"
+    TIN_TYPE_CHOICES = [
+        (SSN, "SSN"),
+        (EIN, "EIN"),
+    ]
+
+    tin_type = models.CharField(max_length=3, choices=TIN_TYPE_CHOICES, blank=True)
+    tin_last4 = models.CharField(
+        max_length=4,
+        blank=True,
+        validators=[RegexValidator(r"^\d{4}$", "Enter last 4 digits.")],
+        help_text="Last 4 digits only. Do not store full TIN.",
+    )
+
+    is_1099_eligible = models.BooleanField(
+        default=True,
+        help_text="Whether this contractor should receive a 1099 (default True; you can override).",
+    )
+
+    # ------------------------------------------------------------------
+    # W-9 tracking (metadata + document)
+    # ------------------------------------------------------------------
+    W9_NOT_REQUESTED = "not_requested"
+    W9_REQUESTED = "requested"
+    W9_RECEIVED = "received"
+    W9_VERIFIED = "verified"
+
+    W9_STATUS_CHOICES = [
+        (W9_NOT_REQUESTED, "Not requested"),
+        (W9_REQUESTED, "Requested"),
+        (W9_RECEIVED, "Received"),
+        (W9_VERIFIED, "Verified"),
+    ]
+
+    w9_status = models.CharField(
+        max_length=20,
+        choices=W9_STATUS_CHOICES,
+        default=W9_NOT_REQUESTED,
+    )
+    w9_sent_date = models.DateField(null=True, blank=True)
+    w9_received_date = models.DateField(null=True, blank=True)
+    w9_document = models.FileField(
+        upload_to="money/tax-documents/w9/%Y/",
+        blank=True,
+        help_text="Store W-9 PDF (S3). Do not store full TIN in DB.",
+    )
+
+    notes = models.TextField(blank=True)
+
+    # ------------------------------------------------------------------
+    # 1099 e-delivery consent
+    # ------------------------------------------------------------------
+    edelivery_consent = models.BooleanField(default=False)
+    edelivery_consent_date = models.DateTimeField(null=True, blank=True)
+
+    # ------------------------------------------------------------------
+    # Housekeeping
+    # ------------------------------------------------------------------
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["last_name", "first_name", "id"]
+        indexes = [
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["user", "last_name", "first_name"]),
+        ]
+        constraints = [
+            # contractor_number is optional, but if present it should be unique per user.
+            models.UniqueConstraint(
+                fields=["user", "contractor_number"],
+                name="uniq_contractor_number_per_user",
+                condition=~models.Q(contractor_number=""),
+            )
+        ]
+
+    def __str__(self) -> str:
+        return self.display_name
+
+    @property
+    def display_name(self) -> str:
+        
+        if self.business_name:
+            return self.business_name
+        return f"{self.first_name} {self.last_name}".strip()
+
+    def clean(self):
+        super().clean() 
+        
+        if self.edelivery_consent and not self.edelivery_consent_date:
+            self.edelivery_consent_date = timezone.now()
+
+        if self.tin_last4 and not self.tin_type:
+            from django.core.exceptions import ValidationError
+            raise ValidationError({"tin_type": "Select SSN or EIN when entering last-4 digits."})

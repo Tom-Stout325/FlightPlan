@@ -12,12 +12,12 @@
     <a href="{% url 'money:add_sub_category' %}" class="btn btn-success btn-sm">+ Add Sub-Category</a>
   </div>
 
-  {% for cat in category %}
+  {% for cat in categories %}
     <div class="card shadow-sm mb-4">
       <div class="card-header d-flex justify-content-between align-items-center bg-light">
         <div>
           <h5 class="mb-0">{{ cat.category }}</h5>
-          <small class="text-muted">ID: {{ cat.id }}</small> &nbsp|&nbsp
+          <small class="text-muted">ID: {{ cat.id }}</small> &nbsp;|&nbsp;
           <small class="text-muted">Slug: {{ cat.slug }}</small>
         </div>
         <div>
@@ -25,13 +25,14 @@
           <a href="{% url 'money:delete_category' cat.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
         </div>
       </div>
+
       <ul class="list-group list-group-flush">
-        {% if cat.subcategories.all %}
+        {% if cat.subcategories.exists %}
           {% for sub in cat.subcategories.all %}
             <li class="list-group-item d-flex justify-content-between align-items-center">
               <div>
                 <strong>{{ sub.sub_cat }}</strong>
-                <small class="text-muted">(ID: {{ sub.id }})</small> &nbsp|&nbsp
+                <small class="text-muted">(ID: {{ sub.id }})</small> &nbsp;|&nbsp;
                 <small class="text-muted">(Slug: {{ sub.slug }})</small>
               </div>
               <div>
@@ -48,7 +49,6 @@
   {% empty %}
     <p class="text-muted text-center">No categories available.</p>
   {% endfor %}
-  
+
 </div>
-<div class="text-danger mb-2">{{ form.errors }}</div>
 {% endblock %}

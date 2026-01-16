@@ -1,0 +1,183 @@
+{% extends "index.html" %}
+
+{% block title %}{% if object %}Edit Contractor{% else %}Add Contractor{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-2 px-md-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h1 class="h4 mb-0">{% if object %}Edit Contractor{% else %}Add Contractor{% endif %}</h1>
+      <div class="text-muted small">W-9 tracking and 1099 prep</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="{% url 'money:contractor_list' %}">Back</a>
+  </div>
+
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">
+      {{ form.non_field_errors }}
+    </div>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" class="card shadow-sm">
+    <div class="card-body">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+
+      <div class="row g-3">
+
+        <div class="col-12 col-md-4">
+          <label class="form-label">Contractor #</label>
+          {{ form.contractor_number }}
+          <div class="form-text">Optional (e.g., C-00023)</div>
+          {{ form.contractor_number.errors }}
+        </div>
+
+        <div class="col-12 col-md-4">
+          <label class="form-label">First name</label>
+          {{ form.first_name }}
+          {{ form.first_name.errors }}
+        </div>
+
+        <div class="col-12 col-md-4">
+          <label class="form-label">Last name</label>
+          {{ form.last_name }}
+          {{ form.last_name.errors }}
+        </div>
+
+        <div class="col-12">
+          <label class="form-label">Business name (optional)</label>
+          {{ form.business_name }}
+          {{ form.business_name.errors }}
+        </div>
+
+        <div class="col-12 col-md-6">
+          <label class="form-label">Email</label>
+          {{ form.email }}
+          {{ form.email.errors }}
+        </div>
+
+        <div class="col-12 col-md-6">
+          <label class="form-label">Phone</label>
+          {{ form.phone }}
+          {{ form.phone.errors }}
+        </div>
+
+        <hr class="my-2">
+
+        <div class="col-12">
+          <label class="form-label">Address</label>
+          {{ form.address1 }}
+          {{ form.address1.errors }}
+        </div>
+
+        <div class="col-12">
+          <label class="form-label">Address 2</label>
+          {{ form.address2 }}
+          {{ form.address2.errors }}
+        </div>
+
+        <div class="col-12 col-md-5">
+          <label class="form-label">City</label>
+          {{ form.city }}
+          {{ form.city.errors }}
+        </div>
+
+        <div class="col-6 col-md-2">
+          <label class="form-label">State</label>
+          {{ form.state }}
+          {{ form.state.errors }}
+        </div>
+
+        <div class="col-6 col-md-3">
+          <label class="form-label">Zip</label>
+          {{ form.zip_code }}
+          {{ form.zip_code.errors }}
+        </div>
+
+        <hr class="my-2">
+
+        <div class="col-12 col-md-6">
+          <label class="form-label">Entity type</label>
+          {{ form.entity_type }}
+          {{ form.entity_type.errors }}
+        </div>
+
+        <div class="col-6 col-md-3">
+          <label class="form-label">TIN type</label>
+          {{ form.tin_type }}
+          {{ form.tin_type.errors }}
+        </div>
+
+        <div class="col-6 col-md-3">
+          <label class="form-label">TIN last 4</label>
+          {{ form.tin_last4 }}
+          {{ form.tin_last4.errors }}
+        </div>
+
+        <div class="col-12 col-md-4">
+          <div class="form-check mt-4">
+            {{ form.is_1099_eligible }}
+            <label class="form-check-label">1099 eligible</label>
+          </div>
+          {{ form.is_1099_eligible.errors }}
+        </div>
+
+        <hr class="my-2">
+
+        <div class="col-12 col-md-4">
+          <label class="form-label">W-9 status</label>
+          {{ form.w9_status }}
+          {{ form.w9_status.errors }}
+        </div>
+
+        <div class="col-6 col-md-4">
+          <label class="form-label">W-9 sent</label>
+          {{ form.w9_sent_date }}
+          {{ form.w9_sent_date.errors }}
+        </div>
+
+        <div class="col-6 col-md-4">
+          <label class="form-label">W-9 received</label>
+          {{ form.w9_received_date }}
+          {{ form.w9_received_date.errors }}
+        </div>
+
+        <div class="col-12">
+          <label class="form-label">W-9 PDF</label>
+          {{ form.w9_document }}
+          {{ form.w9_document.errors }}
+          <div class="form-text">Upload the signed W-9. (Store in S3)</div>
+        </div>
+
+        <div class="col-12 col-md-6">
+          <div class="form-check mt-2">
+            {{ form.edelivery_consent }}
+            <label class="form-check-label">Consents to electronic 1099 delivery</label>
+          </div>
+          {{ form.edelivery_consent.errors }}
+        </div>
+
+        <div class="col-12">
+          <label class="form-label">Notes</label>
+          {{ form.notes }}
+          {{ form.notes.errors }}
+        </div>
+
+        <div class="col-12">
+          <div class="form-check mt-2">
+            {{ form.is_active }}
+            <label class="form-check-label">Active</label>
+          </div>
+          {{ form.is_active.errors }}
+        </div>
+
+      </div>
+    </div>
+
+    <div class="card-footer d-flex justify-content-end gap-2">
+      <a class="btn btn-outline-secondary" href="{% url 'money:contractor_list' %}">Cancel</a>
+      <button class="btn btn-primary" type="submit">Save</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

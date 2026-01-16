@@ -6,7 +6,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from ...models import Category, Event, RecurringTransaction, SubCategory, Team, Transaction
+from ...models import Category, Event, RecurringTransaction, SubCategory, Team, Transaction, Contractor
 
 
 
@@ -43,6 +43,13 @@ class TransForm(forms.ModelForm):
         widget=forms.Select(attrs={"class": "form-control"}),
     )
 
+    contractor = forms.ModelChoiceField(
+        queryset=Contractor.objects.none(),
+        label="Contractor (Optional)",
+        required=False,
+        widget=forms.Select(attrs={"class": "form-control"}),
+    )
+    
     sub_cat = forms.ModelChoiceField(
         queryset=SubCategory.objects.none(),
         label="Sub-Category",
@@ -58,6 +65,7 @@ class TransForm(forms.ModelForm):
             "trans_type",
             "sub_cat",
             "amount",
+            "contractor",  
             "team",
             "transaction",
             "receipt",
@@ -82,8 +90,11 @@ class TransForm(forms.ModelForm):
         """
         super().__init__(*args, **kwargs)
         self.user = user
-
-        # Set owner EARLY (critical for OwnedModelMixin + model.save() calling full_clean())
+        
+        self.fields["contractor"].queryset = Contractor.objects.filter(
+            user=self.user,
+            is_active=True,
+        ).order_by("last_name", "first_name", "business_name")
         if self.user is not None and not getattr(self.instance, "user_id", None):
             self.instance.user = self.user
 
@@ -100,10 +111,18 @@ class TransForm(forms.ModelForm):
             self.fields["event"].queryset = Event.objects.all().order_by("title")
             self.fields["team"].queryset = Team.objects.all().order_by("name")
             self.fields["sub_cat"].queryset = SubCategory.objects.all().order_by("category__category", "sub_cat")
+            self.fields["contractor"].queryset = Contractor.objects.all().order_by(
+                "last_name", "first_name", "business_name"
+                )
 
     # ----------------------------
     # Field-level validation (ownership)
     # ----------------------------
+    def clean_contractor(self):
+        contractor = self.cleaned_data.get("contractor")
+        if contractor and self.user is not None and getattr(contractor, "user_id", None) != self.user.id:
+            raise ValidationError("Invalid contractor selection.")
+        return contractor
 
     def clean_sub_cat(self):
         sub_cat = self.cleaned_data.get("sub_cat")

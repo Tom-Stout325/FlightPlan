@@ -13,11 +13,29 @@ from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.utils import timezone
 from weasyprint import HTML
-
+from dataclasses import dataclass
 from equipment.models import Equipment
 from money.models import CompanyProfile, Transaction
+from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+try:
+    from .reports import _brand_pdf_context  
+except Exception:  
+    _brand_pdf_context = None
+    
+    
+from .reports import ( 
+    _selected_year_from_request,
+    _year_choices_for_user,
+    _company_context,
+
+)
+
+
+
 
 TWO_DP = DecimalField(max_digits=20, decimal_places=2)
 ZERO = Decimal("0.00")
@@ -25,6 +43,7 @@ ZERO = Decimal("0.00")
 MEALS_RATE = Decimal("0.50")
 PERSONAL_VEHICLE_TRANSPORT = "personal_vehicle"
 
+ZERO = Decimal("0.00")
 
 # -----------------------------------------------------------------------------
 # Helpers
@@ -165,16 +184,260 @@ def _build_tax_statement_context(request: HttpRequest, year: int | None) -> dict
     return ctx
 
 
-# -----------------------------------------------------------------------------
-# Views (tax-only)
-# -----------------------------------------------------------------------------
+
+
+# =============================================================================
+# Profit & Loss (Tax) - Single Year
+# =============================================================================
 
 @login_required
 def tax_profit_loss(request: HttpRequest) -> HttpResponse:
     year = _selected_year_from_request(request)
+
+    # Default to the most recent year with data (not the calendar year)
+    if year is None:
+        choices = _year_choices_for_user(request.user)  # already returns desc years
+        year = choices[0] if choices else timezone.localdate().year
+
     ctx = _build_tax_statement_context(request, year)
+    ctx["pl_mode"] = "single"
     ctx["current_page"] = "tax_profit_loss"
-    return render(request, "money/taxes/tax_profit_loss.html", ctx)
+    ctx.update(_brand_pdf_context(request))
+    ctx["now"] = timezone.now()
+
+    return render(request, "money/taxes/profit_loss_tax.html", ctx)
+
+
+@login_required
+def tax_profit_loss_pdf(request: HttpRequest, year: int) -> HttpResponse:
+    try:
+        selected_year = int(year)
+    except (TypeError, ValueError):
+        selected_year = timezone.localdate().year
+
+    ctx = _build_tax_statement_context(request, selected_year)
+    ctx["now"] = timezone.now()
+    ctx.update(_brand_pdf_context(request))
+
+    html = render_to_string(
+        "money/taxes/profit_loss_tax_pdf.html",  # create this PDF template (tax version)
+        ctx,
+        request=request,
+    )
+
+    pdf = HTML(
+        string=html,
+        base_url=request.build_absolute_uri("/"),
+    ).write_pdf()
+
+    preview_flag = (request.GET.get("preview") or "").strip().lower()
+    is_preview = preview_flag in {"1", "true", "yes", "y", "on"}
+
+    filename = f"Tax_Profit_Loss_Statement_{selected_year}.pdf"
+    disposition = "inline" if is_preview else "attachment"
+
+    resp = HttpResponse(pdf, content_type="application/pdf")
+    resp["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+    return resp
+
+
+# =============================================================================
+# Profit & Loss (Tax) - YOY (3 most recent years)
+# =============================================================================
+
+@dataclass(frozen=True)
+class YoYSubRow:
+    name: str
+    schedule_c_line: str
+    values: list[Decimal]  # aligned with years
+
+
+@dataclass(frozen=True)
+class YoYCategoryRow:
+    category: str
+    values: list[Decimal]  # aligned with years
+    subrows: list[YoYSubRow]
+
+
+def _pick_last_three_years(request: HttpRequest, selected_year: int | None) -> list[int]:
+    """
+    3 most recent years ending at selected_year (or current year).
+    Example: 2025 -> [2023, 2024, 2025]
+    """
+    end = selected_year or timezone.localdate().year
+    return [end - 2, end - 1, end]
+
+
+def _dec(v: Any) -> Decimal:
+    if isinstance(v, Decimal):
+        return v
+    if v is None:
+        return ZERO
+    try:
+        return Decimal(str(v))
+    except Exception:
+        return ZERO
+
+
+def _index_statement(
+    ctx: dict[str, Any],
+    key: str,
+) -> tuple[dict[str, Decimal], dict[str, dict[str, tuple[Decimal, str]]]]:
+    """
+    Builds:
+      cat_totals[category] -> total
+      subs[category][sub_name] -> (amount, schedule_c_line)
+
+    From ctx["income_category_totals"] or ctx["expense_category_totals"].
+    """
+    cat_totals: dict[str, Decimal] = {}
+    subs: dict[str, dict[str, tuple[Decimal, str]]] = defaultdict(dict)
+
+    for row in ctx.get(key, []):
+        cat = (row.get("category") or "Uncategorized").strip() or "Uncategorized"
+        cat_totals[cat] = _dec(row.get("total")).quantize(Decimal("0.01"))
+
+        for sub_name, amount, sched in (row.get("subcategories") or []):
+            sub = (sub_name or "").strip()
+            if not sub:
+                continue
+            subs[cat][sub] = (_dec(amount).quantize(Decimal("0.01")), (sched or "").strip())
+
+    return cat_totals, subs
+
+
+def _build_tax_statement_yoy_context(request: HttpRequest, selected_year: int | None = None) -> dict[str, Any]:
+    years = _pick_last_three_years(request, selected_year)
+
+    # Build the existing single-year contexts (preserves your totals logic)
+    per_year: list[dict[str, Any]] = [_build_tax_statement_context(request, y) for y in years]
+
+    income_cat_maps: list[dict[str, Decimal]] = []
+    income_sub_maps: list[dict[str, dict[str, tuple[Decimal, str]]]] = []
+    expense_cat_maps: list[dict[str, Decimal]] = []
+    expense_sub_maps: list[dict[str, dict[str, tuple[Decimal, str]]]] = []
+
+    for ctx in per_year:
+        ic, isubs = _index_statement(ctx, "income_category_totals")
+        ec, esubs = _index_statement(ctx, "expense_category_totals")
+        income_cat_maps.append(ic)
+        income_sub_maps.append(isubs)
+        expense_cat_maps.append(ec)
+        expense_sub_maps.append(esubs)
+
+    income_categories = sorted(set().union(*[m.keys() for m in income_cat_maps]))
+    expense_categories = sorted(set().union(*[m.keys() for m in expense_cat_maps]))
+
+    def build_section(
+        categories: list[str],
+        cat_maps: list[dict[str, Decimal]],
+        sub_maps: list[dict[str, dict[str, tuple[Decimal, str]]]],
+    ) -> list[YoYCategoryRow]:
+        rows: list[YoYCategoryRow] = []
+
+        for cat in categories:
+            cat_vals = [(cat_maps[i].get(cat, ZERO)).quantize(Decimal("0.01")) for i in range(len(years))]
+
+            all_subs: set[str] = set()
+            for i in range(len(years)):
+                all_subs |= set(sub_maps[i].get(cat, {}).keys())
+
+            subrows: list[YoYSubRow] = []
+            for sub in sorted(all_subs):
+                vals: list[Decimal] = []
+                sched_line = ""
+                for i in range(len(years)):
+                    amt, sched = sub_maps[i].get(cat, {}).get(sub, (ZERO, ""))
+                    vals.append(amt.quantize(Decimal("0.01")))
+                    if sched and not sched_line:
+                        sched_line = sched
+                subrows.append(YoYSubRow(name=sub, schedule_c_line=sched_line, values=vals))
+
+            rows.append(YoYCategoryRow(category=cat, values=cat_vals, subrows=subrows))
+
+        return rows
+
+    income_rows = build_section(income_categories, income_cat_maps, income_sub_maps)
+    expense_rows = build_section(expense_categories, expense_cat_maps, expense_sub_maps)
+
+    income_totals = [(_dec(c.get("income_category_total")).quantize(Decimal("0.01"))) for c in per_year]
+    expense_totals = [(_dec(c.get("expense_category_total")).quantize(Decimal("0.01"))) for c in per_year]
+    net_profits = [(_dec(c.get("net_profit")).quantize(Decimal("0.01"))) for c in per_year]
+
+    ctx: dict[str, Any] = {
+        "selected_year": years[-1],
+        "years": years,
+        "year_choices": _year_choices_for_user(request.user),
+        "income_rows": income_rows,
+        "expense_rows": expense_rows,
+        "income_totals": income_totals,
+        "expense_totals": expense_totals,
+        "net_profits": net_profits,
+        "now": timezone.now(),
+    }
+    ctx.update(_company_context())
+
+    if "_brand_pdf_context" in globals():
+        ctx.update(_brand_pdf_context(request))
+
+    return ctx
+
+
+@login_required
+def tax_profit_loss_yoy(request: HttpRequest) -> HttpResponse:
+    try:
+        ending_year = int(request.GET.get("year") or 0) or timezone.localdate().year
+    except (TypeError, ValueError):
+        ending_year = timezone.localdate().year
+
+    ctx = _build_tax_statement_yoy_context(request, ending_year)
+    ctx["pl_mode"] = "yoy"
+    ctx["current_page"] = "tax_profit_loss"
+    return render(request, "money/taxes/profit_loss_tax_yoy.html", ctx)
+
+
+@login_required
+def tax_profit_loss_yoy_pdf(request: HttpRequest) -> HttpResponse:
+    """
+    PDF for Tax Profit & Loss YOY (3 most recent years).
+    ?preview=1 -> inline (new tab)
+    otherwise  -> attachment (download)
+    Optional: ?year=2025 to set ending year
+    """
+    try:
+        ending_year = int(request.GET.get("year") or 0) or timezone.localdate().year
+    except (TypeError, ValueError):
+        ending_year = timezone.localdate().year
+
+    ctx = _build_tax_statement_yoy_context(request, ending_year)
+    ctx["now"] = timezone.now()
+
+    html = render_to_string(
+        "money/taxes/profit_loss_tax_yoy_pdf.html",  # create this PDF template (tax version)
+        ctx,
+        request=request,
+    )
+
+    pdf = HTML(
+        string=html,
+        base_url=request.build_absolute_uri("/"),
+    ).write_pdf()
+
+    preview_flag = (request.GET.get("preview") or "").strip().lower()
+    is_preview = preview_flag in {"1", "true", "yes", "y", "on"}
+
+    years = ctx.get("years") or [ending_year - 2, ending_year - 1, ending_year]
+    filename = f"Tax_Profit_Loss_YOY_{years[0]}_{years[-1]}.pdf"
+    disposition = "inline" if is_preview else "attachment"
+
+    resp = HttpResponse(pdf, content_type="application/pdf")
+    resp["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+    return resp
+
+
+
+
+
 
 
 @login_required

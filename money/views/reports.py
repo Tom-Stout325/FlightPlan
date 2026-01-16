@@ -17,9 +17,17 @@ from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from weasyprint import HTML
 from typing import Any
-from money.models import CompanyProfile, InvoiceV2, Transaction
+
+
+from money.models import (
+        CompanyProfile, 
+        InvoiceV2, 
+        Transaction,
+        Category,
+)
 
 logger = logging.getLogger(__name__)
+
 
 TWO_DP = DecimalField(max_digits=20, decimal_places=2)
 ZERO = Decimal("0.00")
@@ -580,21 +588,23 @@ def profit_loss_yoy_pdf(request: HttpRequest) -> HttpResponse:
 
 
 
-
-
-
-
-
-
-
-
-
+# -----------------------------------------------------------------------------
+# Categories & Sub Categories
+# -----------------------------------------------------------------------------
 
 @login_required
 def category_summary(request: HttpRequest) -> HttpResponse:
     year = _selected_year_from_request(request)
     ctx = _build_statement_context(request, year)
     ctx["current_page"] = "category_summary"
+
+    ctx["categories"] = (
+        Category.objects
+        .filter(user=request.user)
+        .prefetch_related("subcategories")
+        .order_by("category")
+    )
+
     return render(request, "money/reports/category_summary.html", ctx)
 
 

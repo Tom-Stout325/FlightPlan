@@ -1,0 +1,204 @@
+{# money/templates/money/taxes/profit_loss_tax_yoy.html #}
+{% extends "index.html" %}
+{% load humanize %}
+
+{% block title %}Tax Profit & Loss YOY{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+
+  {# Header: title + toggle + year selector #}
+  <div class="d-flex flex-column flex-md-row justify-content-md-between align-items-md-center gap-2 mb-3">
+    <div>
+      <h3 class="mb-1">Profit &amp; Loss (Tax)</h3>
+      <div class="text-muted small">Year over Year ({{ years.0 }}, {{ years.1 }}, {{ years.2 }})</div>
+    </div>
+
+    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-md-end">
+
+      <div class="btn-group" role="group" aria-label="P&L View">
+        <a
+          class="btn btn-sm {% if pl_mode != 'yoy' %}btn-dark{% else %}btn-outline-dark{% endif %}"
+          href="{% url 'money:tax_profit_loss' %}?year={{ selected_year }}"
+        >
+          Single Year
+        </a>
+        <a
+          class="btn btn-sm {% if pl_mode == 'yoy' %}btn-dark{% else %}btn-outline-dark{% endif %}"
+          href="{% url 'money:tax_profit_loss_yoy' %}?year={{ selected_year }}"
+        >
+          YOY (3-Year)
+        </a>
+      </div>
+
+      <form method="get" action="{% url 'money:tax_profit_loss_yoy' %}" class="d-flex align-items-center gap-2 m-0">
+        <label for="year" class="small text-muted mb-0">Ending year</label>
+        <select
+          id="year"
+          name="year"
+          class="form-select form-select-sm"
+          onchange="this.form.submit()"
+        >
+          {% for y in year_choices %}
+            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </form>
+
+    </div>
+  </div>
+
+  {# PDF Buttons #}
+  <div class="d-flex justify-content-end gap-2 mb-3">
+    {% if selected_year %}
+      <a
+        href="{% url 'money:tax_profit_loss_yoy_pdf' %}?year={{ selected_year }}&preview=1"
+        target="_blank"
+        class="btn btn-sm btn-outline-secondary"
+      >
+        <i class="fa-solid fa-eye"></i> Preview PDF
+      </a>
+      <a
+        href="{% url 'money:tax_profit_loss_yoy_pdf' %}?year={{ selected_year }}"
+        class="btn btn-sm btn-outline-danger"
+      >
+        <i class="fa-solid fa-file-pdf"></i> Download PDF
+      </a>
+    {% endif %}
+  </div>
+
+  {# Minimalist YOY report card #}
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+
+      <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
+        <div>
+          <div class="h5 mb-0">Profit &amp; Loss Statement (YOY - Tax)</div>
+          <div class="text-muted small">
+            {% if BRAND_PROFILE %}
+              {{ BRAND_PROFILE.name_for_display }}
+            {% endif %}
+          </div>
+        </div>
+        <div class="text-muted small text-md-end">
+          <div><strong>Years:</strong> {{ years.0 }}–{{ years.2 }}</div>
+          <div><strong>Generated:</strong> {{ now|date:"M j, Y g:i A" }}</div>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th style="min-width: 280px; position: sticky; left: 0; z-index: 2; background: fff;">
+                Line Item
+              </th>
+              {% for y in years %}
+                <th class="text-end" style="min-width: 140px;">{{ y }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr>
+              <td style="position: sticky; left: 0; z-index: 1; background: #fff;" class="fw-bold">
+                Revenue
+              </td>
+              {% for y in years %}<td></td>{% endfor %}
+            </tr>
+
+            {% for cat in income_rows %}
+              <tr class="fw-semibold">
+                <td style="position: sticky; left: 0; background: #fff; z-index: 1;">
+                  {{ cat.category }}
+                </td>
+                {% for v in cat.values %}
+                  <td class="text-end">${{ v|floatformat:2|intcomma }}</td>
+                {% endfor %}
+              </tr>
+
+              {% for sub in cat.subrows %}
+                <tr>
+                  <td style="position: sticky; left: 0; background: #fff; z-index: 1;" class="ps-4 text-muted">
+                    {{ sub.name }}
+                    {% if sub.schedule_c_line %}
+                      <span class="small">({{ sub.schedule_c_line }})</span>
+                    {% endif %}
+                  </td>
+                  {% for v in sub.values %}
+                    <td class="text-end text-muted">${{ v|floatformat:2|intcomma }}</td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            {% endfor %}
+
+            <tr class="table-light">
+              <td style="position: sticky; left: 0; background: #d1e5f9; z-index: 1;" class="fw-semibold">
+                Total Income
+              </td>
+              {% for v in income_totals %}
+                <td style="background: #d1e5f9;" class="text-end fw-semibold">${{ v|floatformat:2|intcomma }}</td>
+              {% endfor %}
+            </tr>
+
+            <tr><td colspan="4" style="height:10px; border:0;"></td></tr>
+
+            <tr>
+              <td style="position: sticky; left: 0; z-index: 1; background: #fff;" class="fw-bold">
+                Expenses
+              </td>
+              {% for y in years %}<td></td>{% endfor %}
+            </tr>
+
+            {% for cat in expense_rows %}
+              <tr class="fw-semibold">
+                <td style="position: sticky; left: 0; background: #fff; z-index: 1;">
+                  {{ cat.category }}
+                </td>
+                {% for v in cat.values %}
+                  <td class="text-end">${{ v|floatformat:2|intcomma }}</td>
+                {% endfor %}
+              </tr>
+
+              {% for sub in cat.subrows %}
+                <tr>
+                  <td style="position: sticky; left: 0; background: #fff; z-index: 1;" class="ps-4 text-muted">
+                    {{ sub.name }}
+                    {% if sub.schedule_c_line %}
+                      <span class="small">({{ sub.schedule_c_line }})</span>
+                    {% endif %}
+                  </td>
+                  {% for v in sub.values %}
+                    <td class="text-end text-muted">${{ v|floatformat:2|intcomma }}</td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            {% endfor %}
+
+            <tr class="table-light">
+              <td style="position: sticky; left: 0; background: #d1e5f9; z-index: 1;" class="fw-semibold">
+                Total Expenses
+              </td>
+              {% for v in expense_totals %}
+                <td class="text-end fw-semibold" style="background: #d1e5f9;">${{ v|floatformat:2|intcomma }}</td>
+              {% endfor %}
+            </tr>
+
+            <tr class="table-dark">
+              <td style="position: sticky; left: 0; background: #769cc2; z-index: 1;" class="fw-semibold">
+                Net Profit
+              </td>
+              {% for v in net_profits %}
+                <td class="text-end fw-semibold" style="background: #769cc2;">${{ v|floatformat:2|intcomma }}</td>
+              {% endfor %}
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}

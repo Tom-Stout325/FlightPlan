@@ -80,6 +80,11 @@ from .views.tax_reports import (
     tax_category_summary,
     form_4797_view,
     form_4797_pdf,
+    tax_profit_loss_pdf,
+    tax_profit_loss_yoy_pdf,
+    tax_profit_loss_yoy,
+    tax_profit_loss_yoy_pdf,
+    
 )
 
 from .views.vehicles import (
@@ -105,6 +110,14 @@ from .views.company_profiles import (
     CompanyProfileListView,
     CompanyProfileUpdateView,
     companyprofile_activate,
+)
+
+from .views.contractors import (
+    ContractorListView,
+    ContractorCreateView,
+    ContractorDetailView,
+    ContractorUpdateView,
+    ContractorDeleteView,
 )
 
 app_name = "money"
@@ -205,6 +218,10 @@ urlpatterns = [
     path("tax/profit-loss/", tax_profit_loss, name="tax_profit_loss"),
     path("tax/category-summary/", tax_category_summary, name="tax_category_summary"),
     path("taxes/schedule-c/", schedule_c_summary, name="schedule_c_summary"),
+    path("tax/reports/profit-loss/", tax_profit_loss, name="tax_profit_loss",),
+    path("tax/reports/profit-loss/pdf/<int:year>/", tax_profit_loss_pdf, name="tax_profit_loss_pdf",),
+    path("tax/reports/profit-loss/yoy/", tax_profit_loss_yoy, name="tax_profit_loss_yoy",),
+    path("tax/reports/profit-loss/yoy/pdf/", tax_profit_loss_yoy_pdf, name="tax_profit_loss_yoy_pdf",),
     path("form-4797/", form_4797_view, name="form_4797"),
     path("form-4797/pdf/", form_4797_pdf, name="form_4797_pdf"),
 
@@ -257,4 +274,13 @@ urlpatterns = [
     path("company-profiles/<int:pk>/edit/", CompanyProfileUpdateView.as_view(), name="companyprofile_update"),
     path("company-profiles/<int:pk>/delete/", CompanyProfileDeleteView.as_view(), name="companyprofile_delete"),
     path("company-profiles/<int:pk>/activate/", companyprofile_activate, name="companyprofile_activate"),
+    
+    # ---------------------------------------------------------------------
+    # Contractors (W-9 / 1099)
+    # ---------------------------------------------------------------------
+    path("contractors/", ContractorListView.as_view(), name="contractor_list"),
+    path("contractors/add/", ContractorCreateView.as_view(), name="contractor_add"),
+    path("contractors/<int:pk>/", ContractorDetailView.as_view(), name="contractor_detail"),
+    path("contractors/<int:pk>/edit/", ContractorUpdateView.as_view(), name="contractor_edit"),
+    path("contractors/<int:pk>/delete/", ContractorDeleteView.as_view(), name="contractor_delete"),
 ]

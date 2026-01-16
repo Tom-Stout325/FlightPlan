@@ -10,7 +10,7 @@ from django.core.files.storage import default_storage
 from django.urls import reverse, NoReverseMatch
 from django.utils.functional import cached_property
 
-from money.models import InvoiceV2, Invoice
+from money.models import InvoiceV2
 
 
 from dataclasses import dataclass

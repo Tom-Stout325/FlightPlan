@@ -1,0 +1,162 @@
+{% extends "index.html" %}
+{% load humanize %}
+
+{% block title %}Contractor{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-2 px-md-3">
+
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+    <div>
+      <h1 class="h4 mb-0">{{ contractor.display_name }}</h1>
+      <div class="text-muted small">
+        {% if contractor.business_name %}{{ contractor.first_name }} {{ contractor.last_name }} • {% endif %}
+        {{ contractor.get_entity_type_display }}
+        {% if contractor.contractor_number %} • {{ contractor.contractor_number }}{% endif %}
+      </div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{% url 'money:contractor_list' %}">Back</a>
+      <a class="btn btn-outline-primary" href="{% url 'money:contractor_edit' contractor.pk %}">
+        <i class="fa-solid fa-pen-to-square me-1"></i> Edit
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-2">
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="fw-semibold mb-2">W-9</div>
+
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="text-muted small">Status</div>
+            <span class="badge
+              {% if contractor.w9_status == 'verified' %} bg-success
+              {% elif contractor.w9_status == 'received' %} bg-primary
+              {% elif contractor.w9_status == 'requested' %} bg-warning text-dark
+              {% else %} bg-secondary
+              {% endif %}">
+              {{ contractor.get_w9_status_display }}
+            </span>
+          </div>
+
+          <div class="mt-2 small text-muted">
+            Sent: {{ contractor.w9_sent_date|default:"—" }}<br>
+            Received: {{ contractor.w9_received_date|default:"—" }}
+          </div>
+
+          {% if contractor.w9_document %}
+            <div class="mt-3">
+              <a class="btn btn-sm btn-outline-secondary" href="{{ contractor.w9_document.url }}" target="_blank">
+                <i class="fa-solid fa-file-pdf me-1"></i> View W-9
+              </a>
+            </div>
+          {% else %}
+            <div class="mt-3 text-muted small">No W-9 uploaded yet.</div>
+          {% endif %}
+
+          <hr>
+
+          <div class="fw-semibold mb-2">Delivery</div>
+          <div class="small">
+            E-delivery consent:
+            {% if contractor.edelivery_consent %}
+              <span class="badge bg-success">Yes</span>
+            {% else %}
+              <span class="badge bg-secondary">No</span>
+            {% endif %}
+          </div>
+
+          <hr>
+
+          <div class="fw-semibold mb-2">Contact</div>
+          <div class="small text-muted">
+            {% if contractor.email %}{{ contractor.email }}<br>{% endif %}
+            {% if contractor.phone %}{{ contractor.phone }}<br>{% endif %}
+            {% if contractor.address1 %}
+              {{ contractor.address1 }}{% if contractor.address2 %}, {{ contractor.address2 }}{% endif %}<br>
+              {{ contractor.city }}, {{ contractor.state }} {{ contractor.zip_code }}
+            {% endif %}
+          </div>
+
+          {% if contractor.tin_last4 %}
+            <div class="mt-2 small text-muted">
+              TIN: {{ contractor.get_tin_type_display }} • ****{{ contractor.tin_last4 }}
+            </div>
+          {% endif %}
+
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-2">
+            <div class="fw-semibold">Linked Transactions</div>
+
+            <form method="get" class="d-flex gap-2 align-items-center">
+              <label class="small text-muted mb-0">Year</label>
+              <select name="year" class="form-select form-select-sm" onchange="this.form.submit()">
+                {% for y in year_choices %}
+                  <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+              </select>
+              <noscript><button class="btn btn-sm btn-outline-secondary" type="submit">Go</button></noscript>
+            </form>
+          </div>
+
+          <div class="text-muted small mb-3">
+            Total ({{ selected_year }}): <span class="fw-semibold">${{ transaction_total|floatformat:2|intcomma }}</span>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th class="text-end">Amount</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for t in transactions %}
+                  <tr>
+                    <td class="text-nowrap">{{ t.date }}</td>
+                    <td class="min-w-0">
+                      <div class="text-truncate">{{ t.transaction }}</div>
+                      <div class="small text-muted text-truncate">
+                        {% if t.sub_cat %}{{ t.sub_cat }}{% elif t.category %}{{ t.category }}{% endif %}
+                        {% if t.event %} • {{ t.event }}{% endif %}
+                      </div>
+                    </td>
+                    <td class="text-end text-nowrap">${{ t.amount|floatformat:2|intcomma }}</td>
+                    <td class="text-end">
+                      <a class="btn btn-sm btn-outline-secondary" href="{% url 'money:transaction_detail' t.pk %}">View</a>
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="4" class="text-muted">No transactions linked for {{ selected_year }}.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      </div>
+
+      {% if contractor.notes %}
+        <div class="card shadow-sm mt-2">
+          <div class="card-body">
+            <div class="fw-semibold mb-1">Notes</div>
+            <div class="small">{{ contractor.notes|linebreaksbr }}</div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

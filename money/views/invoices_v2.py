@@ -18,6 +18,7 @@ from django.views import View
 from django.views.generic import DeleteView, DetailView, ListView
 from django.db.models.functions import Coalesce
 from django.apps import apps
+
 from money.forms.invoices.invoice_v2 import InvoiceItemV2FormSet, InvoiceV2Form
 from money.models import Client, CompanyProfile, InvoiceV2, Transaction
 
