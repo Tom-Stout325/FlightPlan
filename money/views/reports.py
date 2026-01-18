@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -16,17 +16,29 @@ from django.template.loader import render_to_string
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from weasyprint import HTML
+
+from django.apps import apps
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.generic import DetailView
 from typing import Any
 
+from money.services.profitability import build_profitability_context
 
 from money.models import (
         CompanyProfile, 
         InvoiceV2, 
         Transaction,
         Category,
+        Event,
 )
 
-logger = logging.getLogger(__name__)
+
+
+
+
+
+
+
 
 
 TWO_DP = DecimalField(max_digits=20, decimal_places=2)
@@ -1031,3 +1043,108 @@ def travel_summary_pdf_download(request: HttpRequest) -> HttpResponse:
         content_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="travel-summary-{ctx["selected_year"]}.pdf"'},
     )
+    
+    
+    
+    
+
+
+
+def _get_active_profile() -> CompanyProfile | None:
+    try:
+        return CompanyProfile.get_active()
+    except Exception:
+        return None
+    
+    
+def _require_event_owned_by_user(request, pk: int) -> Event:
+    # Use your existing ownership helper pattern if you have one
+    return Event.objects.get(pk=pk, user=request.user)
+
+
+class JobReviewView(LoginRequiredMixin, DetailView):
+    """
+    "Job Review" = profitability hub for an Event (displayed as Job in UI).
+    """
+    model = Event
+    template_name = "money/reports/job_review.html"
+    context_object_name = "job"
+
+    def get_object(self, queryset=None):
+        return _require_event_owned_by_user(self.request, self.kwargs["pk"])
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        job: Event = ctx["job"]
+        user = self.request.user
+
+        # Invoices for this job
+        invoices_qs = (
+            InvoiceV2.objects.filter(user=user, event=job)
+            .select_related("client", "event", "service")
+            .order_by("-date", "-pk")
+        )
+
+        invoice_numbers = list(
+            invoices_qs.exclude(invoice_number__isnull=True).exclude(invoice_number="").values_list("invoice_number", flat=True)
+        )
+
+        # Transactions linked to the job OR linked to any invoice_number under the job
+        tx_qs = (
+            Transaction.objects.filter(user=user)
+            .filter(Q(event=job) | Q(invoice_number__in=invoice_numbers))
+            .select_related("category", "sub_cat", "sub_cat__category", "event")
+            .order_by("date", "pk")
+            .distinct()
+        )
+
+        # Mileage: prefer Miles.event == job; also include invoice-number-linked miles
+        MilesModel = apps.get_model("money", "Miles")
+
+        mileage_qs = MilesModel.objects.filter(user=user).filter(
+            Q(event=job) | Q(invoice_number__in=invoice_numbers)
+        )
+
+        # Profitability context
+        profit_ctx = build_profitability_context(
+            user=user,
+            tx_qs=tx_qs,
+            mileage_qs=mileage_qs,
+            year_hint=job.event_year,
+        )
+        ctx.update(profit_ctx)
+
+        # Revenue: show both "invoiced" and "income tx"
+        invoiced_revenue = invoices_qs.aggregate(total=Sum("amount")).get("total") or 0
+        ctx["invoices"] = invoices_qs
+        ctx["invoiced_revenue"] = invoiced_revenue
+
+
+
+        income_total = ctx.get("income_total")  # Decimal
+        net_profit = ctx.get("net_income_effective")  # Decimal
+
+        margin_pct = None
+        badge_class = "bg-secondary"
+
+        try:
+            if income_total and income_total != Decimal("0.00"):
+                margin_pct = (net_profit / income_total) * Decimal("100")
+                # Color rules
+                if margin_pct >= Decimal("50"):
+                    badge_class = "bg-success"
+                elif margin_pct >= Decimal("20"):
+                    badge_class = "bg-warning text-dark"
+                else:
+                    badge_class = "bg-danger"
+        except (InvalidOperation, ZeroDivisionError, TypeError):
+            margin_pct = None
+            badge_class = "bg-secondary"
+
+        ctx["margin_pct"] = margin_pct
+        ctx["margin_badge_class"] = badge_class
+
+        # Brand/profile (you already use this)
+        ctx["profile"] = _get_active_profile()
+
+        return ctx

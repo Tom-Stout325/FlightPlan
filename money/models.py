@@ -207,14 +207,19 @@ class Client(OwnedModelMixin):
             models.UniqueConstraint(fields=["user", "email"], name="uniq_money_client_user_email"),
         ]
 
-
     def __str__(self):
-        return self.business or f"{self.first or ''} {self.last or ''}".strip() or "Unnamed Client"
+        if self.business:
+            return self.business
+
+        name = f"{self.first or ''} {self.last or ''}".strip()
+        if name:
+            return name
+
+        return self.email or "Unnamed Client"
+
 
     def clean(self):
         super().clean()
-
-        # Normalize/strip
         if self.business is not None:
             self.business = self.business.strip() or None
         if self.first is not None:
@@ -227,7 +232,6 @@ class Client(OwnedModelMixin):
             self.address2 = self.address2.strip() or None
         if self.phone is not None:
             self.phone = self.phone.strip() or None
-
         if self.email:
             self.email = self.email.strip().lower()
 
@@ -237,20 +241,32 @@ class Client(OwnedModelMixin):
 
 
 
+
+
 class Event(OwnedModelMixin):
-    EVENT_TYPE_CHOICES = [
+    CATEGORY_TYPE_CHOICES = [
         ("race", "Race"),
-        ("event", "Event"),
+        ("live_event", "Live Event"),
+        ("real_estate", "Real Estate"),
+        ("inspection", "Inspection"),
+        ("construction", "Construction"),
+        ("photography", "Photography"),
+        ("mapping", "Mapping"),
+        ("marketing", "Marketing"),
+        ("commercial", "Commercial"),
+        ("training", "Training"),
+        ("internal", "Internal"),
         ("other", "Other"),
     ]
 
     title                      = models.CharField(max_length=200)
-    event_type                 = models.CharField(max_length=50, choices=EVENT_TYPE_CHOICES, default="race")
+    event_type                 = models.CharField(max_length=50, choices=CATEGORY_TYPE_CHOICES, default="race")
     event_year                 = models.PositiveIntegerField(default=timezone.localdate().year, validators=[MinValueValidator(2000), MaxValueValidator(2100)], db_index=True, help_text="Year this event belongs to (used for reporting and invoice grouping).",)
-    location_city = models.CharField(max_length=200, blank=True, null=True)
-    location_address = models.CharField(max_length=500, blank=True, null=True)
-    notes = models.TextField(blank=True, null=True)
-    slug = models.SlugField(max_length=100, blank=True, null=True)
+    location_address           = models.CharField(max_length=500, blank=True, null=True)
+    location_city              = models.CharField(max_length=200, blank=True, null=True)
+    notes                      = models.TextField(blank=True, null=True)
+    client                     = models.ForeignKey("money.Client", on_delete=models.SET_NULL, null=True, blank=True, related_name="jobs", help_text="Optional. Attach a client to this job for reporting and defaults.",)
+    slug                       = models.SlugField(max_length=100, blank=True, null=True)
 
     class Meta:
         ordering = ["title"]
@@ -266,16 +282,19 @@ class Event(OwnedModelMixin):
             models.Index(fields=["user", "event_type"]),
             models.Index(fields=["user", "event_year"]),
             models.Index(fields=["user", "slug"]),
+            models.Index(fields=["user", "client"]),
         ]
 
     def __str__(self):
         return self.title
+    
+    def clean(self):
+        super().clean()
+        self._assert_owned_fk("client", self.client)
 
     def save(self, *args, **kwargs):
         if _is_blank(self.slug):
             self.slug = _safe_slug(self.title, 100) or None
-        if not self.event_year and self.title:
-            self.event_year = timezone.localdate().year
         super().save(*args, **kwargs)
 
 

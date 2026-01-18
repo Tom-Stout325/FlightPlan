@@ -1,0 +1,283 @@
+{% extends "index.html" %}
+{% load humanize %}
+
+{% block title %}Job Review — {{ job.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5" style="max-width: 900px;">
+  <a href="{% url 'money:event_list' %}" class="btn btn-link btn-sm px-0 mb-3">← Back to jobs</a>
+
+  <!-- TOP CARD -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+        <div>
+          <h1 class="h4 mb-1">{{ job.title }}</h1>
+          <div class="text-muted small">
+            Year {{ job.event_year }} • Type {{ job.get_event_type_display }}
+            {% if job.location_city %}
+              • {{ job.location_city }}
+            {% endif %}
+          </div>
+          {% if job.notes %}
+            <div class="small text-muted mt-2">{{ job.notes }}</div>
+          {% endif %}
+        </div>
+
+        <div class="d-flex flex-wrap justify-content-md-end gap-2">
+          <a href="{% url 'money:event_update' job.pk %}" class="btn btn-sm btn-outline-primary">
+            Edit job
+          </a>
+
+          {# Optional future: Export Job Summary PDF #}
+          <button class="btn btn-sm btn-outline-secondary" disabled>Export PDF (soon)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUMMARY + FINANCIALS -->
+  <div class="row g-3 mb-4">
+    <!-- Job Summary -->
+    <div class="col-12 col-md-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <h2 class="h6 mb-3">Job Summary</h2>
+          <dl class="row mb-0 small">
+            <dt class="col-5">Job</dt>
+            <dd class="col-7">{{ job.title }}</dd>
+            {% if margin_pct is not None %}
+              <div class="d-flex justify-content-between align-items-center small mb-1">
+                <span class="text-muted">Margin</span>
+                <span class="badge rounded-pill {{ margin_badge_class }}">
+
+                  {{ margin_pct|floatformat:1 }}%
+                </span>
+  
+
+              </div>
+            {% else %}
+              <div class="d-flex justify-content-between align-items-center small mb-1">
+                <span class="text-muted">Margin</span>
+                <span class="badge bg-secondary">—</span>
+              </div>
+            {% endif %}
+
+
+
+            <dt class="col-5">Year</dt>
+            <dd class="col-7">{{ job.event_year }}</dd>
+
+            <dt class="col-5">Type</dt>
+            <dd class="col-7">{{ job.get_event_type_display }}</dd>
+
+            <dt class="col-5">Invoices</dt>
+            <dd class="col-7">{{ invoices|length }}</dd>
+
+            <dt class="col-5">Transactions</dt>
+            <dd class="col-7">{{ tx_list|length }}</dd>
+
+            <dt class="col-5">Mileage entries</dt>
+            <dd class="col-7">{{ mileage_entries|length }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <!-- Financials -->
+    <div class="col-12 col-md-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <h2 class="h6 mb-3">Financials</h2>
+
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted small">Revenue (Invoices)</span>
+            <span class="fw-semibold">${{ invoiced_revenue|floatformat:2|intcomma }}</span>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center small mb-1">
+            <span class="text-muted">Income (Transactions)</span>
+            <span>${{ income_total|default:0|floatformat:2|intcomma }}</span>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center small mb-1">
+            <span class="text-muted">Expenses</span>
+            <span>${{ total_expenses|default:0|floatformat:2|intcomma }}</span>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center small mb-1">
+            <span class="text-muted">Mileage (taxable)</span>
+            <span>${{ mileage_dollars|default:0|floatformat:2|intcomma }}</span>
+          </div>
+
+          <hr class="my-2">
+
+          <div class="d-flex justify-content-between align-items-center small mb-1">
+            <span class="text-muted fw-semibold">Net profit (actual)</span>
+            <span class="fw-semibold">${{ net_income_effective|default:0|floatformat:2|intcomma }}</span>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center small mb-1">
+            <span class="text-muted">Taxable expenses</span>
+            <span>${{ deductible_expenses|default:0|floatformat:2|intcomma }}</span>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center small mt-2 border-top pt-2">
+            <span class="text-muted fw-semibold">Taxable income</span>
+            <span class="fw-semibold">${{ taxable_income|default:0|floatformat:2|intcomma }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INVOICES CARD -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h2 class="h6 mb-0">Invoices</h2>
+      <span class="small text-muted">{{ invoices|length }} invoice{{ invoices|length|pluralize }}</span>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>#</th>
+            <th class="d-none d-md-table-cell">Client</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th class="text-end">Amount</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for inv in invoices %}
+            <tr>
+              <td class="small">{{ inv.invoice_number|default:"(draft)" }}</td>
+              <td class="small d-none d-md-table-cell">{{ inv.client }}</td>
+              <td class="small">{{ inv.date|date:"M j, Y" }}</td>
+              <td class="small">{{ inv.status }}</td>
+              <td class="small text-end">${{ inv.amount|floatformat:2|intcomma }}</td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-secondary"
+                   href="{% url 'money:invoice_v2_detail' inv.pk %}">Review</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-center py-3 text-muted small">No invoices linked to this job.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TRANSACTIONS CARD (reuse your existing table) -->
+  <div class="card shadow-sm mt-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h2 class="h6 mb-0">Transactions</h2>
+      {% if tx_list %}
+        <span class="small text-muted">{{ tx_list|length }} transaction{{ tx_list|length|pluralize }}</span>
+      {% endif %}
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Date</th>
+            <th>Description</th>
+            <th>Category</th>
+            <th class="d-none d-md-table-cell">Sub-Category</th>
+            <th class="text-end">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in tx_list %}
+            <tr>
+              <td class="small">{{ t.date|date:"M j, Y" }}</td>
+              <td class="small">{{ t.transaction }}</td>
+              <td class="small">
+                {% if t.sub_cat %}
+                  {{ t.sub_cat.category.category }}
+                {% else %}
+                  {{ t.category.category }}
+                {% endif %}
+              </td>
+              <td class="small d-none d-md-table-cell">
+                {% if t.sub_cat %}
+                  {{ t.sub_cat.sub_cat }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="small text-end">${{ t.amount|floatformat:2|intcomma }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="text-center py-3 text-muted small">No transactions linked to this job.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MILEAGE CARD (reuse) -->
+  <div class="card shadow-sm mt-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h2 class="h6 mb-0">Mileage</h2>
+      <span class="small text-muted">
+        {{ total_mileage_miles|default:0|floatformat:1 }} miles @ ${{ mileage_rate|default:0|floatformat:2 }} / mile
+      </span>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Date</th>
+            <th>Client</th>
+            <th>Job</th>
+            <th class="text-center">Vehicle</th>
+            <th class="text-center">Miles</th>
+            <th class="text-end">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in mileage_entries %}
+            <tr>
+              <td class="small">{{ m.date|date:"M j, Y" }}</td>
+              <td class="small">{{ m.client }}</td>
+              <td class="small">
+                {% if m.event %}
+                  {{ m.event.title }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="small text-center">{{ m.vehicle|default:"—" }}</td>
+              <td class="small text-center">{{ m.miles|default:0|floatformat:1 }}</td>
+              <td class="small text-end">${{ m.amount|default:0|floatformat:2|intcomma }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-center py-3 text-muted small">No mileage entries linked to this job.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        {% if mileage_entries %}
+          <tfoot>
+            <tr class="fw-semibold">
+              <td colspan="4" class="text-end small">Total</td>
+              <td class="text-center small">{{ total_mileage_miles|default:0|floatformat:1 }}</td>
+              <td class="text-end small">${{ mileage_dollars|default:0|floatformat:2|intcomma }}</td>
+            </tr>
+          </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

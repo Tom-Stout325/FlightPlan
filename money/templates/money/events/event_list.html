@@ -1,53 +1,169 @@
-{% extends 'index.html' %}
+{% extends "index.html" %}
 {% load static %}
-{% load crispy_forms_tags %}
 
-{% block title %}Event List{% endblock %}
+{% block title %}Jobs List{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="text-primary mb-0">Event List</h2>
-    <a href="{% url 'money:create_event' %}" class="btn btn-outline-primary">
-      <i class="fas fa-plus-circle"></i> Add Event
+<div class="container py-3" style="max-width: 1100px;">
+
+  <!-- Header -->
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-3">
+    <div>
+      <h1 class="h4 mb-1 text-primary">Jobs</h1>
+      <div class="text-muted small">Filter by year, search by title or location, then review profitability.</div>
+    </div>
+    <a href="{% url 'money:create_event' %}" class="btn btn-sm btn-outline-primary">
+      <i class="fas fa-plus-circle me-1"></i> Add Job
     </a>
   </div>
 
+  <!-- Filters -->
+  <form method="get" class="card shadow-sm mb-3">
+    <div class="card-body p-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-3">
+          <label class="form-label small text-muted mb-1" for="year">Year</label>
+          <select id="year" name="year" class="form-select">
+            {% for y in years %}
+              <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-12 col-md-7">
+          <label class="form-label small text-muted mb-1" for="q">Search</label>
+          <input
+            id="q"
+            name="q"
+            type="text"
+            value="{{ query }}"
+            class="form-control"
+            placeholder="Search title, city, or address…"
+          >
+        </div>
+
+        <div class="col-12 col-md-2 d-grid">
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-search me-1"></i> Filter
+          </button>
+        </div>
+      </div>
+
+      {% if query %}
+        <div class="mt-2">
+          <a class="small" href="{% url 'money:event_list' %}?year={{ selected_year }}">Clear search</a>
+        </div>
+      {% endif %}
+    </div>
+  </form>
+
+  <!-- Table -->
   <div class="table-responsive shadow-sm rounded">
-    <table class="table table-hover align-middle">
+    <table class="table table-hover align-middle mb-0">
       <thead class="table-primary">
         <tr>
           <th>Title</th>
+          <th class="d-none d-md-table-cell">Client</th>
           <th>Type</th>
           <th>Location</th>
           <th class="text-end">Actions</th>
         </tr>
       </thead>
+
       <tbody>
         {% for event in events %}
-        <tr>
-          <td>{{ event.title }}</td>
-          <td>{{ event.event_type }}</td>
-          <td>{{ event.location_city }}</td>
-          <td class="text-end">
-            <a href="{% url 'money:event_detail' event.pk %}" class="btn btn-sm btn-outline-info" title="View">
-              <i class="fas fa-eye"></i>
-            </a>
-            <a href="{% url 'money:event_update' event.pk %}" class="btn btn-sm btn-outline-warning" title="Edit">
-              <i class="fas fa-edit"></i>
-            </a>
-            <a href="{% url 'money:event_delete' event.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
-              <i class="fas fa-trash-alt"></i>
-            </a>
-          </td>
-        </tr>
+          <tr>
+            <td class="fw-semibold">
+              {{ event.title }}
+              <div class="d-md-none small text-muted mt-1">
+                {% if event.client %}{{ event.client }}{% else %}—{% endif %}
+              </div>
+            </td>
+
+            <td class="d-none d-md-table-cell">
+              {% if event.client %}{{ event.client }}{% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+
+            <td>
+              <span class="badge bg-light text-dark border">
+                {{ event.get_event_type_display }}
+              </span>
+            </td>
+
+            <td>
+              {% if event.location_city %}
+                {{ event.location_city }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <td class="text-end">
+              <div class="d-inline-flex flex-wrap gap-1 justify-content-end">
+                <a href="{% url 'money:job_review' event.pk %}" class="btn btn-sm btn-outline-secondary" title="Review">
+                  <i class="fas fa-chart-line"></i>
+                  <span class="d-none d-lg-inline ms-1">Review</span>
+                </a>
+
+                <a href="{% url 'money:event_detail' event.pk %}" class="btn btn-sm btn-outline-info" title="View">
+                  <i class="fas fa-eye"></i>
+                </a>
+
+                <a href="{% url 'money:event_update' event.pk %}" class="btn btn-sm btn-outline-warning" title="Edit">
+                  <i class="fas fa-edit"></i>
+                </a>
+
+                <a href="{% url 'money:event_delete' event.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
+                  <i class="fas fa-trash-alt"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
         {% empty %}
-        <tr>
-          <td colspan="6" class="text-center text-muted py-4">No events found.</td>
-        </tr>
+          <tr>
+            <td colspan="5" class="text-center text-muted py-4">
+              No jobs found for {{ selected_year }}.
+            </td>
+          </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+
+  <!-- Pagination -->
+  {% if is_paginated %}
+    <nav class="mt-3" aria-label="Jobs pagination">
+      <ul class="pagination pagination-sm justify-content-center mb-0">
+        {% if page_obj.has_previous %}
+          <li class="page-item">
+            <a class="page-link"
+               href="?year={{ selected_year }}{% if query %}&q={{ query|urlencode }}{% endif %}&page={{ page_obj.previous_page_number }}">
+              Previous
+            </a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Previous</span></li>
+        {% endif %}
+
+        <li class="page-item disabled">
+          <span class="page-link">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+          </span>
+        </li>
+
+        {% if page_obj.has_next %}
+          <li class="page-item">
+            <a class="page-link"
+               href="?year={{ selected_year }}{% if query %}&q={{ query|urlencode }}{% endif %}&page={{ page_obj.next_page_number }}">
+              Next
+            </a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Next</span></li>
+        {% endif %}
+      </ul>
+    </nav>
+  {% endif %}
+
 </div>
 {% endblock %}

@@ -55,6 +55,7 @@ from .views.reports import (
     travel_summary,
     travel_summary_pdf_preview,
     travel_summary_pdf_download,
+    JobReviewView,
 )
 
 from .views.tax_tools import (
@@ -198,7 +199,7 @@ urlpatterns = [
     path("reports/travel-summary/", travel_summary, name="travel_summary"),
     path("reports/travel-summary/pdf/", travel_summary_pdf_preview, name="travel_summary_pdf_preview"),
     path("reports/travel-summary/pdf/download/", travel_summary_pdf_download, name="travel_summary_pdf_download"),
-
+   path("jobs/<int:pk>/review/", JobReviewView.as_view(), name="job_review"),
     # ---------------------------------------------------------------------
     # Legacy report aliases (safe to keep while migrating templates / bookmarks)
     # IMPORTANT: Do not use these in templates going forward.
@@ -263,7 +264,10 @@ urlpatterns = [
     path("events/add/", EventCreateView.as_view(), name="create_event"),
     path("events/<int:pk>/edit/", EventUpdateView.as_view(), name="event_update"),
     path("events/<int:pk>/", EventDetailView.as_view(), name="event_detail"),
+    path("events/<int:pk>/review/", JobReviewView.as_view(), name="job_review"),
     path("events/<int:pk>/delete/", EventDeleteView.as_view(), name="event_delete"),
+
+
 
     # ---------------------------------------------------------------------
     # Company Profiles
