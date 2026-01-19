@@ -1,48 +1,130 @@
-{% extends 'index.html' %}
+{% extends "index.html" %}
 {% load static %}
-{% block title %}Event: {{ event.title }}{% endblock %}
+
+{% block title %}
+Job: {% if event.job_number %}{{ event.job_number }} • {% endif %}{{ event.title }} {{ event.event_year }}
+{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="text-primary text-center">Job Details</h2>
+<div class="container py-3" style="max-width: 900px;">
+
+  <!-- Header -->
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-3">
     <div>
-      <a href="{% url 'money:event_update' event.pk %}" class="btn btn-outline-warning me-2">
-        <i class="fas fa-edit"></i> Edit Details
+      <h1 class="h4 mb-1 text-primary">Job Details</h1>
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        {% if event.job_number %}
+          <span class="badge text-bg-light border">
+            Job # <strong class="ms-1">{{ event.job_number }}</strong>
+          </span>
+        {% endif %}
+        <span class="badge text-bg-light border">
+          {{ event.event_year }}
+        </span>
+        <span class="badge bg-light text-dark border">
+          {{ event.get_event_type_display }}
+        </span>
+        {% if event.client %}
+          <span class="badge text-bg-light border">{{ event.client }}</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2">
+      <a href="{% url 'money:event_update' event.pk %}" class="btn btn-sm btn-outline-warning">
+        <i class="fas fa-edit me-1"></i> Edit
       </a>
-      <a href="{% url 'money:event_delete' event.pk %}" class="btn btn-outline-danger">
-        <i class="fas fa-trash-alt"></i> Delete
+      <a href="{% url 'money:event_delete' event.pk %}" class="btn btn-sm btn-outline-danger">
+        <i class="fas fa-trash-alt me-1"></i> Delete
       </a>
     </div>
   </div>
 
-  <div class="card shadow-sm border-primary">
-    <div class="card-body">
-      <dl class="row">
-        <dt class="col-sm-4">Job</dt>
-        <dd class="col-sm-8">{{ event.title }} - {{event.event_year}}</dd>
-        <dt class="col-sm-4">Client</dt>
-        <dd class="col-sm-8">{{ event.client }}</dd>
-        <dt class="col-sm-4">Type</dt>
-        <dd class="col-sm-8">{{ {{ event.get_event_type_display }}
-}}</dd>
+  <!-- Details Card -->
+  <div class="card shadow-sm">
+    <div class="card-body p-3 p-md-4">
 
-        <dt class="col-sm-4">Location</dt>
-        <dd class="col-sm-8">
-          {{ event.location_address }}
-          {{ event.location_city }}<br>
-        </dd>
+      <div class="mb-3">
+        <div class="text-muted small mb-1">Job</div>
+        <div class="h5 mb-0">{{ event.title }}</div>
+      </div>
 
-        <dt class="col-sm-4">Notes</dt>
-        <dd class="col-sm-8">{{ event.notes|linebreaksbr }}</dd>
-      </dl>
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <div class="text-muted small mb-1">Client</div>
+          <div>{% if event.client %}{{ event.client }}{% else %}<span class="text-muted">—</span>{% endif %}</div>
+        </div>
+
+        <div class="col-6 col-md-3">
+          <div class="text-muted small mb-1">Year</div>
+          <div>{{ event.event_year }}</div>
+        </div>
+
+        <div class="col-6 col-md-3">
+          <div class="text-muted small mb-1">Job Number</div>
+          <div>
+            {% if event.job_number %}
+              <span class="badge text-bg-light border"># {{ event.job_number }}</span>
+              <span class="text-muted small ms-2">Locked</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="col-12 col-md-6">
+          <div class="text-muted small mb-1">Type</div>
+          <div>
+            <span class="badge bg-light text-dark border">{{ event.get_event_type_display }}</span>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-6">
+          <div class="text-muted small mb-1">Location</div>
+          <div>
+            {% if event.location_address or event.location_city %}
+              {% if event.location_address %}{{ event.location_address }}{% endif %}
+              {% if event.location_address and event.location_city %}<br>{% endif %}
+              {% if event.location_city %}{{ event.location_city }}{% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="col-12">
+          <div class="text-muted small mb-1">Notes</div>
+          <div>
+            {% if event.notes %}
+              {{ event.notes|linebreaksbr }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      {# Optional: quick jumps once those filtered pages exist #}
+      {#
+      <hr class="my-4">
+      <div class="d-flex flex-column flex-sm-row gap-2">
+        <a class="btn btn-outline-primary" href="{% url 'money:transactions' %}?event={{ event.pk }}">
+          <i class="fas fa-receipt me-1"></i> View Transactions
+        </a>
+        <a class="btn btn-outline-primary" href="{% url 'money:invoice_list' %}?event={{ event.pk }}">
+          <i class="fas fa-file-invoice-dollar me-1"></i> View Invoices
+        </a>
+      </div>
+      #}
+
+      <div class="mt-4">
+        <a href="{% url 'money:event_list' %}" class="btn btn-outline-secondary">
+          <i class="fas fa-arrow-left me-1"></i> Back to Jobs
+        </a>
+      </div>
+
     </div>
   </div>
 
-  <div class="mt-3">
-    <a href="{% url 'money:event_list' %}" class="btn btn-outline-secondary">
-      <i class="fas fa-arrow-left"></i> Back to Jobs
-    </a>
-  </div>
 </div>
 {% endblock %}

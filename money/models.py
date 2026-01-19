@@ -7,11 +7,13 @@ from django.apps import apps
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
-from django.db import models, transaction
 from django.db.models import DecimalField, ExpressionWrapper, F, IntegerField, Q, Sum
 from django.db.models.functions import Cast
 from django.utils import timezone
 from django.utils.text import slugify
+from django.db import models
+from django.db import transaction as db_tx
+
 
 try:
     from django.contrib.postgres.indexes import GinIndex
@@ -238,64 +240,264 @@ class Client(OwnedModelMixin):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+        
+        
+        
 
+
+
+# -----------------------------------------------------------------------------
+# EVENTS
+# -----------------------------------------------------------------------------
+
+
+JOB_SEGMENT_DIGITS = {
+    "commercial": 1,
+    "real_estate": 2,
+    "inspection": 3,
+    "construction": 4,
+    "photography": 5,
+    "mapping": 6,
+    "training": 7,
+    "internal": 8,
+    "other": 9,
+}
+
+
+def _jobnum_prefix(year: int, seg_digit: int) -> str:
+    yy = year % 100
+    return f"{yy:02d}{seg_digit}"
+
+
+class JobNumberCounter(models.Model):
+    """
+    Global counter per (year, segment_digit). Tracks the last used 3-digit sequence.
+    Manual overrides do NOT advance this counter (behavior #2).
+    """
+    year = models.PositiveIntegerField(db_index=True)
+    segment_digit = models.PositiveSmallIntegerField(db_index=True)
+    last_seq = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["year", "segment_digit"],
+                name="uniq_money_job_counter_year_segment",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.year} seg={self.segment_digit} last_seq={self.last_seq:03d}"
 
 
 
 
 class Event(OwnedModelMixin):
     CATEGORY_TYPE_CHOICES = [
-        ("race", "Race"),
-        ("live_event", "Live Event"),
+        ("commercial", "Commercial"),
         ("real_estate", "Real Estate"),
         ("inspection", "Inspection"),
         ("construction", "Construction"),
         ("photography", "Photography"),
         ("mapping", "Mapping"),
-        ("marketing", "Marketing"),
-        ("commercial", "Commercial"),
         ("training", "Training"),
         ("internal", "Internal"),
         ("other", "Other"),
     ]
 
-    title                      = models.CharField(max_length=200)
-    event_type                 = models.CharField(max_length=50, choices=CATEGORY_TYPE_CHOICES, default="race")
-    event_year                 = models.PositiveIntegerField(default=timezone.localdate().year, validators=[MinValueValidator(2000), MaxValueValidator(2100)], db_index=True, help_text="Year this event belongs to (used for reporting and invoice grouping).",)
-    location_address           = models.CharField(max_length=500, blank=True, null=True)
-    location_city              = models.CharField(max_length=200, blank=True, null=True)
-    notes                      = models.TextField(blank=True, null=True)
-    client                     = models.ForeignKey("money.Client", on_delete=models.SET_NULL, null=True, blank=True, related_name="jobs", help_text="Optional. Attach a client to this job for reporting and defaults.",)
-    slug                       = models.SlugField(max_length=100, blank=True, null=True)
+    title = models.CharField(max_length=200)
+    # Base job number only (e.g., 261000). Invoices may later use suffixes; jobs do not.
+    job_number = models.CharField(max_length=20, blank=True, null=True, db_index=True)
+
+    event_type = models.CharField(
+        max_length=50,
+        choices=CATEGORY_TYPE_CHOICES,
+        default="commercial",
+    )
+
+    event_year = models.PositiveIntegerField(
+        default=timezone.localdate().year,
+        validators=[MinValueValidator(2000), MaxValueValidator(2100)],
+        db_index=True,
+        help_text="Year this job belongs to (used for reporting and invoice grouping).",
+    )
+
+    location_address = models.CharField(max_length=500, blank=True, null=True)
+    location_city = models.CharField(max_length=200, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+
+    client = models.ForeignKey(
+        "money.Client",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="jobs",
+        help_text="Optional. Attach a client to this job for reporting and defaults.",
+    )
+
+    slug = models.SlugField(max_length=100, blank=True, null=True)
 
     class Meta:
-        ordering = ["title"]
+        ordering = ["event_year", "job_number", "title"]
+
         constraints = [
             models.UniqueConstraint(
                 fields=["user", "slug"],
                 condition=Q(slug__isnull=False),
                 name="uniq_money_event_user_slug_not_null",
-            )
-        ]
-        indexes = [
-            models.Index(fields=["user", "title"]),
-            models.Index(fields=["user", "event_type"]),
-            models.Index(fields=["user", "event_year"]),
-            models.Index(fields=["user", "slug"]),
-            models.Index(fields=["user", "client"]),
+            ),
+            # Global per-year job numbers (not per user)
+            models.UniqueConstraint(
+                fields=["event_year", "job_number"],
+                condition=Q(job_number__isnull=False),
+                name="uniq_money_event_year_job_number_not_null",
+            ),
         ]
 
-    def __str__(self):
-        return self.title
-    
-    def clean(self):
+        indexes = [
+            models.Index(fields=["user", "event_year"]),
+            models.Index(fields=["user", "event_year", "job_number"]),
+            models.Index(fields=["job_number"]),
+            models.Index(fields=["event_year"]),
+            models.Index(fields=["event_type"]),
+            models.Index(fields=["client"]),
+            models.Index(fields=["user", "slug"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.title} {self.event_year}" if self.event_year else self.title
+
+    # -----------------------------------------------------------------
+    # Job Number helpers
+    # -----------------------------------------------------------------
+
+    def _segment_digit(self) -> int:
+        return JOB_SEGMENT_DIGITS.get(self.event_type or "commercial", JOB_SEGMENT_DIGITS["commercial"])
+
+    def _validate_job_number(self) -> None:
+        """
+        Validates base job number format + year/type prefix.
+        Jobs store base only: 6 digits, no suffix.
+        """
+        if not self.job_number:
+            return
+
+        s = (self.job_number or "").strip()
+
+        if "-" in s:
+            raise ValidationError(
+                {"job_number": "Job Number must be the base number only (example: 261000). No suffix."}
+            )
+
+        if len(s) != 6 or not s.isdigit():
+            raise ValidationError({"job_number": "Job Number must be a 6-digit number like 261000."})
+
+        year = int(self.event_year or timezone.localdate().year)
+        expected_prefix = _jobnum_prefix(year, self._segment_digit())  # e.g. "261"
+
+        if not s.startswith(expected_prefix):
+            raise ValidationError({"job_number": f"Job Number must start with {expected_prefix} for this year/type."})
+
+        self.job_number = s  # normalized
+
+    def _generate_job_number(self) -> str:
+        """
+        Generates the next available job number for (event_year, segment_digit).
+        Counter is advanced ONLY for auto-generated numbers (overrides do not advance).
+        """
+        year = int(self.event_year or timezone.localdate().year)
+        seg_digit = self._segment_digit()
+        prefix = _jobnum_prefix(year, seg_digit)  # e.g. "261"
+
+        with db_tx.atomic():
+            counter, _ = JobNumberCounter.objects.select_for_update().get_or_create(
+                year=year,
+                segment_digit=seg_digit,
+                defaults={"last_seq": 0},
+            )
+
+            next_seq = counter.last_seq
+            while True:
+                candidate = f"{prefix}{next_seq:03d}"  # e.g. 261000
+                exists = (
+                    type(self)
+                    .objects
+                    .filter(event_year=year, job_number=candidate)
+                    .exclude(pk=self.pk)
+                    .exists()
+                )
+                if not exists:
+                    break
+
+                next_seq += 1
+                if next_seq > 999:
+                    raise ValidationError(
+                        {"job_number": "No more job numbers available for this year/segment (000-999)."}
+                    )
+
+            counter.last_seq = next_seq + 1
+            counter.save(update_fields=["last_seq"])
+
+        return candidate
+
+    # -----------------------------------------------------------------
+    # Validation / persistence
+    # -----------------------------------------------------------------
+
+    def clean(self) -> None:
         super().clean()
+
+        # Normalize text fields
+        if self.title:
+            self.title = self.title.strip()
+        if self.location_city:
+            self.location_city = self.location_city.strip()
+        if self.location_address:
+            self.location_address = self.location_address.strip()
+        if self.notes:
+            self.notes = self.notes.strip()
+
+        # Ownership checks
         self._assert_owned_fk("client", self.client)
 
+        # Lock behavior:
+        # - job_number cannot change after creation (including clearing)
+        # - if job_number exists, event_year and event_type are also locked
+        if self.pk:
+            old = (
+                type(self)
+                .objects
+                .filter(pk=self.pk)
+                .values("job_number", "event_year", "event_type")
+                .first()
+            )
+            if old:
+                if old["job_number"] != self.job_number:
+                    raise ValidationError({"job_number": "Job Number is locked once created and cannot be changed."})
+
+                if old["job_number"]:
+                    if old["event_year"] != self.event_year:
+                        raise ValidationError({"event_year": "Year cannot be changed after Job Number is assigned."})
+                    if old["event_type"] != self.event_type:
+                        raise ValidationError({"event_type": "Type cannot be changed after Job Number is assigned."})
+
+        # Validate manual override (or existing value)
+        self._validate_job_number()
+
     def save(self, *args, **kwargs):
+        # Auto-generate if blank. Manual overrides are validated in clean().
+        if _is_blank(self.job_number):
+            self.job_number = self._generate_job_number()
+
+        # Generate slug from title (do not append year to title)
         if _is_blank(self.slug):
             self.slug = _safe_slug(self.title, 100) or None
+
         super().save(*args, **kwargs)
+
+
+
+
 
 
 class Service(OwnedModelMixin):

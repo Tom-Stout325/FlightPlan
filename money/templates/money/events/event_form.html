@@ -1,7 +1,7 @@
 {% extends "index.html" %}
 {% load crispy_forms_tags %}
 
-{% block title %}{{ form.instance.pk|yesno:"Edit Job,Add Job" }}{% endblock %}
+{% block title %}{{ is_create|yesno:"Add Job,Edit Job" }}{% endblock %}
 
 {% block content %}
 <div class="container py-3" style="max-width: 900px;">
@@ -9,10 +9,19 @@
   <!-- Header -->
   <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-3">
     <div>
-      <h1 class="h4 mb-1">{{ form.instance.pk|yesno:"Edit Job,Add Job" }}</h1>
+      <h1 class="h4 mb-1">{{ is_create|yesno:"Add Job,Edit Job" }}</h1>
       <div class="text-muted small">
-        Jobs group invoices, transactions, and mileage for profitability reports.
+        Jobs group invoices, transactions, and mileage for year-specific profitability reports.
       </div>
+
+      {% if not is_create and object.job_number %}
+        <div class="mt-2">
+          <span class="badge text-bg-light border">
+            Job # <strong class="ms-1">{{ object.job_number }}</strong>
+          </span>
+          <span class="text-muted small ms-2">Locked</span>
+        </div>
+      {% endif %}
     </div>
 
     <a href="{% url 'money:event_list' %}" class="btn btn-sm btn-outline-secondary">
@@ -28,18 +37,27 @@
 
         {{ form|crispy }}
 
-        <div class="d-flex flex-column flex-sm-row justify-content-end gap-2 mt-3">
+        <hr class="my-4">
+
+        <div class="d-flex flex-column flex-sm-row justify-content-end gap-2">
           <a href="{% url 'money:event_list' %}" class="btn btn-outline-secondary">
             Cancel
           </a>
+
           <button type="submit" class="btn btn-primary">
             <i class="fas fa-save me-1"></i>
-            {{ form.instance.pk|yesno:"Save Changes,Create Job" }}
+            {{ is_create|yesno:"Create Job,Save Changes" }}
           </button>
         </div>
       </form>
     </div>
   </div>
+
+  {% if is_create %}
+    <div class="alert alert-info border-0 mt-3 small mb-0">
+      <strong>Tip:</strong> Leave Job Number blank to auto-generate. If you override it, the number must match the selected year and type.
+    </div>
+  {% endif %}
 
 </div>
 {% endblock %}

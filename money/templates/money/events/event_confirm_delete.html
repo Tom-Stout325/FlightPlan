@@ -15,7 +15,7 @@
       <form method="post" class="mt-4">
         {% csrf_token %}
         <div class="d-flex justify-content-between">
-          <a href="{% url 'event_detail' event.pk %}" class="btn btn-outline-secondary">
+          <a href="{% url 'money:event_detail' event.pk %}" class="btn btn-outline-secondary">
             <i class="fas fa-times"></i> Cancel
           </a>
           <button type="submit" class="btn btn-danger">

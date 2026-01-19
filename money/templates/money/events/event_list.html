@@ -1,7 +1,7 @@
 {% extends "index.html" %}
 {% load static %}
 
-{% block title %}Jobs List{% endblock %}
+{% block title %}Jobs{% endblock %}
 
 {% block content %}
 <div class="container py-3" style="max-width: 1100px;">
@@ -62,7 +62,9 @@
     <table class="table table-hover align-middle mb-0">
       <thead class="table-primary">
         <tr>
-          <th>Title</th>
+          <th>Job</th>
+          <th class="d-none d-lg-table-cell">Job #</th>
+          <th class="d-none d-lg-table-cell">Year</th>
           <th class="d-none d-md-table-cell">Client</th>
           <th>Type</th>
           <th>Location</th>
@@ -73,23 +75,57 @@
       <tbody>
         {% for event in events %}
           <tr>
+            <!-- Job -->
             <td class="fw-semibold">
               {{ event.title }}
-              <div class="d-md-none small text-muted mt-1">
-                {% if event.client %}{{ event.client }}{% else %}—{% endif %}
+
+              <!-- Mobile meta -->
+              <div class="d-lg-none small text-muted mt-1 d-flex flex-wrap gap-2">
+                <span class="badge text-bg-light border">
+                  # {% if event.job_number %}{{ event.job_number }}{% else %}<span class="text-muted">—</span>{% endif %}
+                </span>
+
+                <span class="badge text-bg-light border">
+                  {{ event.event_year }}
+                </span>
+
+                {% if event.client %}
+                  <span class="badge text-bg-light border">{{ event.client }}</span>
+                {% endif %}
               </div>
             </td>
 
-            <td class="d-none d-md-table-cell">
-              {% if event.client %}{{ event.client }}{% else %}<span class="text-muted">—</span>{% endif %}
+            <!-- Job # (desktop) -->
+            <td class="d-none d-lg-table-cell">
+              {% if event.job_number %}
+                <span class="badge text-bg-light border"># {{ event.job_number }}</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
             </td>
 
+            <!-- Year (desktop) -->
+            <td class="d-none d-lg-table-cell">
+              {{ event.event_year }}
+            </td>
+
+            <!-- Client (md+) -->
+            <td class="d-none d-md-table-cell">
+              {% if event.client %}
+                {{ event.client }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <!-- Type -->
             <td>
               <span class="badge bg-light text-dark border">
                 {{ event.get_event_type_display }}
               </span>
             </td>
 
+            <!-- Location -->
             <td>
               {% if event.location_city %}
                 {{ event.location_city }}
@@ -98,6 +134,7 @@
               {% endif %}
             </td>
 
+            <!-- Actions -->
             <td class="text-end">
               <div class="d-inline-flex flex-wrap gap-1 justify-content-end">
                 <a href="{% url 'money:job_review' event.pk %}" class="btn btn-sm btn-outline-secondary" title="Review">
@@ -121,7 +158,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="5" class="text-center text-muted py-4">
+            <td colspan="7" class="text-center text-muted py-4">
               No jobs found for {{ selected_year }}.
             </td>
           </tr>
