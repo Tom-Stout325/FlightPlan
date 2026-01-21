@@ -1,5 +1,4 @@
 # money/forms/invoices/invoice_v2.py
-
 from __future__ import annotations
 
 from decimal import Decimal
@@ -41,9 +40,18 @@ class ClientChoiceField(ModelChoiceField):
 class InvoiceV2Form(forms.ModelForm):
     client = ClientChoiceField(queryset=Client.objects.none())
 
+    # Read-only display field (won’t be saved from POST)
+    invoice_number = forms.CharField(
+        required=False,
+        disabled=True,
+        label="Invoice #",
+        help_text="Auto-assigned from the Job number when you save.",
+    )
+
     class Meta:
         model = InvoiceV2
         fields = [
+            "invoice_number",   # <-- add this
             "client",
             "service",
             "event",
@@ -63,7 +71,7 @@ class InvoiceV2Form(forms.ModelForm):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Bootstrap-ish widgets (matches your template expectations)
+        # Bootstrap-ish widgets
         for field in self.fields.values():
             w = field.widget
             existing = w.attrs.get("class", "")
@@ -72,38 +80,22 @@ class InvoiceV2Form(forms.ModelForm):
             else:
                 w.attrs["class"] = (existing + " form-control").strip()
 
+        # Make invoice_number look clearly read-only
+        self.fields["invoice_number"].widget.attrs.update({"readonly": True})
+
         # Scope dropdowns by owner
         if user is not None:
-            self.fields["client"].queryset = (
-                Client.objects.filter(user=user).order_by("business", "last", "first")
-            )
-            self.fields["service"].queryset = (
-                Service.objects.filter(user=user).order_by("service")
-            )
-            self.fields["event"].queryset = (
-                Event.objects.filter(user=user).order_by("-event_year", "title")
-            )
+            self.fields["client"].queryset = Client.objects.filter(user=user).order_by("business", "last", "first")
+            self.fields["service"].queryset = Service.objects.filter(user=user).order_by("service")
+            self.fields["event"].queryset = Event.objects.filter(user=user).order_by("-event_year", "title")
 
-        # Optional placeholder for event
         if "event" in self.fields:
             self.fields["event"].required = False
 
-    def clean(self):
-        cleaned = super().clean()
+        # Display current value if editing
+        if self.instance and self.instance.invoice_number:
+            self.initial["invoice_number"] = self.instance.invoice_number
 
-        # Nice UX: if event is selected and event_name is blank, default it.
-        event = cleaned.get("event")
-        event_name = cleaned.get("event_name")
-        if event and not (event_name or "").strip():
-            cleaned["event_name"] = getattr(event, "title", "") or ""
-
-        # Optional UX: if paid_date exists, auto-set status to Paid (but still allow user override if needed)
-        paid_date = cleaned.get("paid_date")
-        status = cleaned.get("status")
-        if paid_date and status != InvoiceV2.STATUS_PAID:
-            cleaned["status"] = InvoiceV2.STATUS_PAID
-
-        return cleaned
 
 
 
@@ -112,11 +104,6 @@ class InvoiceV2Form(forms.ModelForm):
 # -----------------------------------------------------------------------------
 # Line item form
 # -----------------------------------------------------------------------------
-from django import forms
-from django.forms import BaseInlineFormSet, inlineformset_factory
-
-from money.models import InvoiceV2, InvoiceItemV2, SubCategory
-
 
 class InvoiceItemV2Form(forms.ModelForm):
     class Meta:
@@ -162,61 +149,6 @@ class InvoiceItemV2Form(forms.ModelForm):
             raise forms.ValidationError("Selected sub-category is missing a category.")
 
         return cleaned
-
-
-class BaseInvoiceItemV2FormSet(BaseInlineFormSet):
-    def __init__(self, *args, **kwargs):
-        self.user = kwargs.pop("user", None)
-        super().__init__(*args, **kwargs)
-
-    def get_form_kwargs(self, index):
-        kwargs = super().get_form_kwargs(index)
-        kwargs["user"] = self.user
-        return kwargs
-
-    def clean(self):
-        super().clean()
-
-        for form in self.forms:
-            if not hasattr(form, "cleaned_data"):
-                continue
-            if form.cleaned_data.get("DELETE"):
-                continue
-            if not form.cleaned_data.get("sub_cat"):
-                raise forms.ValidationError("Each line item needs a sub-category.")
-
-    def save(self, commit=True):
-        instances = super().save(commit=False)
-
-        for obj in instances:
-            if self.user is not None:
-                obj.user = self.user
-
-            # Always derive category from sub_cat
-            if obj.sub_cat_id:
-                obj.category = obj.sub_cat.category
-
-            if commit:
-                obj.save()
-
-        # ensure deletions get applied
-        for obj in self.deleted_objects:
-            obj.delete()
-
-        if commit:
-            self.save_m2m()
-
-        return instances
-
-
-InvoiceItemV2FormSet = inlineformset_factory(
-    InvoiceV2,
-    InvoiceItemV2,
-    form=InvoiceItemV2Form,
-    formset=BaseInvoiceItemV2FormSet,
-    extra=1,
-    can_delete=True,
-)
 
 
 
@@ -284,3 +216,65 @@ InvoiceItemV2FormSet = inlineformset_factory(
     extra=1,
     can_delete=True,
 )
+
+
+
+
+
+
+
+
+# class BaseInvoiceItemV2FormSet(BaseInlineFormSet):
+#     def __init__(self, *args, **kwargs):
+#         self.user = kwargs.pop("user", None)
+#         super().__init__(*args, **kwargs)
+
+#     def get_form_kwargs(self, index):
+#         kwargs = super().get_form_kwargs(index)
+#         kwargs["user"] = self.user
+#         return kwargs
+
+#     def clean(self):
+#         super().clean()
+
+#         for form in self.forms:
+#             if not hasattr(form, "cleaned_data"):
+#                 continue
+#             if form.cleaned_data.get("DELETE"):
+#                 continue
+#             if not form.cleaned_data.get("sub_cat"):
+#                 raise forms.ValidationError("Each line item needs a sub-category.")
+
+#     def save(self, commit=True):
+#         instances = super().save(commit=False)
+
+#         for obj in instances:
+#             if self.user is not None:
+#                 obj.user = self.user
+
+#             # Always derive category from sub_cat
+#             if obj.sub_cat_id:
+#                 obj.category = obj.sub_cat.category
+
+#             if commit:
+#                 obj.save()
+
+#         # ensure deletions get applied
+#         for obj in self.deleted_objects:
+#             obj.delete()
+
+#         if commit:
+#             self.save_m2m()
+
+#         return instances
+
+
+# InvoiceItemV2FormSet = inlineformset_factory(
+#     InvoiceV2,
+#     InvoiceItemV2,
+#     form=InvoiceItemV2Form,
+#     formset=BaseInvoiceItemV2FormSet,
+#     extra=1,
+#     can_delete=True,
+# )
+

@@ -12,11 +12,6 @@ environ.Env.read_env(BASE_DIR / ".env")
 OPENAI_API_KEY = env("OPENAI_API_KEY", default=None)
 OPENAI_TEXT_MODEL = os.getenv("OPENAI_TEXT_MODEL", "gpt-4.1-mini")
 
-
-
-# Set base directory first
-
-# Initialize environment
 env = environ.Env()
 
 environ.Env.read_env()
@@ -270,3 +265,8 @@ CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 
+# Custom Terminology (can be overridden per client via env)
+# TERM_EVENT_SINGULAR = env('TERM_EVENT_SINGULAR', default=None)
+# TERM_EVENT_PLURAL   = env('TERM_EVENT_PLURAL',   default=None)
+# CLIENT_SLUG         = env('CLIENT_SLUG', default='default') 
+# BRAND_NAME          = env('BRAND_NAME',  default='12bytes')

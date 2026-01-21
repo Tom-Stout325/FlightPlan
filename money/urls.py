@@ -30,6 +30,7 @@ from .views.invoices_v2 import (
     invoice_v2_send_email,
     invoice_v2_review,
     InvoiceV2ListView,
+    invoice_v2_suggest_number,
 )
 
 from .views.clients import (
@@ -163,6 +164,8 @@ urlpatterns = [
     path("invoices/v2/<int:pk>/send-email/", invoice_v2_send_email, name="invoice_v2_send_email"),
     path("invoices/v2/<int:pk>/review/", invoice_v2_review, name="invoice_v2_review"),
     path("invoices/", InvoiceV2ListView.as_view(), name="invoice_list"),
+
+    path("invoices-v2/suggest-number/", invoice_v2_suggest_number, name="invoice_v2_suggest_number"),
 
     # ---------------------------------------------------------------------
     # Clients

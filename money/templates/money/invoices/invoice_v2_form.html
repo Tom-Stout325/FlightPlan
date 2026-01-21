@@ -10,6 +10,22 @@
   {% endif %}
 {% endblock %}
 
+
+{% block extra_css %}
+<style>
+  /* Hide inline delete checkboxes; we toggle via JS */
+  input[type="checkbox"][name$="-DELETE"] { display: none !important; }
+
+  /* Slightly tighter inputs in table */
+  #invoice-items-table input.form-control,
+  #invoice-items-table select.form-select {
+    padding-top: .35rem;
+    padding-bottom: .35rem;
+  }
+</style>
+{% endblock %}
+
+
 {% block content %}
 <div class="container mt-4 mb-5" style="max-width: 900px;">
 
@@ -30,7 +46,40 @@
             {% endif %}
           </h1>
           <p class="text-muted small mb-0">
-            Amount is calculated from line items after saving.
+            
+          <div class="row g-2 mt-2">
+            <div class="col-12 col-md-4">
+              <label class="form-label small text-muted mb-1">Invoice #</label>
+              <input
+                type="text"
+                id="id_invoice_number"
+                class="form-control"
+                value="{% if form.invoice_number.value %}{{ form.invoice_number.value }}{% elif invoice and invoice.invoice_number %}{{ invoice.invoice_number }}{% else %}{% endif %}"
+                disabled
+                readonly
+              >
+              <div class="form-text">
+                Assigned from the Job number when you save.
+              </div>
+            </div>
+
+            <div class="col-12 col-md-8">
+              {% if invoice and invoice.pk and invoice.invoice_number %}
+                <div class="alert alert-light border mb-0 h-100 d-flex align-items-center">
+                  <div class="small text-muted">
+                    This invoice number is locked once created.
+                  </div>
+                </div>
+              {% else %}
+                <div class="alert alert-light border mb-0 h-100 d-flex align-items-center">
+                  <div class="small text-muted">
+                    Select a Job to preview the next invoice number.
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+
           </p>
         </div>
       </div>
@@ -294,18 +343,9 @@
   {% endwith %}
 </template>
 
-<style>
-  /* Hide inline delete checkboxes; we toggle via JS */
-  input[type="checkbox"][name$="-DELETE"] { display: none !important; }
 
-  /* Slightly tighter inputs in table */
-  #invoice-items-table input.form-control,
-  #invoice-items-table select.form-select {
-    padding-top: .35rem;
-    padding-bottom: .35rem;
-  }
-</style>
 
+{% block extra_js %}
 <script>
   (function () {
     const addBtn = document.getElementById("add-line-item-btn");
@@ -371,5 +411,37 @@
       }
     });
   })();
+
+
+(() => {
+  const eventSelect = document.getElementById("id_event");
+  const invoiceField = document.getElementById("id_invoice_number");
+  if (!eventSelect || !invoiceField) return;
+
+  async function suggest() {
+    const eventId = eventSelect.value;
+    if (!eventId) {
+      invoiceField.value = "";
+      return;
+    }
+
+    // Don't override existing invoice number on edit
+    if (invoiceField.value && invoiceField.value.trim().length > 0) return;
+
+    const url = "{% url 'money:invoice_v2_suggest_number' %}?event=" + encodeURIComponent(eventId);
+    const resp = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" }});
+    if (!resp.ok) return;
+
+    const data = await resp.json();
+    if (data.ok && data.invoice_number) {
+      invoiceField.value = data.invoice_number;
+    }
+  }
+
+  eventSelect.addEventListener("change", suggest);
+})();
 </script>
+
+{% endblock %}
+
 {% endblock %}

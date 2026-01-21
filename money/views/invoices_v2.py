@@ -18,9 +18,10 @@ from django.views import View
 from django.views.generic import DeleteView, DetailView, ListView
 from django.db.models.functions import Coalesce
 from django.apps import apps
+from django.http import JsonResponse
 
 from money.forms.invoices.invoice_v2 import InvoiceItemV2FormSet, InvoiceV2Form
-from money.models import Client, CompanyProfile, InvoiceV2, Transaction
+from money.models import Client, CompanyProfile, InvoiceV2, Transaction, Event, Service
 
 try:
     from weasyprint import HTML
@@ -321,6 +322,30 @@ class InvoiceV2DetailView(LoginRequiredMixin, DetailView):
 # -----------------------------------------------------------------------------
 # Create / Update (FBVs for predictable formset handling)
 # -----------------------------------------------------------------------------
+
+@login_required
+def invoice_v2_suggest_number(request: HttpRequest) -> JsonResponse:
+    event_id = request.GET.get("event")
+    if not event_id:
+        return JsonResponse({"ok": False}, status=400)
+
+    job = get_object_or_404(Event, user=request.user, pk=event_id)
+
+    temp = InvoiceV2(user=request.user, event=job, client=job.client, service=Service.objects.filter(user=request.user).first())
+    # NOTE: above client/service are only to satisfy clean() if needed; we won't save.
+    # If your clean() does not require client/service for suggestion, we can omit.
+
+    try:
+        with db_tx.atomic():
+            # Use the same generator as save() uses, but do not persist
+            suggested = temp._generate_invoice_number_from_job()
+    except Exception:
+        return JsonResponse({"ok": False}, status=200)
+
+    return JsonResponse({"ok": True, "invoice_number": suggested})
+
+
+
 @login_required
 def invoice_v2_create(request: HttpRequest) -> HttpResponse:
     parent = InvoiceV2(user=request.user)

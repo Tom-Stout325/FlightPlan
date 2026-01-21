@@ -12,7 +12,8 @@ from money.models import Client, Event
 
 def year_choices(start: int = 2020, years_ahead: int = 2):
     current = timezone.localdate().year
-    return [(y, str(y)) for y in range(start, current + years_ahead + 1)]
+    return [(y, y) for y in range(start, current + years_ahead + 1)]
+
 
 
 class _BaseEventForm(forms.ModelForm):
@@ -22,6 +23,14 @@ class _BaseEventForm(forms.ModelForm):
     - sets instance.user before model validation
     - defaults year and type for new objects
     """
+
+    event_year = forms.TypedChoiceField(
+        coerce=int,
+        choices=[],
+        required=True,
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="Event year",
+    )
 
     class Meta:
         model = Event
@@ -37,7 +46,6 @@ class _BaseEventForm(forms.ModelForm):
         widgets = {
             "title": forms.TextInput(attrs={"class": "form-control"}),
             "client": forms.Select(attrs={"class": "form-select"}),
-            "event_year": forms.Select(attrs={"class": "form-select"}),
             "event_type": forms.Select(attrs={"class": "form-select"}),
             "location_city": forms.TextInput(attrs={"class": "form-control"}),
             "location_address": forms.TextInput(attrs={"class": "form-control"}),
@@ -48,12 +56,13 @@ class _BaseEventForm(forms.ModelForm):
         self.user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
 
+        # Dynamic year choices + sensible create default
+        self.fields["event_year"].choices = year_choices()
+
         # Ensure owner is set BEFORE full_clean (OwnedModelMixin.clean)
         if self.user is not None and getattr(self.instance, "user_id", None) is None:
             self.instance.user = self.user
 
-        # Dynamic year choices + sensible create default
-        self.fields["event_year"].choices = year_choices()
         if not self.instance.pk and not self.initial.get("event_year"):
             self.initial["event_year"] = timezone.localdate().year
 
@@ -83,6 +92,7 @@ class _BaseEventForm(forms.ModelForm):
         if cleaned.get("notes"):
             cleaned["notes"] = cleaned["notes"].strip()
         return cleaned
+
 
 
 class EventCreateForm(_BaseEventForm):

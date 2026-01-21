@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import re
 from django.apps import apps
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -13,7 +14,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from django.db import models
 from django.db import transaction as db_tx
-
+from django.db import transaction
 
 try:
     from django.contrib.postgres.indexes import GinIndex
@@ -26,9 +27,15 @@ from project.common.models import OwnedModelMixin
 
 
 
+
+
 # -----------------------------------------------------------------------------
 # Helpers / Validators
 # -----------------------------------------------------------------------------
+
+_SUFFIX_RE = re.compile(r"^(?P<base>\d{6})(?:-(?P<seq>\d{2}))?$")
+
+
 
 HEX_COLOR_VALIDATOR = RegexValidator(
     regex=r"^#(?:[0-9a-fA-F]{3}){1,2}$",
@@ -305,36 +312,15 @@ class Event(OwnedModelMixin):
         ("other", "Other"),
     ]
 
-    title = models.CharField(max_length=200)
+    title                  = models.CharField(max_length=200)
     # Base job number only (e.g., 261000). Invoices may later use suffixes; jobs do not.
-    job_number = models.CharField(max_length=20, blank=True, null=True, db_index=True)
-
-    event_type = models.CharField(
-        max_length=50,
-        choices=CATEGORY_TYPE_CHOICES,
-        default="commercial",
-    )
-
-    event_year = models.PositiveIntegerField(
-        default=timezone.localdate().year,
-        validators=[MinValueValidator(2000), MaxValueValidator(2100)],
-        db_index=True,
-        help_text="Year this job belongs to (used for reporting and invoice grouping).",
-    )
-
-    location_address = models.CharField(max_length=500, blank=True, null=True)
-    location_city = models.CharField(max_length=200, blank=True, null=True)
-    notes = models.TextField(blank=True, null=True)
-
-    client = models.ForeignKey(
-        "money.Client",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="jobs",
-        help_text="Optional. Attach a client to this job for reporting and defaults.",
-    )
-
+    job_number             = models.CharField(max_length=20, blank=True, null=True, db_index=True)
+    event_type             = models.CharField(max_length=50, choices=CATEGORY_TYPE_CHOICES, default="commercial",)
+    event_year             = models.PositiveIntegerField(default=timezone.localdate().year, validators=[MinValueValidator(2000), MaxValueValidator(2100)], db_index=True, help_text="Year this job belongs to (used for reporting and invoice grouping).",)
+    location_address       = models.CharField(max_length=500, blank=True, null=True)
+    location_city          = models.CharField(max_length=200, blank=True, null=True)
+    notes                  = models.TextField(blank=True, null=True)
+    client = models.ForeignKey("money.Client", on_delete=models.SET_NULL, null=True, blank=True, related_name="jobs", help_text="Optional. Attach a client to this job for reporting and defaults.",)
     slug = models.SlugField(max_length=100, blank=True, null=True)
 
     class Meta:
@@ -1066,20 +1052,18 @@ class InvoiceV2(OwnedModelMixin):
     from_email         = models.EmailField(blank=True)
     from_website       = models.URLField(blank=True)
     from_tax_id        = models.CharField(max_length=64, blank=True)
-
     from_logo_url      = models.URLField(blank=True)
     from_header_logo_max_width_px = models.PositiveIntegerField(default=320)
-
     from_terms         = models.CharField(max_length=100, blank=True)
     from_net_days      = models.PositiveIntegerField(default=30)
     from_footer_text   = models.TextField(blank=True)
-
     from_currency      = models.CharField(max_length=3, default="USD")
     from_locale        = models.CharField(max_length=10, default="en_US")
     from_timezone      = models.CharField(max_length=64, default="America/Indiana/Indianapolis")
 
     pdf_snapshot       = models.FileField(upload_to="invoices_v2/", blank=True, null=True)
     pdf_snapshot_created_at = models.DateTimeField(null=True, blank=True)
+
 
     class Meta:
         ordering = ["invoice_number"]
@@ -1097,7 +1081,7 @@ class InvoiceV2(OwnedModelMixin):
             models.Index(fields=["user", "status"]),
         ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.invoice_number:
             return f"{self.invoice_number} ({self.client})"
         return f"InvoiceV2 #{self.pk} ({self.client})"
@@ -1106,27 +1090,85 @@ class InvoiceV2(OwnedModelMixin):
     def year(self) -> int:
         return self.date.year if self.date else timezone.localdate().year
 
-    def clean(self):
+    def clean(self) -> None:
         super().clean()
         self._assert_owned_fk("client", self.client)
         self._assert_owned_fk("event", self.event)
         self._assert_owned_fk("service", self.service)
 
+    # -------------------------------------------------------------------------
+    # Invoice numbering
+    # -------------------------------------------------------------------------
+
+    def _generate_invoice_number_from_job(self) -> str:
+        """
+        Rule:
+          - First invoice for a job: BASE (no suffix), e.g. 261001
+          - Next invoices: BASE-02, BASE-03, ...
+        """
+        if not self.event_id:
+            raise ValueError("Event/Job is required to generate job-based invoice number.")
+        if not self.user_id:
+            raise ValueError("Invoice user is required.")
+
+        # Ensure event loaded
+        job = getattr(self, "event", None)
+        if job is None:
+            job = Event.objects.get(pk=self.event_id)
+            self.event = job
+
+        base = (getattr(job, "job_number", "") or "").strip()
+        if not base:
+            raise ValueError("Selected Job has no job_number.")
+
+        # Lock this job's invoices for this user to avoid duplicates under concurrency
+        existing_numbers = (
+            type(self).objects.select_for_update()
+            .filter(user=self.user, event=job)
+            .filter(Q(invoice_number=base) | Q(invoice_number__startswith=f"{base}-"))
+            .values_list("invoice_number", flat=True)
+        )
+
+        max_seq = 0
+        for inv_no in existing_numbers:
+            s = (inv_no or "").strip()
+            m = _SUFFIX_RE.match(s)
+            if not m:
+                continue
+
+            # base-only counts as seq=1
+            if m.group("seq") is None:
+                max_seq = max(max_seq, 1)
+            else:
+                try:
+                    max_seq = max(max_seq, int(m.group("seq")))
+                except (TypeError, ValueError):
+                    continue
+
+        if max_seq == 0:
+            return base
+
+        # base-only is seq=1, so next should start at 02
+        next_seq = max_seq + 1
+        return f"{base}-{next_seq:02d}"
+
     def _generate_invoice_number(self) -> str:
         """
+        Legacy fallback:
         Generates invoice numbers like YYNNNN per *user*.
         Sequence starts at 0100 each year.
+        Only considers purely-numeric invoice numbers (no suffix).
         """
         if not self.date:
             raise ValueError("Invoice date is required to generate invoice_number.")
         if not self.user_id:
             raise ValueError("Invoice user is required to generate invoice_number.")
 
-        year_short = str(self.date.year)[-2:] 
+        year_short = str(self.date.year)[-2:]
         prefix = year_short
 
         qs = (
-            InvoiceV2.objects.select_for_update()
+            type(self).objects.select_for_update()
             .filter(
                 user=self.user,
                 invoice_number__startswith=prefix,
@@ -1148,18 +1190,36 @@ class InvoiceV2(OwnedModelMixin):
         return str(last_number + 1)
 
     def save(self, *args, **kwargs):
-        self.full_clean()
+        """
+        IMPORTANT:
+        Your OwnedModelMixin.save() calls full_clean().
+        So we must generate invoice_number BEFORE calling super().save()
+        when creating a new row.
+        """
+        # New invoice only
+        if not self.pk and not (self.invoice_number or "").strip():
+            # Prefer job-based numbering when event/job selected
+            if self.event_id:
+                with transaction.atomic():
+                    if getattr(self, "event", None) is None:
+                        self.event = Event.objects.get(pk=self.event_id)
+                    self.invoice_number = self._generate_invoice_number_from_job()
+                    super().save(*args, **kwargs)
+                    return
 
-        if not self.invoice_number and self.date:
-            with transaction.atomic():
-                self.full_clean()
-                self.invoice_number = self._generate_invoice_number()
-                super().save(*args, **kwargs)
-                return
+            # Fallback legacy numbering only if no job selected
+            if self.date:
+                with transaction.atomic():
+                    self.invoice_number = self._generate_invoice_number()
+                    super().save(*args, **kwargs)
+                    return
 
         super().save(*args, **kwargs)
 
-    # ---------- Totals ----------
+    # -------------------------------------------------------------------------
+    # Totals
+    # -------------------------------------------------------------------------
+
     def update_amount(self, save: bool = True):
         total = (
             self.items.annotate(
@@ -1172,7 +1232,12 @@ class InvoiceV2(OwnedModelMixin):
             .get("sum")
             or Decimal("0.00")
         )
-        self.amount = _quantize_money(total)
+        # If you have a shared money quantizer, keep using it.
+        try:
+            self.amount = _quantize_money(total)  # type: ignore[name-defined]
+        except Exception:
+            self.amount = total
+
         if save:
             self.save(update_fields=["amount"])
 
@@ -1204,12 +1269,14 @@ class InvoiceV2(OwnedModelMixin):
             return
 
         self.from_name = getattr(profile, "name_for_display", "") or ""
+
         address_lines = []
         if hasattr(profile, "full_address_lines"):
             try:
                 address_lines = profile.full_address_lines()
             except Exception:
                 address_lines = []
+
         self.from_address = "\n".join(address_lines)
         self.from_phone = getattr(profile, "main_phone", "") or ""
         self.from_email = (
@@ -1247,6 +1314,10 @@ class InvoiceV2(OwnedModelMixin):
         self.from_locale = getattr(profile, "default_locale", "") or "en_US"
         self.from_timezone = getattr(profile, "timezone", "America/Indiana/Indianapolis")
 
+    # -------------------------------------------------------------------------
+    # Net / Job profitability helpers
+    # -------------------------------------------------------------------------
+
     @property
     def net_income(self) -> Decimal:
         """
@@ -1270,7 +1341,11 @@ class InvoiceV2(OwnedModelMixin):
             .get("total")
             or Decimal("0.00")
         )
-        return _quantize_money(income_total - expense_total)
+
+        try:
+            return _quantize_money(income_total - expense_total)  # type: ignore[name-defined]
+        except Exception:
+            return income_total - expense_total
 
     def _get_income_subcat_from_items(self):
         items = self.items.select_related("sub_cat__category")
@@ -1371,6 +1446,9 @@ class InvoiceV2(OwnedModelMixin):
             transport_type=transport_type,
             overwrite_existing=True,
         )
+
+
+
 
 
 class InvoiceItemV2(OwnedModelMixin):

@@ -23,11 +23,15 @@
       <div class="row g-2 align-items-end">
         <div class="col-12 col-md-3">
           <label class="form-label small text-muted mb-1" for="year">Year</label>
-          <select id="year" name="year" class="form-select">
+          <select id="year"
+                  name="year"
+                  class="form-select"
+                  onchange="this.form.submit()">
             {% for y in years %}
               <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
             {% endfor %}
           </select>
+
         </div>
 
         <div class="col-12 col-md-7">
@@ -44,7 +48,7 @@
 
         <div class="col-12 col-md-2 d-grid">
           <button type="submit" class="btn btn-primary">
-            <i class="fas fa-search me-1"></i> Filter
+            <i class="fas fa-search me-1"></i> Search
           </button>
         </div>
       </div>
@@ -81,16 +85,15 @@
 
               <!-- Mobile meta -->
               <div class="d-lg-none small text-muted mt-1 d-flex flex-wrap gap-2">
-                <span class="badge text-bg-light border">
-                  # {% if event.job_number %}{{ event.job_number }}{% else %}<span class="text-muted">—</span>{% endif %}
-                </span>
-
-                <span class="badge text-bg-light border">
+              <span class="badge text-dark border">
+                # {{ event.job_number }}
+              </span>
+                <span class="badge text-dark border">
                   {{ event.event_year }}
                 </span>
 
                 {% if event.client %}
-                  <span class="badge text-bg-light border">{{ event.client }}</span>
+                  <span class="badge text-dark border">{{ event.client }}</span>
                 {% endif %}
               </div>
             </td>
@@ -98,7 +101,7 @@
             <!-- Job # (desktop) -->
             <td class="d-none d-lg-table-cell">
               {% if event.job_number %}
-                <span class="badge text-bg-light border"># {{ event.job_number }}</span>
+                <span class="badge text-dark border "># {{ event.job_number }}</span>
               {% else %}
                 <span class="text-muted">—</span>
               {% endif %}
