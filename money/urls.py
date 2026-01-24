@@ -123,6 +123,7 @@ from .views.contractors import (
     contractor_w9,
     contractor_w9_admin,
     contractor_w9_thanks,
+    contractor_send_w9_email,
 )
 
 
@@ -300,5 +301,7 @@ urlpatterns = [
     path("contractors/<int:pk>/w9/", contractor_w9_admin, name="contractor_w9_admin"),
     path("contractors/w9/<str:token>/thanks/", contractor_w9_thanks, name="contractor_w9_thanks"),
 
+    path("contractors/<int:pk>/send-w9/", contractor_send_w9_email, name="contractor_send_w9_email",
+),
 
 ]

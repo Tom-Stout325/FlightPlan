@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.conf import settings
 from django.db.models import Q, Sum
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
@@ -12,22 +13,23 @@ from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_GET, require_POST
 from django.views.decorators.http import require_GET
+from django.contrib import messages
 
 
 from money.forms.contractors.contractors import ContractorForm, ContractorW9UploadForm
 from money.models import Contractor, Transaction, ContractorW9Submission
 
 from money.utils.utils_token import parse_contractor_w9_token
-
-
-
-
+from ..emails import W9EmailContext, send_w9_request_email
+from ..utils import make_contractor_w9_token  # if you re-exported in money/utils/__init__.py
 
 
 
 IRS_W9_PDF_URL = "https://www.irs.gov/pub/irs-pdf/fw9.pdf"
+
+
 
 
 
@@ -426,3 +428,45 @@ def contractor_w9_thanks(request, token: str):
         "money/contractors/w9_thanks.html",
         {"contractor": contractor},
     )
+
+
+
+
+
+
+@login_required
+@require_POST
+def contractor_send_w9_email(request, pk: int):
+    contractor = get_object_or_404(Contractor, pk=pk, user=request.user)
+
+    if not contractor.email:
+        messages.error(request, "This contractor has no email address on file.")
+        return redirect("money:contractor_detail", pk=contractor.pk)
+
+    token = make_contractor_w9_token(contractor.id)
+    portal_path = reverse("money:contractor_w9", kwargs={"token": token})
+    portal_link = request.build_absolute_uri(portal_path)
+
+    business_name = getattr(settings, "BRAND_NAME", "Airborne Images")
+    business_phone = getattr(settings, "BRAND_PHONE", "")
+    support_email = getattr(settings, "BRAND_EMAIL", settings.DEFAULT_FROM_EMAIL)
+
+    try:
+        ctx = W9EmailContext(
+            contractor_name=f"{contractor.first_name} {contractor.last_name}".strip() or "there",
+            w9_portal_link=portal_link,
+            support_email=support_email,
+            business_name=business_name,
+            business_phone=business_phone,
+        )
+        send_w9_request_email(to_email=contractor.email, ctx=ctx)
+
+        contractor.w9_status = Contractor.W9_REQUESTED
+        contractor.w9_sent_date = timezone.localdate()
+        contractor.save(update_fields=["w9_status", "w9_sent_date"])
+
+        messages.success(request, f"W-9 request email sent to {contractor.email}.")
+    except Exception:
+        messages.error(request, "Email failed to send. Please try again or check email settings/logs.")
+
+    return redirect("money:contractor_detail", pk=contractor.pk)
