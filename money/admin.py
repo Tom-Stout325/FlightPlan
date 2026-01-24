@@ -485,7 +485,6 @@ class InvoiceV2Admin(UserScopedFKMixin, admin.ModelAdmin):
 
 @admin.register(InvoiceItemV2)
 class InvoiceItemV2Admin(UserScopedAdminMixin, admin.ModelAdmin):
-    # InvoiceItemV2 is owned via invoice.user
     owner_rel = "invoice__user"
 
     list_display = ("user_display", "invoice", "description", "qty", "price", "line_total_display", "sub_cat", "category")
@@ -636,3 +635,202 @@ class RecurringTransactionAdmin(UserScopedAdminMixin, admin.ModelAdmin):
     ordering = ("-active", "day", "id")
 
 
+# money/admin.py  (or money/contractors/admin.py if you split admin modules)
+
+from __future__ import annotations
+
+from django.contrib import admin
+from django.db.models import Q
+from django.utils import timezone
+
+from .models import Contractor  # adjust import path if needed
+
+
+@admin.register(Contractor)
+class ContractorAdmin(admin.ModelAdmin):
+    """
+    Admin for Contractor (user-owned / tenant-scoped).
+
+    Assumptions:
+      - Contractor inherits OwnedModelMixin with a `user` FK.
+      - You store only tin_last4 (never full TIN).
+    """
+
+    # ---------
+    # List page
+    # ---------
+    list_display = (
+        "display_name",
+        "business_name",
+        "email",
+        "phone",
+        "entity_type",
+        "tin_type",
+        "tin_last4",
+        "is_1099_eligible",
+        "w9_status",
+        "w9_sent_date",
+        "w9_received_date",
+        "edelivery_consent",
+        "is_active",
+        "updated_at",
+    )
+    list_filter = (
+        "is_active",
+        "is_1099_eligible",
+        "entity_type",
+        "tin_type",
+        "w9_status",
+        "edelivery_consent",
+        ("w9_sent_date", admin.DateFieldListFilter),
+        ("w9_received_date", admin.DateFieldListFilter),
+    )
+    search_fields = (
+        "first_name",
+        "last_name",
+        "business_name",
+        "email",
+        "phone",
+        "contractor_number",
+        "tin_last4",
+        "address1",
+        "address2",
+        "city",
+        "state",
+        "zip_code",
+    )
+    ordering = ("last_name", "first_name", "business_name")
+
+    # optional niceties
+    list_select_related = ("user",)
+    list_per_page = 50
+    date_hierarchy = "w9_received_date"
+
+    # ----------
+    # Detail page
+    # ----------
+    fieldsets = (
+        ("Identity", {"fields": ("contractor_number", ("first_name", "last_name"), "business_name")}),
+        ("Contact", {"fields": ("email", "phone")}),
+        ("Mailing Address", {"fields": ("address1", "address2", ("city", "state", "zip_code"))}),
+        ("Tax Classification", {"fields": ("entity_type", ("tin_type", "tin_last4"), "is_1099_eligible")}),
+        (
+            "W-9 Tracking",
+            {
+                "fields": (
+                    "w9_status",
+                    ("w9_sent_date", "w9_received_date"),
+                    "w9_document",
+                )
+            },
+        ),
+        ("1099 e-Delivery Consent", {"fields": ("edelivery_consent", "edelivery_consent_date")}),
+        ("Notes", {"fields": ("notes",)}),
+        ("Housekeeping", {"fields": ("is_active",)}),
+    )
+
+    readonly_fields = ("edelivery_consent_date",)
+
+    # ----------
+    # Actions
+    # ----------
+    actions = (
+        "mark_w9_requested_today",
+        "mark_w9_received_today",
+        "mark_w9_verified",
+        "set_1099_eligible",
+        "set_1099_ineligible",
+        "activate_contractors",
+        "deactivate_contractors",
+    )
+
+    # -------------------------
+    # OwnedModelMixin scoping
+    # -------------------------
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(user=request.user)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """
+        If Contractor has a FK to user via OwnedModelMixin, keep it locked down for non-superusers.
+        """
+        if db_field.name == "user" and not request.user.is_superuser:
+            kwargs["queryset"] = kwargs.get("queryset", db_field.remote_field.model.objects.all()).filter(
+                pk=request.user.pk
+            )
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def save_model(self, request, obj, form, change):
+        """
+        Ensure user is set on create for non-superusers (matches your OwnedModelMixin expectations).
+        """
+        if not change and getattr(obj, "user_id", None) is None and not request.user.is_superuser:
+            obj.user = request.user
+        super().save_model(request, obj, form, change)
+
+    # -------------------------
+    # Display helpers
+    # -------------------------
+    @admin.display(description="Contractor", ordering="last_name")
+    def display_name(self, obj: Contractor) -> str:
+        if obj.business_name:
+            return f"{obj.last_name}, {obj.first_name} ({obj.business_name})".strip()
+        return f"{obj.last_name}, {obj.first_name}".strip()
+
+    # -------------------------
+    # Admin Actions
+    # -------------------------
+    @admin.action(description="W-9: Mark as requested (set status=Requested; sent date=today)")
+    def mark_w9_requested_today(self, request, queryset):
+        today = timezone.localdate()
+        updated = queryset.update(w9_status=Contractor.W9_REQUESTED, w9_sent_date=today)
+        self.message_user(request, f"Updated {updated} contractor(s): W-9 set to Requested.")
+
+    @admin.action(description="W-9: Mark as received (set status=Received; received date=today)")
+    def mark_w9_received_today(self, request, queryset):
+        today = timezone.localdate()
+        updated = queryset.update(w9_status=Contractor.W9_RECEIVED, w9_received_date=today)
+        self.message_user(request, f"Updated {updated} contractor(s): W-9 set to Received.")
+
+    @admin.action(description="W-9: Mark as verified (set status=Verified)")
+    def mark_w9_verified(self, request, queryset):
+        updated = queryset.update(w9_status=Contractor.W9_VERIFIED)
+        self.message_user(request, f"Updated {updated} contractor(s): W-9 set to Verified.")
+
+    @admin.action(description="1099: Set eligible = Yes")
+    def set_1099_eligible(self, request, queryset):
+        updated = queryset.update(is_1099_eligible=True)
+        self.message_user(request, f"Updated {updated} contractor(s): 1099 eligible enabled.")
+
+    @admin.action(description="1099: Set eligible = No")
+    def set_1099_ineligible(self, request, queryset):
+        updated = queryset.update(is_1099_eligible=False)
+        self.message_user(request, f"Updated {updated} contractor(s): 1099 eligible disabled.")
+
+    @admin.action(description="Activate selected contractors")
+    def activate_contractors(self, request, queryset):
+        updated = queryset.update(is_active=True)
+        self.message_user(request, f"Activated {updated} contractor(s).")
+
+    @admin.action(description="Deactivate selected contractors")
+    def deactivate_contractors(self, request, queryset):
+        updated = queryset.update(is_active=False)
+        self.message_user(request, f"Deactivated {updated} contractor(s).")
+
+    # -------------------------
+    # Optional: tighten search results for non-superusers (already scoped by queryset)
+    # -------------------------
+    def get_search_results(self, request, queryset, search_term):
+        qs, use_distinct = super().get_search_results(request, queryset, search_term)
+        # Add a slightly smarter multi-field search if desired:
+        if search_term and " " in search_term:
+            parts = [p.strip() for p in search_term.split() if p.strip()]
+            if len(parts) >= 2:
+                qs = qs.filter(
+                    Q(first_name__icontains=parts[0], last_name__icontains=parts[1])
+                    | Q(last_name__icontains=parts[0], first_name__icontains=parts[1])
+                )
+        return qs, use_distinct

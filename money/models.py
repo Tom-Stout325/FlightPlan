@@ -1530,11 +1530,7 @@ class Contractor(OwnedModelMixin):
     # ------------------------------------------------------------------
     # Human-friendly ID (optional)
     # ------------------------------------------------------------------
-    contractor_number = models.CharField(
-        max_length=20,
-        blank=True,
-        help_text="Optional human-friendly ID, e.g. C-00023",
-    )
+    contractor_number = models.CharField(max_length=20, blank=True, help_text="Optional human-friendly ID, e.g. C-00023",)
 
     # ------------------------------------------------------------------
     # Identity
@@ -1555,17 +1551,8 @@ class Contractor(OwnedModelMixin):
     address1 = models.CharField(max_length=200, blank=True)
     address2 = models.CharField(max_length=200, blank=True)
     city = models.CharField(max_length=120, blank=True)
-    state = models.CharField(
-        max_length=2,
-        blank=True,
-        validators=[RegexValidator(r"^[A-Z]{2}$", "Use 2-letter state code (e.g., IN).")],
-        help_text="2-letter state code",
-    )
-    zip_code = models.CharField(
-        max_length=10,
-        blank=True,
-        validators=[RegexValidator(r"^\d{5}(-\d{4})?$", "Use ZIP format 12345 or 12345-6789.")],
-    )
+    state = models.CharField(max_length=2,blank=True, validators=[RegexValidator(r"^[A-Z]{2}$", "Use 2-letter state code (e.g., IN).")], help_text="2-letter state code",)
+    zip_code = models.CharField( max_length=10, blank=True,validators=[RegexValidator(r"^\d{5}(-\d{4})?$", "Use ZIP format 12345 or 12345-6789.")],)
 
     # ------------------------------------------------------------------
     # Tax classification
@@ -1598,17 +1585,9 @@ class Contractor(OwnedModelMixin):
     ]
 
     tin_type = models.CharField(max_length=3, choices=TIN_TYPE_CHOICES, blank=True)
-    tin_last4 = models.CharField(
-        max_length=4,
-        blank=True,
-        validators=[RegexValidator(r"^\d{4}$", "Enter last 4 digits.")],
-        help_text="Last 4 digits only. Do not store full TIN.",
-    )
+    tin_last4 = models.CharField(max_length=4, blank=True, validators=[RegexValidator(r"^\d{4}$", "Enter last 4 digits.")], help_text="Last 4 digits only. Do not store full TIN.",)
 
-    is_1099_eligible = models.BooleanField(
-        default=True,
-        help_text="Whether this contractor should receive a 1099 (default True; you can override).",
-    )
+    is_1099_eligible = models.BooleanField( default=True, help_text="Whether this contractor should receive a 1099 (default True; you can override).",)
 
     # ------------------------------------------------------------------
     # W-9 tracking (metadata + document)
@@ -1625,18 +1604,10 @@ class Contractor(OwnedModelMixin):
         (W9_VERIFIED, "Verified"),
     ]
 
-    w9_status = models.CharField(
-        max_length=20,
-        choices=W9_STATUS_CHOICES,
-        default=W9_NOT_REQUESTED,
-    )
+    w9_status = models.CharField(max_length=20, choices=W9_STATUS_CHOICES, default=W9_NOT_REQUESTED,)
     w9_sent_date = models.DateField(null=True, blank=True)
     w9_received_date = models.DateField(null=True, blank=True)
-    w9_document = models.FileField(
-        upload_to="money/tax-documents/w9/%Y/",
-        blank=True,
-        help_text="Store W-9 PDF (S3). Do not store full TIN in DB.",
-    )
+    w9_document = models.FileField(upload_to="money/tax-documents/w9/%Y/", blank=True, help_text="Store W-9 PDF (S3). Do not store full TIN in DB.",)
 
     notes = models.TextField(blank=True)
 

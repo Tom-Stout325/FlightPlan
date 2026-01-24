@@ -2,6 +2,7 @@ from pathlib import Path
 import environ
 import os
 from django.contrib.messages import constants as messages
+from django.core.exceptions import ImproperlyConfigured
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -17,14 +18,9 @@ env = environ.Env()
 environ.Env.read_env()
 
 
-
-
-SALT_KEY = os.environ["DJANGO_FIELD_ENCRYPTION_SALT_KEY"]
-# Optional rotation later:
-# SALT_KEY = [os.environ["NEW_SALT_KEY"], os.environ["OLD_SALT_KEY"]]
-
-
-
+SALT_KEY = os.getenv("DJANGO_FIELD_ENCRYPTION_SALT_KEY")
+if not SALT_KEY:
+    raise ImproperlyConfigured("Missing DJANGO_FIELD_ENCRYPTION_SALT_KEY env var.")
 
 
 # ---- Brand configuration ----
