@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from django.contrib import admin, messages
 from django.core.exceptions import FieldDoesNotExist
+from django.db.models import Q
 from django.utils.safestring import mark_safe
+from django.utils import timezone
 
 from .models import (
     Category,
@@ -23,6 +25,7 @@ from .models import (
     Vehicle,
     VehicleExpense,
     VehicleYear,
+    Contractor
 )
 
 
@@ -214,10 +217,7 @@ class ClientAdmin(UserScopedAdminMixin, admin.ModelAdmin):
     ordering = ("business", "last", "first")
 
 
-# ------------------------------------------------------------------------------
-# CompanyProfile (branding)
-# NOTE: If CompanyProfile is deployment-level and has no user FK, user_display will show "—".
-# ------------------------------------------------------------------------------
+
 
 @admin.register(CompanyProfile)
 class CompanyProfileAdmin(UserScopedAdminMixin, admin.ModelAdmin):
@@ -635,15 +635,6 @@ class RecurringTransactionAdmin(UserScopedAdminMixin, admin.ModelAdmin):
     ordering = ("-active", "day", "id")
 
 
-# money/admin.py  (or money/contractors/admin.py if you split admin modules)
-
-from __future__ import annotations
-
-from django.contrib import admin
-from django.db.models import Q
-from django.utils import timezone
-
-from .models import Contractor  # adjust import path if needed
 
 
 @admin.register(Contractor)
@@ -673,7 +664,7 @@ class ContractorAdmin(admin.ModelAdmin):
         "w9_received_date",
         "edelivery_consent",
         "is_active",
-        "updated_at",
+
     )
     list_filter = (
         "is_active",
@@ -774,11 +765,11 @@ class ContractorAdmin(admin.ModelAdmin):
     # -------------------------
     # Display helpers
     # -------------------------
-    @admin.display(description="Contractor", ordering="last_name")
-    def display_name(self, obj: Contractor) -> str:
-        if obj.business_name:
-            return f"{obj.last_name}, {obj.first_name} ({obj.business_name})".strip()
-        return f"{obj.last_name}, {obj.first_name}".strip()
+    # @admin.display(description="Contractor", ordering="last_name")
+    # def display_name(self, obj: Contractor) -> str:
+    #     if obj.business_name:
+    #         return f"{obj.last_name}, {obj.first_name} ({obj.business_name})".strip()
+    #     return f"{obj.last_name}, {obj.first_name}".strip()
 
     # -------------------------
     # Admin Actions
