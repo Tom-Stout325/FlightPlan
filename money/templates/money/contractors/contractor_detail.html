@@ -15,12 +15,33 @@
         {% if contractor.contractor_number %} • {{ contractor.contractor_number }}{% endif %}
       </div>
     </div>
-    <div class="d-flex gap-2">
-      <a class="btn btn-outline-secondary" href="{% url 'money:contractor_list' %}">Back</a>
-      <a class="btn btn-outline-primary" href="{% url 'money:contractor_edit' contractor.pk %}">
-        <i class="fa-solid fa-pen-to-square me-1"></i> Edit
-      </a>
-    </div>
+
+
+<div class="d-flex flex-wrap gap-2 align-items-center">
+  <a class="btn btn-outline-secondary border"
+     href="{% url 'money:contractor_list' %}">
+    <i class="fa-solid fa-arrow-left me-1"></i>
+    Back
+  </a>
+  <form method="post"
+        action="{% url 'money:contractor_send_w9_email' contractor.pk %}"
+        class="d-inline m-0 p-0 bg-transparent border-0">
+    {% csrf_token %}
+    <button class="btn btn-success d-flex align-items-center gap-1"
+            {% if not contractor.email %}disabled{% endif %}>
+      <i class="fa-solid fa-paper-plane"></i>
+      <span>Send W-9</span>
+    </button>
+  </form>
+  <a class="btn btn-outline-primary"
+     href="{% url 'money:contractor_edit' contractor.pk %}">
+    <i class="fa-solid fa-pen-to-square"></i>
+    Edit
+  </a>
+</div> 
+
+
+
   </div>
 
   <div class="row g-2">
@@ -52,7 +73,6 @@
                 <i class="fa-solid fa-file-pdf me-1"></i> View W-9 (PDF)
               </a>
             </div>
-
           {% elif has_w9_submission %}
             <div class="mt-3 d-flex align-items-center gap-2">
               <span class="text-muted small">
@@ -63,14 +83,10 @@
                   <i class="fa-solid fa-lock me-1"></i> View W-9
                 </a>
             </div>
-
           {% else %}
             <div class="mt-3 text-muted small">No W-9 received yet.</div>
           {% endif %}
-
-
           <hr>
-
           <div class="fw-semibold mb-2">Delivery</div>
           <div class="small">
             E-delivery consent:
