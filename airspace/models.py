@@ -9,7 +9,116 @@ from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from documents.models import GeneralDocument  # assumes you have this app/model
+from documents.models import GeneralDocument 
+
+
+
+
+# ==========================================================
+# CONTROLLED AIRSPACE REQUIREMENTS (FAA WAIVER DESCRIPTION)
+# ==========================================================
+
+CONTROLLED_AIRSPACE_CLASSES = {"B", "C", "D", "E"}
+
+
+def _has_text(v) -> bool:
+    return bool((v or "").strip()) if isinstance(v, str) else bool(v)
+
+
+def _is_controlled_airspace(planning) -> bool:
+    return (getattr(planning, "airspace_class", "") or "").strip().upper() in CONTROLLED_AIRSPACE_CLASSES
+
+
+def _validate_controlled_airspace_required_fields(planning) -> dict:
+    """
+    Returns an errors dict suitable for ValidationError(errors).
+    Uses WaiverPlanning field names EXACTLY.
+    """
+    if not _is_controlled_airspace(planning):
+        return {}
+
+    errors = {}
+
+    def add(field: str, msg: str) -> None:
+        errors.setdefault(field, []).append(msg)
+
+    op_area = (getattr(planning, "operation_area_type", "") or "").strip().lower()
+    if not op_area:
+        add(
+            "operation_area_type",
+            "Required for controlled airspace: define the operation area type (radius/corridor/polygon/site).",
+        )
+
+    containment_ok = (
+        _has_text(getattr(planning, "containment_method", "")) or
+        _has_text(getattr(planning, "containment_notes", ""))
+    )
+    if not containment_ok:
+        add(
+            "containment_method",
+            "Required for controlled airspace: choose a containment method or provide containment notes.",
+        )
+        add(
+            "containment_notes",
+            "Required for controlled airspace: describe how containment is enforced/verified on-site (no inventing).",
+        )
+
+    if op_area == "corridor":
+        if getattr(planning, "corridor_length_ft", None) is None:
+            add("corridor_length_ft", "Required when operation area type is 'corridor': provide corridor length (ft).")
+        if getattr(planning, "corridor_width_ft", None) is None:
+            add("corridor_width_ft", "Required when operation area type is 'corridor': provide corridor width (ft).")
+
+    # ----- ATC coordination: require procedural content (not just a name) -----
+    atc_method = (getattr(planning, "atc_coordination_method", "") or "").strip()
+    atc_phone = (getattr(planning, "atc_phone", "") or "").strip()
+    atc_freq = (getattr(planning, "atc_frequency", "") or "").strip()
+    atc_checkin = (getattr(planning, "atc_checkin_procedure", "") or "").strip()
+
+    has_contact_detail = bool(atc_phone or atc_freq)
+    atc_ok = bool(atc_checkin) or (bool(atc_method) and has_contact_detail)
+
+    if not atc_ok:
+        add(
+            "atc_checkin_procedure",
+            "Required for controlled airspace: describe check-in / coordination steps (when/how, what info, and termination procedure).",
+        )
+        add(
+            "atc_coordination_method",
+            "Required for controlled airspace if no check-in procedure is provided: select phone/radio/both/other.",
+        )
+        add("atc_phone", "Provide if coordination uses phone (or if phone is part of 'both').")
+        add("atc_frequency", "Provide if coordination uses radio (or if radio is part of 'both').")
+
+    if not _has_text(getattr(planning, "atc_deviation_triggers", "")):
+        add(
+            "atc_deviation_triggers",
+            "Required for controlled airspace: define deviation/termination triggers (traffic, weather, direction, etc.).",
+        )
+
+    # ----- Lost link / flyaway -----
+    llb = (getattr(planning, "lost_link_behavior", "") or "").strip()
+    if not llb:
+        add("lost_link_behavior", "Required for controlled airspace: select lost-link behavior (RTH/hover/land).")
+
+    if not _has_text(getattr(planning, "lost_link_actions", "")):
+        add(
+            "lost_link_actions",
+            "Required for controlled airspace: provide step-by-step lost-link actions (who does what, who is notified, and how ops terminate).",
+        )
+
+    if llb == "rth" and getattr(planning, "rth_altitude_ft_agl", None) is None:
+        add("rth_altitude_ft_agl", "Required when lost-link behavior is RTH: provide RTH altitude (ft AGL).")
+
+    if not _has_text(getattr(planning, "flyaway_actions", "")):
+        add(
+            "flyaway_actions",
+            "Required for controlled airspace: provide flyaway actions (tracking/last-known position capture and facility notification).",
+        )
+
+    return errors
+
+
 
 
 def _ownership_error() -> str:
@@ -22,6 +131,7 @@ def _model_has_user_fk(obj) -> bool:
     (We avoid importing the other app models here.)
     """
     return obj is not None and hasattr(obj, "user_id")
+
 
 
 class WaiverPlanning(models.Model):
@@ -101,319 +211,129 @@ class WaiverPlanning(models.Model):
     # -------------------------
     # Ownership
     # -------------------------
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="waiver_planning_entries",
-    )
+    user                         = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="waiver_planning_entries")
 
     # -------------------------
     # Operation basics
     # -------------------------
-    operation_title = models.CharField(
-        max_length=255,
-        help_text="Short title for this operation (e.g., 'NHRA Nationals FPV Coverage').",
-    )
-    start_date = models.DateField(help_text="First date on which operations will occur.")
-    end_date = models.DateField(
-        null=True,
-        blank=True,
-        help_text="Last date on which operations will occur (optional if single day).",
-    )
-    timeframe = ArrayField(
-        base_field=models.CharField(max_length=20, choices=TIMEFRAME_CHOICES),
-        blank=True,
-        default=list,
-        help_text="Select all timeframes you expect to operate.",
-    )
-    frequency = models.CharField(
-        max_length=20,
-        choices=FREQUENCY_CHOICES,
-        blank=True,
-        help_text="How often operations will occur during this date range.",
-    )
-    local_time_zone = models.CharField(
-        max_length=64,
-        blank=True,
-        help_text="Local time zone for the operation (e.g., America/New_York).",
-    )
-    proposed_agl = models.PositiveIntegerField(
-        null=True,
-        blank=True,
-        help_text="Maximum planned altitude AGL in feet.",
-    )
+    operation_title              = models.CharField(max_length=255, help_text="Short title for this operation (e.g., 'NHRA Nationals FPV Coverage').")
+    start_date                   = models.DateField(help_text="First date on which operations will occur.")
+    end_date                     = models.DateField(null=True, blank=True, help_text="Last date on which operations will occur (optional if single day).")
+    timeframe                    = ArrayField(models.CharField(max_length=20, choices=TIMEFRAME_CHOICES), blank=True, default=list, help_text="Select all timeframes you expect to operate.")
+    frequency                    = models.CharField(max_length=20, choices=FREQUENCY_CHOICES, blank=True, help_text="How often operations will occur during this date range.")
+    local_time_zone              = models.CharField(max_length=64, blank=True, help_text="Local time zone for the operation (e.g., America/New_York).")
+    proposed_agl                 = models.PositiveIntegerField(null=True, blank=True, help_text="Maximum planned altitude AGL in feet.")
 
     # -------------------------
     # Aircraft
     # -------------------------
-    aircraft = models.ForeignKey(
-        "equipment.Equipment",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="waiver_planning_entries",
-        limit_choices_to={"equipment_type": "Drone"},
-        help_text="Select a drone from your equipment list (optional).",
-    )
-    aircraft_manual = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="If needed, manually describe any additional aircraft types.",
-    )
+    aircraft                     = models.ForeignKey("equipment.Equipment", null=True, blank=True, on_delete=models.SET_NULL, related_name="waiver_planning_entries", limit_choices_to={"equipment_type": "Drone"})
+    aircraft_manual              = models.CharField(max_length=255, blank=True, help_text="If needed, manually describe any additional aircraft types.")
 
     # -------------------------
     # Pilot
     # -------------------------
-    pilot_profile = models.ForeignKey(
-        "pilot.PilotProfile",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="waiver_planning_entries",
-        help_text="Pilot selected from your Pilot Profile app (optional).",
-    )
-    pilot_name_manual = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Manual pilot name override, if not using a profile.",
-    )
-    pilot_cert_manual = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Manual Part 107 certificate number, if not using a profile.",
-    )
-    pilot_flight_hours = models.DecimalField(
-        max_digits=7,
-        decimal_places=1,
-        null=True,
-        blank=True,
-        help_text="Approximate total UAS flight hours for this pilot.",
-    )
+    pilot_profile                = models.ForeignKey("pilot.PilotProfile", null=True, blank=True, on_delete=models.SET_NULL, related_name="waiver_planning_entries")
+    pilot_name_manual            = models.CharField(max_length=255, blank=True)
+    pilot_cert_manual            = models.CharField(max_length=255, blank=True)
+    pilot_flight_hours           = models.DecimalField(max_digits=7, decimal_places=1, null=True, blank=True, help_text="Approximate total UAS flight hours.")
 
     # -------------------------
-    # Waivers (107.39 & 107.145)
+    # Waivers
     # -------------------------
-    operates_under_10739 = models.BooleanField(
-        default=False,
-        help_text=(
-            "Check if this operation will be conducted under an approved "
-            "14 CFR §107.39 Operations Over People waiver."
-        ),
-    )
-    oop_waiver_document = models.ForeignKey(
-        GeneralDocument,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="oop_waiver_planning_entries",
-        help_text="Select your approved 107.39 waiver from General Documents.",
-    )
-    oop_waiver_number = models.CharField(
-        "Approved 107.39 Waiver Number",
-        max_length=100,
-        blank=True,
-        help_text="Example: 107W-2024-01234",
-    )
-    operates_under_107145 = models.BooleanField(
-        default=False,
-        help_text=(
-            "Check if this operation will be conducted under an approved "
-            "14 CFR §107.145 Operations Over Moving Vehicles waiver."
-        ),
-    )
-    mv_waiver_document = models.ForeignKey(
-        GeneralDocument,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="mv_waiver_planning_entries",
-        help_text="Select your approved 107.145 waiver from General Documents.",
-    )
-    mv_waiver_number = models.CharField(
-        "Approved 107.145 Waiver Number",
-        max_length=100,
-        blank=True,
-        help_text="Example: 107W-2024-04567",
-    )
+    operates_under_10739         = models.BooleanField(default=False)
+    oop_waiver_document          = models.ForeignKey(GeneralDocument, null=True, blank=True, on_delete=models.SET_NULL, related_name="oop_waiver_planning_entries")
+    oop_waiver_number            = models.CharField(max_length=100, blank=True)
+    operates_under_107145        = models.BooleanField(default=False)
+    mv_waiver_document           = models.ForeignKey(GeneralDocument, null=True, blank=True, on_delete=models.SET_NULL, related_name="mv_waiver_planning_entries")
+    mv_waiver_number             = models.CharField(max_length=100, blank=True)
 
     # -------------------------
     # Purpose of Operations
     # -------------------------
-    purpose_operations = ArrayField(
-        base_field=models.CharField(max_length=50, choices=PURPOSE_OPERATIONS_CHOICES),
-        blank=True,
-        default=list,
-        help_text="Select all purposes that apply to this operation.",
-    )
-    purpose_operations_details = models.TextField(
-        blank=True,
-        null=True,
-        help_text="Additional context about how the drone will be used.",
-    )
+    purpose_operations           = ArrayField(models.CharField(max_length=50, choices=PURPOSE_OPERATIONS_CHOICES), blank=True, default=list)
+    purpose_operations_details   = models.TextField(blank=True, null=True)
 
     # -------------------------
     # Venue & Location
     # -------------------------
-    venue_name = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Name of the venue (e.g., 'Lucas Oil Raceway').",
-    )
-    street_address = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Street address of the venue or operation area.",
-    )
-    location_city = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="City where the operation will occur.",
-    )
-    location_state = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="State where the operation will occur.",
-    )
-    zip_code = models.CharField(
-        max_length=20,
-        blank=True,
-        help_text="ZIP or postal code for the operation location.",
-    )
-    location_latitude = models.DecimalField(
-        max_digits=9,
-        decimal_places=6,
-        null=True,
-        blank=True,
-        help_text="Latitude of the center point for operations.",
-    )
-    location_longitude = models.DecimalField(
-        max_digits=9,
-        decimal_places=6,
-        null=True,
-        blank=True,
-        help_text="Longitude of the center point for operations.",
-    )
-    airspace_class = models.CharField(
-        max_length=1,
-        choices=AIRSPACE_CLASS_CHOICES,
-        blank=True,
-        help_text="Class of airspace where operations will occur.",
-    )
-    location_radius = models.CharField(
-        max_length=20,
-        blank=True,
-        null=True,
-        help_text="Radius from the center point (in NM or blanket area).",
-    )
-    nearest_airport = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Nearest airport (e.g., 'KIND – Indianapolis Intl').",
-    )
-    nearest_airport_ref = models.ForeignKey(
-        "airspace.Airport",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="waiver_planning_entries",
-        help_text="Airport reference selected from NASR (preferred).",
-    )
-    distance_to_airport_nm = models.DecimalField(
-        max_digits=6,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text="Great-circle distance from operation location to nearest airport (NM).",
-    )
+    venue_name                   = models.CharField(max_length=255, blank=True)
+    street_address               = models.CharField(max_length=255, blank=True)
+    location_city                = models.CharField(max_length=100, blank=True)
+    location_state               = models.CharField(max_length=100, blank=True)
+    zip_code                     = models.CharField(max_length=20, blank=True)
+    location_latitude            = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    location_longitude           = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    airspace_class               = models.CharField(max_length=1, choices=AIRSPACE_CLASS_CHOICES, blank=True)
+    location_radius              = models.CharField(max_length=20, blank=True, null=True)
+    nearest_airport              = models.CharField(max_length=255, blank=True)
+    nearest_airport_ref          = models.ForeignKey("airspace.Airport", null=True, blank=True, on_delete=models.SET_NULL, related_name="waiver_planning_entries")
+    distance_to_airport_nm       = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
 
     # -------------------------
-    # Launch location & safety features
+    # Launch & Safety
     # -------------------------
-    launch_location = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Typical launch location or staging area for this waiver.",
-    )
-    uses_drone_detection = models.BooleanField(
-        default=False,
-        help_text="Drone detection system (e.g., AirSentinel) will be used.",
-    )
-    uses_flight_tracking = models.BooleanField(
-        default=False,
-        help_text="Flight tracking (e.g., FlightAware / ADS-B) will be monitored.",
-    )
-    has_visual_observer = models.BooleanField(
-        default=False,
-        help_text="One or more Visual Observers will be used.",
-    )
-    insurance_provider = models.CharField(
-        max_length=255,
-        blank=True,
-        help_text="Insurance provider for this operation (optional).",
-    )
-    insurance_coverage_limit = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="Coverage limit (e.g., '$5,000,000').",
-    )
-    safety_features_notes = models.TextField(
-        blank=True,
-        help_text=(
-            "Key safety features, redundancies, or geofencing used for this operation. "
-            "If a drone with a safety profile is selected, this will be auto-filled."
-        ),
-    )
+    launch_location              = models.CharField(max_length=255, blank=True)
+    uses_drone_detection         = models.BooleanField(default=False)
+    uses_flight_tracking         = models.BooleanField(default=False)
+    has_visual_observer          = models.BooleanField(default=False)
+    insurance_provider           = models.CharField(max_length=255, blank=True)
+    insurance_coverage_limit     = models.CharField(max_length=100, blank=True)
+    safety_features_notes        = models.TextField(blank=True)
 
     # -------------------------
     # Operational Profile
     # -------------------------
-    aircraft_count = models.CharField(
-        max_length=25,
-        choices=OP_AIRCRAFT_COUNT_CHOICES,
-        blank=True,
-        help_text="Number of aircraft used for this operation.",
-    )
-    flight_duration = models.CharField(
-        max_length=50,
-        blank=True,
-        help_text="Typical flight duration (e.g., 5–10 min).",
-    )
-    flights_per_day = models.PositiveIntegerField(
-        blank=True,
-        null=True,
-        help_text="Approximate number of flights per day (used for narrative only).",
-    )
-    ground_environment = ArrayField(
-        base_field=models.CharField(max_length=50, choices=GROUND_ENVIRONMENT_CHOICES),
-        blank=True,
-        default=list,
-        help_text="Types of ground environment present in the area.",
-    )
-    ground_environment_other = models.TextField(
-        blank=True,
-        help_text=(
-            "Any additional ground environment types not covered by the "
-            "checkbox list (e.g., rail yards, marinas, refineries, etc.)."
-        ),
-    )
-    estimated_crowd_size = models.CharField(
-        max_length=50,
-        blank=True,
-        help_text="Estimated maximum crowd size (e.g., 15,000). Leave blank if unknown.",
-    )
-    prepared_procedures = ArrayField(
-        base_field=models.CharField(max_length=30, choices=PREPARED_PROCEDURES_CHOICES),
-        blank=True,
-        default=list,
-        help_text="Safety procedures used during operations.",
-    )
+    aircraft_count               = models.CharField(max_length=25, choices=OP_AIRCRAFT_COUNT_CHOICES, blank=True)
+    flight_duration              = models.CharField(max_length=50, blank=True)
+    flights_per_day              = models.PositiveIntegerField(null=True, blank=True)
+    ground_environment           = ArrayField(models.CharField(max_length=50, choices=GROUND_ENVIRONMENT_CHOICES), blank=True, default=list)
+    ground_environment_other     = models.TextField(blank=True)
+    estimated_crowd_size         = models.CharField(max_length=50, blank=True)
+    prepared_procedures          = ArrayField(models.CharField(max_length=30, choices=PREPARED_PROCEDURES_CHOICES), blank=True, default=list)
+    operation_area_type          = models.CharField(max_length=20, choices=[("radius","Radius"),("corridor","Corridor"),("polygon","Polygon"),("site","Site")], default="radius")
+    containment_method           = models.CharField(max_length=20, choices=[("geofence","Geofence"),("visual_markers","Visual markers"),("map_overlays","Map overlays"),("combination","Combination")], blank=True)
+    containment_notes            = models.TextField(blank=True)
+    corridor_length_ft           = models.PositiveIntegerField(null=True, blank=True)
+    corridor_width_ft            = models.PositiveIntegerField(null=True, blank=True)
+    max_groundspeed_mph          = models.PositiveIntegerField(null=True, blank=True)
+
+    # -------------------------
+    # Emergency / Lost Link
+    # -------------------------
+    lost_link_behavior           = models.CharField(max_length=20, choices=[("rth","RTH"),("hover","Hover"),("land","Land")], blank=True)
+    rth_altitude_ft_agl          = models.PositiveIntegerField(null=True, blank=True, help_text="If using RTH, the programmed RTH altitude in feet AGL.")
+    lost_link_actions            = models.TextField(blank=True)
+    flyaway_actions              = models.TextField(blank=True)
+
+    # -------------------------
+    # ATC / Communications
+    # -------------------------
+    atc_facility_name            = models.CharField(max_length=255, blank=True)
+    atc_coordination_method      = models.CharField(max_length=20, choices=[("phone","Phone"),("radio","Radio"),("both","Phone + Radio"),("other","Other")], blank=True)
+    atc_phone                    = models.CharField(max_length=50, blank=True)
+    atc_frequency                = models.CharField(max_length=50, blank=True)
+    atc_checkin_procedure        = models.TextField(blank=True)
+    atc_deviation_triggers       = models.TextField(blank=True)
+
+    # -------------------------
+    # Weather & Crew
+    # -------------------------
+    max_wind_mph                 = models.PositiveIntegerField(null=True, blank=True)
+    min_visibility_sm            = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    weather_go_nogo              = models.TextField(blank=True)
+    crew_count                   = models.PositiveIntegerField(null=True, blank=True)
+    crew_briefing_procedure      = models.TextField(blank=True)
+    radio_discipline             = models.CharField(max_length=20, choices=[("sterile","Sterile"),("standard","Standard")], blank=True)
 
     # -------------------------
     # Timestamps
     # -------------------------
-    generated_description_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    generated_description_at     = models.DateTimeField(null=True, blank=True)
+    created_at                   = models.DateTimeField(auto_now_add=True)
+    updated_at                   = models.DateTimeField(auto_now=True)
+
+
 
     # -------------------------
     # Convenience helpers
@@ -503,6 +423,8 @@ class WaiverPlanning(models.Model):
     def clean(self):
         """
         Ownership + integrity guards (server-side, admin-safe).
+        Also enforces controlled-airspace FAA fields so the waiver description
+        cannot be forced to invent Paragraph 2 procedures.
         """
         super().clean()
         errors = {}
@@ -524,6 +446,24 @@ class WaiverPlanning(models.Model):
         if self.mv_waiver_document and _model_has_user_fk(self.mv_waiver_document):
             if self.mv_waiver_document.user_id != self.user_id:
                 errors["mv_waiver_document"] = _ownership_error()
+
+        # CONTROLLED AIRSPACE: enforce FAA-specific fields so Description Paragraph 2 is never forced to invent
+        ca_errors = _validate_controlled_airspace_required_fields(self)
+        for field, msgs in (ca_errors or {}).items():
+            # normalize to list
+            if isinstance(msgs, str):
+                msgs = [msgs]
+            else:
+                msgs = list(msgs)
+
+            if field in errors:
+                existing = errors[field]
+                if isinstance(existing, str):
+                    errors[field] = [existing] + msgs
+                else:
+                    errors[field] = list(existing) + msgs
+            else:
+                errors[field] = msgs
 
         if errors:
             raise ValidationError(errors)
@@ -608,6 +548,8 @@ class WaiverPlanning(models.Model):
         indexes = [
             models.Index(fields=["user", "-created_at"]),
         ]
+
+
 
 
 class WaiverApplication(models.Model):

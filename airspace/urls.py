@@ -18,6 +18,9 @@ from .views import (
     conops_section_edit,
     conops_review,
     conops_pdf_export,
+    waiver_readiness_checklist,
+    waiver_readiness_checklist_pdf,
+    
     
 )
 
@@ -34,9 +37,10 @@ urlpatterns = [
     path("waiver/application/<int:pk>/description/", waiver_application_description, name="waiver_application_description",),
 
     path("waiver/planning/<int:pk>/delete/", waiver_planning_delete, name="waiver_planning_delete",),
-
     path("waiver/application/<int:pk>/conops/",conops_overview,name="conops_overview",),
     path("waiver/application/<int:pk>/conops/<slug:section_key>/", conops_section_edit, name="conops_section_edit",),
+    path("waiver-readiness/", waiver_readiness_checklist, name="waiver_readiness_checklist"),
+    path("waiver-readiness/pdf/", waiver_readiness_checklist_pdf, name="waiver_readiness_checklist_pdf"),
 
 
     path("conops/<int:application_id>/review/", conops_review, name="conops_review"),

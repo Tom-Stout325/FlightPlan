@@ -1,0 +1,324 @@
+{% extends "index.html" %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}W-9 Intake{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* W-9 tax classification radios */
+  .w9-tax .form-check{
+    display:flex;
+    align-items:flex-start;
+    gap:.75rem;
+    padding:.75rem .75rem;
+    border:1px solid rgba(0,0,0,.08);
+    border-radius:.75rem;
+  }
+  .w9-tax .form-check:hover{
+    background: rgba(0,0,0,.02);
+  }
+  .w9-tax .form-check-input{
+    margin-top:.2rem;   /* aligns with first line of label */
+    float:none !important;
+  }
+  .w9-tax .form-check-label{
+    margin:0;
+    line-height:1.25;
+  }
+  .w9-tax .choice-note{
+    display:block;
+    margin-top:.15rem;
+  }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+  <script>
+    (function () {
+      const taxRadios = document.querySelectorAll('input[name="tax_classification"]');
+      const llcWrapper = document.getElementById("llc-tax-wrapper");
+
+      function toggleLLC() {
+        const selected = document.querySelector('input[name="tax_classification"]:checked');
+        llcWrapper.style.display = selected && selected.value === "llc" ? "block" : "none";
+      }
+
+      taxRadios.forEach(r => r.addEventListener("change", toggleLLC));
+      toggleLLC();
+    })();
+  </script>
+{% endblock %}
+
+{% block content %}
+<div class="container my-4" style="max-width: 980px;">
+
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-2 mb-3">
+    <div>
+      <h2 class="mb-1">W-9 Contractor Information</h2>
+      <div class="text-muted">For: <strong>{{ contractor }}</strong></div>
+    </div>
+
+    <a class="btn btn-outline-primary"
+       href="{{ irs_w9_pdf_url }}"
+       target="_blank" rel="noopener">
+      Download the official IRS W-9 (PDF)
+    </a>
+  </div>
+
+  {% if submitted %}
+    <div class="alert alert-success">
+      Thanks — your W-9 information was submitted.
+    </div>
+  {% endif %}
+
+  <!-- W-9 image preview -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <img src="{% static 'images/w-9.png' %}"
+           alt="W-9 preview"
+           class="img-fluid rounded border" />
+      <div class="small text-muted mt-2">
+        Tip: You can also download the full form above, fill it out offline, and return it to Tom.
+      </div>
+    </div>
+  </div>
+
+  <!-- Form -->
+  <form method="post" class="card shadow-sm">
+    <div class="card-body">
+      {% csrf_token %}
+
+      <div class="row g-3">
+        <div class="col-12">
+          <h5 class="mb-2">Your Information</h5>
+        </div>
+
+        <div class="col-12 col-md-6">
+          {{ form.full_name|as_crispy_field }}
+        </div>
+        <div class="col-12 col-md-6">
+          {{ form.business_name|as_crispy_field }}
+        </div>
+        <div class="col-12">
+          <div class="p-3 border rounded">
+    
+         <div class="mb-3 w9-tax">
+          <label class="form-label fw-semibold mb-1">
+            Tax classification <span class="text-danger">*</span>
+          </label>
+          <div class="form-text text-muted mb-3">Federal tax classification (W-9)</div>
+
+          <div class="vstack gap-2">
+            {% for radio in form.tax_classification %}
+              <div class="form-check">
+                {{ radio.tag }}
+                <label class="form-check-label w-100" for="{{ radio.id_for_label }}">
+                  <span class="fw-semibold">{{ radio.choice_label }}</span>
+
+                  {% if radio.data.value == "individual" %}
+                    <span class="choice-note text-muted small">
+                      Single-member LLC (“disregarded entity”) usually selects this option.
+                    </span>
+                  {% endif %}
+
+                  {% if radio.data.value == "llc" %}
+                    <span class="choice-note text-muted small">
+                      If your LLC is taxed as a C-Corp, S-Corp, or Partnership, choose LLC and complete the next field.
+                    </span>
+                  {% endif %}
+                </label>
+              </div>
+            {% endfor %}
+          </div>
+
+          {% if form.tax_classification.errors %}
+            <div class="invalid-feedback d-block mt-2">
+              {{ form.tax_classification.errors|striptags }}
+            </div>
+          {% endif %}
+        </div>
+        <div class="alert alert-info py-2 small mb-0">
+          <strong>LLC help:</strong>
+          If you choose <strong>LLC</strong>, select how the LLC is taxed:
+          <strong>C</strong> (C-Corp), <strong>S</strong> (S-Corp), or <strong>P</strong> (Partnership).
+          <br>
+          <strong>Single-member LLC</strong> (“disregarded entity”) usually selects
+          <strong>Individual / Sole proprietor</strong> instead.
+        </div>
+
+
+            <div id="llc-tax-wrapper" class="mt-3">
+              <div class="row g-3 mt-1">
+                <div class="col-12 col-md-6">
+                  {{ form.llc_tax_class|as_crispy_field }}
+                </div>
+                
+                <div class="col-12 col-md-6">
+                  {{ form.other_tax_class|as_crispy_field }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        <div class="col-12 col-md-6">
+          {{ form.address_line1|as_crispy_field }}
+        </div>
+        <div class="col-12 col-md-6">
+          {{ form.address_line2|as_crispy_field }}
+        </div>
+
+        <div class="col-12">
+          <h5 class="mt-3 mb-2">Taxpayer Identification Number</h5>
+        </div>
+        <div class="col-12 col-md-4">
+          {{ form.tin_type|as_crispy_field }}
+        </div>
+        <div class="col-12 col-md-8">
+          {{ form.tin|as_crispy_field }}
+        </div>
+
+        <div class="col-12">
+          <hr class="my-3" />
+          <h5 class="mb-2">Signature & Certification</h5>
+          <p class="text-muted mb-2">
+            Please sign below and confirm the certification statement.
+          </p>
+        </div>
+
+        <!-- Signature pad -->
+        <div class="col-12">
+          <div class="p-3 border rounded">
+            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+              <div class="fw-semibold">Draw your signature</div>
+              <button type="button" id="sigClear" class="btn btn-sm btn-outline-secondary">
+                Clear
+              </button>
+            </div>
+
+            <div class="ratio ratio-21x9 border rounded bg-white">
+              <canvas id="sigCanvas" class="w-100 h-100"></canvas>
+            </div>
+
+            {{ form.signature_data }}
+            <div class="small text-muted mt-2">
+              You can sign with mouse, trackpad, or finger.
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-6">
+          {{ form.signature_name|as_crispy_field }}
+        </div>
+
+        <div class="col-12">
+          {{ form.attestation|as_crispy_field }}
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="col-12">
+            <div class="alert alert-danger">
+              {{ form.non_field_errors }}
+            </div>
+          </div>
+        {% endif %}
+
+        <div class="col-12 d-grid d-md-flex justify-content-md-end gap-2 mt-2">
+          <button class="btn btn-primary btn-lg" type="submit">
+            Submit W-9 Info
+          </button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+(function() {
+  const canvas = document.getElementById("sigCanvas");
+  const clearBtn = document.getElementById("sigClear");
+  const hiddenInput = document.getElementById("id_signature_data");
+  if (!canvas || !hiddenInput) return;
+
+  // Make canvas crisp on mobile
+  const ctx = canvas.getContext("2d");
+  let drawing = false;
+  let last = null;
+
+  function resizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(rect.width * dpr);
+    canvas.height = Math.floor(rect.height * dpr);
+    ctx.scale(dpr, dpr);
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#111";
+  }
+
+  function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches && e.touches[0];
+    const clientX = touch ? touch.clientX : e.clientX;
+    const clientY = touch ? touch.clientY : e.clientY;
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  }
+
+  function start(e) {
+    e.preventDefault();
+    drawing = true;
+    last = getPos(e);
+  }
+
+  function move(e) {
+    if (!drawing) return;
+    e.preventDefault();
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    last = pos;
+  }
+
+  function end(e) {
+    if (!drawing) return;
+    e.preventDefault();
+    drawing = false;
+    last = null;
+
+    // store as dataURL (PNG) in hidden input
+    hiddenInput.value = canvas.toDataURL("image/png");
+  }
+
+  function clearSig() {
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    hiddenInput.value = "";
+  }
+
+  // init
+  resizeCanvas();
+  window.addEventListener("resize", () => {
+    // re-init clears drawing; acceptable for now
+    resizeCanvas();
+    hiddenInput.value = "";
+  });
+
+  // mouse
+  canvas.addEventListener("mousedown", start);
+  canvas.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", end);
+
+  // touch
+  canvas.addEventListener("touchstart", start, { passive: false });
+  canvas.addEventListener("touchmove", move, { passive: false });
+  window.addEventListener("touchend", end, { passive: false });
+
+  clearBtn.addEventListener("click", clearSig);
+})();
+</script>
+{% endblock %}

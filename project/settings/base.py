@@ -15,6 +15,18 @@ OPENAI_TEXT_MODEL = os.getenv("OPENAI_TEXT_MODEL", "gpt-4.1-mini")
 env = environ.Env()
 
 environ.Env.read_env()
+
+
+
+
+SALT_KEY = os.environ["DJANGO_FIELD_ENCRYPTION_SALT_KEY"]
+# Optional rotation later:
+# SALT_KEY = [os.environ["NEW_SALT_KEY"], os.environ["OLD_SALT_KEY"]]
+
+
+
+
+
 # ---- Brand configuration ----
 BRAND_NAME   = env("BRAND_NAME", default="Airborne Images")
 BRAND_DOMAIN = env("BRAND_DOMAIN", default="airborne-images.com")

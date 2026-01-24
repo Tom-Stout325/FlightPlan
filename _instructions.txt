@@ -1,11 +1,48 @@
 Next Steps:
 
-Miles is not working
-    add mileage log throws Owner must be set error
+Airspace:
+See if Waiver Planning is better than Waiver Rediness, get rid of one of them
 
 
+Fix Rediness form so it looks better
+Create CRUD for Rediness
+Create PDF output for Rediness
 
+Rediness form:
+    Add Aircraft from Equipment into the Dropdown
 
+Populate Pilot Info
+    name    
+    Flight hours
+    certificate number
+
+Add Timezone dropdown fields
+
+Remove:  Purpose operations details
+
+Fix Nearest Airport dropdown - it's not auto-flightlog
+
+OOP Waiver Document
+    Link OOP Waiver number
+
+OOMV Waiver 
+    Link waiver doc
+
+Remove ATC frequency
+
+One more heads-up (related to your earlier Airspace admin autocomplete issue)
+If your Airspace WaiverPlanningAdmin.autocomplete_fields includes:
+nearest_airport_ref (Airport)
+aircraft (Equipment)
+pilot_profile (PilotProfile)
+oop_waiver_document / mv_waiver_document (GeneralDocument)
+…then those referenced models must have:
+an admin registered (for Airport, etc.)
+search_fields defined on that admin
+✅ This GeneralDocumentAdmin now has search_fields, so it will satisfy autocomplete if you add oop_waiver_document / mv_waiver_document to autocomplete_fields.
+If you paste your current airspace/admin.py autocomplete_fields line (or tell me what you want to autocomplete), I’ll give you the exact minimal set of ModelAdmins you need to register (AirportAdmin, EquipmentAdmin, PilotProfileAdmin) with the right search_fields so the system checks are clean.
+
+-------------------------------------------------------------------------
 
 
 

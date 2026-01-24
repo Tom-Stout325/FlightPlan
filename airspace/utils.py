@@ -1,3 +1,4 @@
+#airspce/utils.py
 from __future__ import annotations
 
 from decimal import Decimal
@@ -5,11 +6,9 @@ from typing import Any, Optional
 
 from math import radians, sin, cos, sqrt, atan2
 
-# ---------------------------------------------------------------------
-# Coordinate helpers
-# ---------------------------------------------------------------------
 
-from decimal import Decimal
+
+
 
 def dms_to_decimal(deg, minutes, seconds, direction):
     """

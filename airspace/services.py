@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 from typing import Optional, List, Dict, Any
-
+import re 
 from django.conf import settings
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
-import re
 from openai import OpenAI
 
 from .constants.conops import CONOPS_SECTIONS
@@ -18,10 +17,10 @@ from .forms import (
     PREPARED_PROCEDURES_CHOICES,
 )
 
-
 # ==========================================================
 # USER-SCOPING GUARDS
 # ==========================================================
+
 
 def _assert_owned_planning(planning: Any, user: Any) -> None:
     if planning is None or user is None:
@@ -51,6 +50,7 @@ def _assert_owned_section(section: Any, user: Any) -> None:
 # OPENAI CLIENT
 # ==========================================================
 
+
 def get_openai_client() -> OpenAI:
     api_key = getattr(settings, "OPENAI_API_KEY", None)
     if not api_key:
@@ -61,6 +61,7 @@ def get_openai_client() -> OpenAI:
 # ==========================================================
 # SHARED HELPERS
 # ==========================================================
+
 
 def _clean(value: Optional[str]) -> str:
     return (value or "").strip()
@@ -118,7 +119,6 @@ def _has_pilot_name(planning: Any, section: Any) -> bool:
     if not text:
         return False
 
-    # Accept either of these labels (your UI text uses Remote Pilot in Command)
     patterns = [
         r"Remote Pilot in Command\s*:\s*\S+",
         r"RPIC Name\s*:\s*\S+",
@@ -138,65 +138,225 @@ def _line(label: str, value: Any) -> str:
     return f"{label}: {value}\n"
 
 
+def _date_range(planning: Any) -> str:
+    start = getattr(planning, "start_date", None)
+    end = getattr(planning, "end_date", None)
+    if not start:
+        return ""
+    if end and end != start:
+        return f"{start} to {end}"
+    return f"{start}"
+
+
+# ==========================================================
+# CONTROLLED AIRSPACE REQUIREMENTS (FAA WAIVER DESCRIPTION)
+# ==========================================================
+
+CONTROLLED_AIRSPACE_CLASSES = {"B", "C", "D", "E"}
+
+def _has_text(v: Any) -> bool:
+    return bool((v or "").strip()) if isinstance(v, str) else bool(v)
+
+def _is_controlled_airspace(planning: Any) -> bool:
+    return (getattr(planning, "airspace_class", "") or "").strip().upper() in CONTROLLED_AIRSPACE_CLASSES
+
+def validate_controlled_airspace_description_requirements(planning: Any) -> None:
+    """
+    Enforces that the FAA DroneZone Description-of-Operations Paragraph 2 can be written
+    WITHOUT inventing details when the operation is in controlled airspace.
+
+    Raises ValidationError with field-specific errors for use in forms/views.
+    Uses WaiverPlanning field names EXACTLY as in your model.
+    """
+    if not _is_controlled_airspace(planning):
+        return
+
+    errors: Dict[str, List[str]] = {}
+
+    def add(field: str, msg: str) -> None:
+        errors.setdefault(field, []).append(msg)
+
+    # -------------------------
+    # Containment (must exist)
+    # -------------------------
+    if not _has_text(getattr(planning, "operation_area_type", "")):
+        add("operation_area_type", "Required for controlled airspace: define the operation area type (radius/corridor/polygon/site).")
+
+    containment_ok = (
+        _has_text(getattr(planning, "containment_method", "")) or
+        _has_text(getattr(planning, "containment_notes", ""))
+    )
+    if not containment_ok:
+        add("containment_method", "Required for controlled airspace: choose a containment method or provide containment notes.")
+        add("containment_notes", "Required for controlled airspace: describe how containment is enforced/verified on-site (no inventing).")
+
+    # If corridor is chosen, require corridor dimensions
+    if (getattr(planning, "operation_area_type", "") or "").strip() == "corridor":
+        if getattr(planning, "corridor_length_ft", None) is None:
+            add("corridor_length_ft", "Required when operation area type is 'corridor': provide corridor length (ft).")
+        if getattr(planning, "corridor_width_ft", None) is None:
+            add("corridor_width_ft", "Required when operation area type is 'corridor': provide corridor width (ft).")
+
+    # -------------------------
+    # ATC coordination (must exist)
+    # -------------------------
+    # Accept a few ways to satisfy "ATC coordination exists" without inventing:
+    # - facility name OR
+    # - check-in procedure OR
+    # - coordination method with at least one contact channel (phone/frequency)
+    atc_facility_name = getattr(planning, "atc_facility_name", "")
+    atc_checkin = getattr(planning, "atc_checkin_procedure", "")
+    atc_method = getattr(planning, "atc_coordination_method", "")
+    atc_phone = getattr(planning, "atc_phone", "")
+    atc_freq = getattr(planning, "atc_frequency", "")
+
+    atc_ok = (
+        _has_text(atc_facility_name) or
+        _has_text(atc_checkin) or
+        (_has_text(atc_method) and (_has_text(atc_phone) or _has_text(atc_freq)))
+    )
+    if not atc_ok:
+        add("atc_facility_name", "Required for controlled airspace: provide ATC facility name OR a check-in procedure OR a coordination method with phone/frequency.")
+        add("atc_checkin_procedure", "Required for controlled airspace: describe check-in / coordination steps (when/how, what info, and termination procedure).")
+        add("atc_coordination_method", "Required for controlled airspace if you don’t have a facility name/check-in procedure: select phone/radio/both/other.")
+        add("atc_phone", "Provide if coordination uses phone.")
+        add("atc_frequency", "Provide if coordination uses radio.")
+
+    # Deviation/termination triggers (this is how we avoid inventing “traffic abort” logic)
+    if not _has_text(getattr(planning, "atc_deviation_triggers", "")):
+        add("atc_deviation_triggers", "Required for controlled airspace: define deviation/termination triggers (traffic, weather, direction, etc.).")
+
+    # -------------------------
+    # Lost link / flyaway (must exist)
+    # -------------------------
+    if not _has_text(getattr(planning, "lost_link_behavior", "")):
+        add("lost_link_behavior", "Required for controlled airspace: select lost-link behavior (RTH/hover/land).")
+
+    if not _has_text(getattr(planning, "lost_link_actions", "")):
+        add("lost_link_actions", "Required for controlled airspace: provide step-by-step lost-link actions (who does what, who is notified, and how ops terminate).")
+
+    # If behavior is RTH, require RTH altitude
+    if (getattr(planning, "lost_link_behavior", "") or "").strip() == "rth":
+        if getattr(planning, "rth_altitude_ft_agl", None) is None:
+            add("rth_altitude_ft_agl", "Required when lost-link behavior is RTH: provide RTH altitude (ft AGL).")
+
+    # Flyaway actions are strongly recommended; require in controlled airspace so Paragraph 2 can be complete.
+    if not _has_text(getattr(planning, "flyaway_actions", "")):
+        add("flyaway_actions", "Required for controlled airspace: provide flyaway actions (tracking/last-known position capture and facility notification).")
+
+    # -------------------------
+    # Finalize
+    # -------------------------
+    if errors:
+        # Raise with field-specific errors so forms can display nicely
+        raise ValidationError(errors)
 # ==========================================================
 # WAIVER DESCRIPTION (SHORT FORM – NOT CONOPS)
 # ==========================================================
 
+
 def build_waiver_description_prompt(planning) -> str:
     timeframe_labels = _labels_from_choices(planning.timeframe_codes(), TIMEFRAME_CHOICES)
-    purpose_labels = _labels_from_choices(planning.purpose_operations or [], PURPOSE_OPERATIONS_CHOICES)
-    ground_labels = _labels_from_choices(planning.ground_environment or [], GROUND_ENVIRONMENT_CHOICES)
-    procedure_labels = _labels_from_choices(planning.prepared_procedures or [], PREPARED_PROCEDURES_CHOICES)
+    purpose_labels = _labels_from_choices(getattr(planning, "purpose_operations", []) or [], PURPOSE_OPERATIONS_CHOICES)
+    ground_labels = _labels_from_choices(getattr(planning, "ground_environment", []) or [], GROUND_ENVIRONMENT_CHOICES)
+    procedure_labels = _labels_from_choices(getattr(planning, "prepared_procedures", []) or [], PREPARED_PROCEDURES_CHOICES)
 
     addr_bits = [
-        _clean(planning.street_address),
-        _clean(planning.location_city),
-        _clean(planning.location_state),
-        _clean(planning.zip_code),
+        _clean(getattr(planning, "street_address", "")),
+        _clean(getattr(planning, "location_city", "")),
+        _clean(getattr(planning, "location_state", "")),
+        _clean(getattr(planning, "zip_code", "")),
     ]
     address = ", ".join(b for b in addr_bits if b)
 
-    date_range = ""
-    if planning.start_date and planning.end_date:
-        date_range = (
-            f"{planning.start_date} to {planning.end_date}"
-            if planning.start_date != planning.end_date
-            else f"{planning.start_date}"
-        )
+    airport = getattr(planning, "nearest_airport_ref", None)
+    airport_icao = _clean(getattr(airport, "icao", "")) or _clean(getattr(planning, "nearest_airport", ""))
+    airport_name = _clean(getattr(airport, "name", ""))
 
     data: Dict[str, Any] = {
-        "Operation Title": _clean(planning.operation_title),
-        "Venue Name": _clean(planning.venue_name),
-        "Venue Address": address,
-        "Launch Location": _clean(planning.launch_location),
-        "Purpose": ", ".join(purpose_labels),
-        "Purpose Details": _clean(planning.purpose_operations_details),
-        "Dates": date_range,
-        "Timeframes": ", ".join(timeframe_labels),
-        "Frequency": _clean(planning.frequency),
-        "Local Time Zone": _clean(planning.local_time_zone),
-        "Airspace Class": _clean(planning.airspace_class),
-        "Nearest Airport": _clean(planning.nearest_airport),
-        "Operating Radius": _clean(planning.location_radius),
-        "Max Altitude AGL": planning.proposed_agl or "",
-        "Aircraft": _clean(planning.aircraft_display()),
-        "Aircraft Count": planning.aircraft_count or "",
-        "RPIC Name": _clean(planning.pilot_display_name()),
-        "RPIC Certificate": _clean(planning.pilot_cert_display()),
-        "RPIC Flight Hours": planning.pilot_flight_hours or "",
-        "Visual Observer": _bool_text(planning.has_visual_observer),
-        "Drone Detection": _bool_text(planning.uses_drone_detection),
-        "Flight Tracking": _bool_text(planning.uses_flight_tracking),
-        "Safety Notes": _clean(planning.safety_features_notes),
-        "Ground Environment": ", ".join(ground_labels),
-        "Estimated Crowd Size": _clean(planning.estimated_crowd_size),
-        "Prepared Procedures": ", ".join(procedure_labels),
-        "107.39 OOP Waiver": _bool_text(planning.operates_under_10739),
-        "107.145 Moving Vehicles Waiver": _bool_text(planning.operates_under_107145),
+        # --- operation basics ---
+        "operation_title": _clean(getattr(planning, "operation_title", "")),
+        "start_date": getattr(planning, "start_date", None) or "",
+        "end_date": getattr(planning, "end_date", None) or "",
+        "date_range": _date_range(planning),
+        "timeframe": ", ".join(timeframe_labels),
+        "frequency": _clean(getattr(planning, "frequency", "")),
+        "local_time_zone": _clean(getattr(planning, "local_time_zone", "")),
+        "proposed_agl": getattr(planning, "proposed_agl", None) or "",
+
+        # --- location / airspace ---
+        "venue_name": _clean(getattr(planning, "venue_name", "")),
+        "street_address": _clean(getattr(planning, "street_address", "")),
+        "location_city": _clean(getattr(planning, "location_city", "")),
+        "location_state": _clean(getattr(planning, "location_state", "")),
+        "zip_code": _clean(getattr(planning, "zip_code", "")),
+        "venue_address_compiled": address,
+        "location_latitude": getattr(planning, "location_latitude", None) or "",
+        "location_longitude": getattr(planning, "location_longitude", None) or "",
+        "airspace_class": _clean(getattr(planning, "airspace_class", "")),
+        "location_radius": _clean(getattr(planning, "location_radius", "")),
+        "nearest_airport": _clean(getattr(planning, "nearest_airport", "")),
+        "nearest_airport_ref__icao": airport_icao,
+        "nearest_airport_ref__name": airport_name,
+        "distance_to_airport_nm": getattr(planning, "distance_to_airport_nm", None) or "",
+
+        # --- aircraft ---
+        "aircraft": _clean(getattr(planning, "aircraft_display", lambda: "")()),
+        "aircraft_count": _clean(getattr(planning, "aircraft_count", "")),
+
+        # --- pilot ---
+        "pilot_name": _clean(getattr(planning, "pilot_display_name", lambda: "")()),
+        "pilot_cert": _clean(getattr(planning, "pilot_cert_display", lambda: "")()),
+        "pilot_flight_hours": getattr(planning, "pilot_flight_hours", None) or "",
+
+        # --- safety posture helpers ---
+        "has_visual_observer": _bool_text(getattr(planning, "has_visual_observer", False)),
+        "uses_drone_detection": _bool_text(getattr(planning, "uses_drone_detection", False)),
+        "uses_flight_tracking": _bool_text(getattr(planning, "uses_flight_tracking", False)),
+        "safety_features_notes": _clean(getattr(planning, "safety_features_notes", "")),
+        "ground_environment": ", ".join(ground_labels),
+        "estimated_crowd_size": _clean(getattr(planning, "estimated_crowd_size", "")),
+        "prepared_procedures": ", ".join(procedure_labels),
+
+        # --- waivers (only if you’re also running them for this op) ---
+        "operates_under_10739": _bool_text(getattr(planning, "operates_under_10739", False)),
+        "oop_waiver_number": _clean(getattr(planning, "oop_waiver_number", "")),
+        "operates_under_107145": _bool_text(getattr(planning, "operates_under_107145", False)),
+        "mv_waiver_number": _clean(getattr(planning, "mv_waiver_number", "")),
+
+        # --- FAA specificity (controlled airspace waiver posture) ---
+        "operation_area_type": _clean(getattr(planning, "operation_area_type", "")),
+        "containment_method": _clean(getattr(planning, "containment_method", "")),
+        "containment_notes": _clean(getattr(planning, "containment_notes", "")),
+        "corridor_length_ft": getattr(planning, "corridor_length_ft", None) or "",
+        "corridor_width_ft": getattr(planning, "corridor_width_ft", None) or "",
+        "max_groundspeed_mph": getattr(planning, "max_groundspeed_mph", None) or "",
+
+        # --- lost-link / flyaway ---
+        "lost_link_behavior": _clean(getattr(planning, "lost_link_behavior", "")),
+        "rth_altitude_ft_agl": getattr(planning, "rth_altitude_ft_agl", None) or "",
+        "lost_link_actions": _clean(getattr(planning, "lost_link_actions", "")),
+        "flyaway_actions": _clean(getattr(planning, "flyaway_actions", "")),
+
+        # --- ATC coordination (facility specifics) ---
+        "atc_facility_name": _clean(getattr(planning, "atc_facility_name", "")),
+        "atc_coordination_method": _clean(getattr(planning, "atc_coordination_method", "")),
+        "atc_phone": _clean(getattr(planning, "atc_phone", "")),
+        "atc_frequency": _clean(getattr(planning, "atc_frequency", "")),
+        "atc_checkin_procedure": _clean(getattr(planning, "atc_checkin_procedure", "")),
+        "atc_deviation_triggers": _clean(getattr(planning, "atc_deviation_triggers", "")),
+
+        # --- weather + crew discipline ---
+        "max_wind_mph": getattr(planning, "max_wind_mph", None) or "",
+        "min_visibility_sm": getattr(planning, "min_visibility_sm", None) or "",
+        "weather_go_nogo": _clean(getattr(planning, "weather_go_nogo", "")),
+        "crew_count": getattr(planning, "crew_count", None) or "",
+        "crew_briefing_procedure": _clean(getattr(planning, "crew_briefing_procedure", "")),
+        "radio_discipline": _clean(getattr(planning, "radio_discipline", "")),
     }
 
     return f"""
-You are writing a SHORT FAA DroneZone "Description of Operations".
+You are writing a SHORT FAA DroneZone "Description of Operations" for controlled airspace waiver review.
 
 RULES:
 - Exactly 2 paragraphs.
@@ -208,14 +368,24 @@ RULES:
 DATA:
 {data}
 
-Paragraph 1: What / where / when / flight profile.
-Paragraph 2: Safety posture and waiver dependency.
+Paragraph 1: Describe the operation, location, dates/times, airspace class, altitude, aircraft, and general flight profile.
+
+Paragraph 2: Describe the safety posture using ONLY provided data.
+If present, include:
+- Containment (operation_area_type, containment_method, containment_notes, corridor_* if applicable)
+- ATC coordination (atc_facility_name, atc_coordination_method, atc_checkin_procedure, atc_deviation_triggers)
+- Lost-link and flyaway (lost_link_behavior, rth_altitude_ft_agl, lost_link_actions, flyaway_actions)
+- Traffic abort/termination triggers ONLY if explicitly provided in the data (atc_deviation_triggers)
+Do not speculate or add procedures that are not explicitly provided.
 """.strip()
 
 
 def generate_waiver_description_text(planning, *, user, model=None) -> str:
     _assert_owned_planning(planning, user)
 
+    # HARD STOP: prevent Paragraph 2 from being forced to "invent" controlled-airspace specifics
+    validate_controlled_airspace_description_requirements(planning)
+    
     client = get_openai_client()
     prompt = build_waiver_description_prompt(planning)
 
@@ -236,14 +406,12 @@ def generate_waiver_description_text(planning, *, user, model=None) -> str:
 # CONOPS INITIALIZATION
 # ==========================================================
 
+
 def ensure_conops_sections(application, *, user) -> None:
     _assert_owned_application(application, user)
 
     existing = set(application.conops_sections.values_list("section_key", flat=True))
 
-    # IMPORTANT:
-    # This assumes ConopsSection has a `user` FK and your models enforce alignment to application.user.
-    # If you haven't added ConopsSection.user yet, remove the user=... line temporarily.
     new_sections = [
         ConopsSection(
             application=application,
@@ -263,18 +431,19 @@ def ensure_conops_sections(application, *, user) -> None:
 # CONOPS GENERATION (PER SECTION)
 # ==========================================================
 
+
 def build_conops_section_prompt(*, application, planning, section) -> str:
     """
-    Builds the prompt for ANY CONOPS section. This must always return a string.
+    Builds the prompt for ANY CONOPS section.
 
-    NOTE: This version omits empty fields entirely (no "TBD" lines),
-    using _line() blocks so the generated CONOPS stays clean.
+    NOTE: Omits empty fields entirely (no "TBD" lines) to keep the CONOPS clean.
     """
 
+    # ---- Cover Page: label-only output ----
     if section.section_key == "cover_page":
-        aircraft = _clean(planning.aircraft_display())
-        pilot_name = _clean(planning.pilot_display_name())
-        pilot_cert = _clean(planning.pilot_cert_display())
+        aircraft = _clean(getattr(planning, "aircraft_display", lambda: "")())
+        pilot_name = _clean(getattr(planning, "pilot_display_name", lambda: "")())
+        pilot_cert = _clean(getattr(planning, "pilot_cert_display", lambda: "")())
         pilot_hours = getattr(planning, "pilot_flight_hours", None)
 
         cover_block = (
@@ -292,12 +461,8 @@ def build_conops_section_prompt(*, application, planning, section) -> str:
                     _clean(getattr(planning, "zip_code", "")),
                 ] if p])
             )
-            + _line(
-                "Dates",
-                f"{getattr(planning, 'start_date', None)}"
-                + (f" to {getattr(planning, 'end_date', None)}" if getattr(planning, "end_date", None) else "")
-            )
-            + _line("Airspace Classification", _clean(getattr(planning, "airspace_class", "")))
+            + _line("Dates", _date_range(planning))
+            + _line("Airspace Class", _clean(getattr(planning, "airspace_class", "")))
             + _line("Nearest Airport", _clean(getattr(planning, "nearest_airport", "")))
         ).strip()
 
@@ -317,9 +482,9 @@ PLANNING DATA:
 
     # ---- Choice label helpers ----
     timeframe_labels = _labels_from_choices(planning.timeframe_codes(), TIMEFRAME_CHOICES)
-    purpose_labels = _labels_from_choices(planning.purpose_operations or [], PURPOSE_OPERATIONS_CHOICES)
-    ground_labels = _labels_from_choices(planning.ground_environment or [], GROUND_ENVIRONMENT_CHOICES)
-    procedure_labels = _labels_from_choices(planning.prepared_procedures or [], PREPARED_PROCEDURES_CHOICES)
+    purpose_labels = _labels_from_choices(getattr(planning, "purpose_operations", []) or [], PURPOSE_OPERATIONS_CHOICES)
+    ground_labels = _labels_from_choices(getattr(planning, "ground_environment", []) or [], GROUND_ENVIRONMENT_CHOICES)
+    procedure_labels = _labels_from_choices(getattr(planning, "prepared_procedures", []) or [], PREPARED_PROCEDURES_CHOICES)
 
     # ---- Address string ----
     addr_bits = [
@@ -330,14 +495,14 @@ PLANNING DATA:
     ]
     address = ", ".join(b for b in addr_bits if b)
 
-    # ---- Airport + distance (robust formatting) ----
+    # ---- Airport + distance ----
     airport = getattr(planning, "nearest_airport_ref", None)
     airport_icao = _clean(getattr(airport, "icao", "")) or _clean(getattr(planning, "nearest_airport", ""))
     airport_name = _clean(getattr(airport, "name", ""))
 
     distance_nm = getattr(planning, "distance_to_airport_nm", None)
 
-    # ---- ARTCC (field names vary; keep safe) ----
+    # ---- ARTCC (safe; your Airport model may not have these fields yet) ----
     artcc_name = (
         _clean(getattr(airport, "artcc_name", ""))
         or _clean(getattr(airport, "artcc", ""))
@@ -353,147 +518,161 @@ PLANNING DATA:
     # ==========================================================
     extra_section_instructions = ""
 
-    if section.section_key == "cover_page":
+    if section.section_key == "communications_coordination":
         extra_section_instructions = """
 SPECIAL INSTRUCTIONS FOR THIS SECTION:
-- Use these exact labels (verbatim) when present:
-  - "Unmanned Aircraft System:"
-  - "Remote Pilot in Command:"
-  - "RPIC Certificate:"
-  - "RPIC Flight Hours:"
-  - "Location:"
-  - "Dates:"
-- Keep it concise and professional (cover-page style).
+- Focus on controlled airspace coordination and communication discipline.
+- Use ONLY the ATC/Facility details provided in PLANNING DATA.
+- If atc_facility_name / atc_coordination_method is blank, do not invent facility names, frequencies, phone numbers, or procedures.
+- Include atc_checkin_procedure and atc_deviation_triggers only if present.
+- Keep it procedural (who does what, when, and how), not promotional.
 """.strip()
 
-    elif section.section_key == "communications_coordination":
-        exact_paragraph = (
-            "Airspace authorization for operations within controlled airspace will be requested through the FAA DroneZone system prior to the event. "
-            "Flight operations will commence only after authorization is granted. "
-            "The Remote Pilot in Command (RPIC) will adhere strictly to all approved operational parameters, including altitude limits, geographic boundaries, and time restrictions. "
-            "Any deviation from the approved authorization or direction from Air Traffic Control (ATC) will result in immediate termination of UAS operations."
-        )
-        extra_section_instructions = f"""
+    elif section.section_key == "emergency_contingency":
+        extra_section_instructions = """
 SPECIAL INSTRUCTIONS FOR THIS SECTION:
-1) INCLUDE THIS EXACT PARAGRAPH VERBATIM (word-for-word) as the FIRST paragraph:
-"{exact_paragraph}"
+- Write step-by-step emergency and contingency procedures using ONLY provided planning data.
+- If present, include:
+  - lost_link_behavior and rth_altitude_ft_agl
+  - lost_link_actions and flyaway_actions
+  - atc_coordination_method + atc_facility_name for abnormal events (only if provided)
+  - atc_deviation_triggers (only if provided)
+  - weather go/no-go criteria (max_wind_mph, min_visibility_sm, weather_go_nogo) only if provided
+- Do not add new emergency types, emergency services, frequencies, or check-in rules that are not in the data.
+""".strip()
 
-2) Then add ATC / FACILITY CONTEXT using ONLY these values (if present):
-- Nearest Airport: {airport_icao or ""}
-- Nearest Airport Name: {airport_name or ""}
-- Distance to Airport (NM): {distance_nm if distance_nm is not None else ""}
-- Responsible ARTCC: {artcc_name or ""} ({artcc_id or ""})
+    elif section.section_key == "safety_systems_risk_mitigation":
+        extra_section_instructions = """
+SPECIAL INSTRUCTIONS FOR THIS SECTION:
+- Emphasize concrete risk controls and mitigations appropriate for controlled airspace.
+- If present, include: operation_area_type/containment_method/containment_notes, crew_briefing_procedure, radio_discipline,
+  and atc_deviation_triggers (only if provided).
+- Keep mitigations procedural and verifiable; avoid vague assurances.
+""".strip()
 
-3) Then include these operational rules (do not invent extra methods):
-- RPIC will contact ATC prior to the start of operations each day and at the conclusion of operations each day.
-- Fly-away will trigger immediate ATC contact, providing last known location, time, and direction of flight.
+    elif section.section_key == "operational_limitations":
+        extra_section_instructions = """
+SPECIAL INSTRUCTIONS FOR THIS SECTION:
+- List hard operational limits only (proposed_agl, airspace_class, timeframe, location_radius, corridor dims, max_groundspeed_mph,
+  max_wind_mph, min_visibility_sm).
+- Use short bullets where appropriate.
+- Do not invent numeric thresholds or constraints.
 """.strip()
 
     elif section.section_key == "operational_area_airspace":
         extra_section_instructions = f"""
 SPECIAL INSTRUCTIONS FOR THIS SECTION:
-- INCLUDE ARTCC RESPONSIBILITY IN THIS SECTION when present.
-- Use ONLY these values (leave out anything blank):
+- Include responsible ATC context ONLY when present in PLANNING DATA.
+- Use ONLY these values (omit anything blank):
   - Responsible ARTCC: {artcc_name or ""} ({artcc_id or ""})
   - Nearest Airport: {airport_icao or ""} – {airport_name or ""}
   - Distance to Airport (NM): {distance_nm if distance_nm is not None else ""}
-- Do not invent phone numbers or frequencies.
+- Do not invent phone numbers, frequencies, or facility names.
 """.strip()
 
     # ==========================================================
-    # Build "only-if-present" blocks
+    # Build "only-if-present" blocks (labels match your WaiverPlanning field names)
     # ==========================================================
 
     operation_block = (
-        _line("Operation Title", _clean(getattr(planning, "operation_title", "")))
-        + _line(
-            "Dates",
-            f"{getattr(planning, 'start_date', None)} to {getattr(planning, 'end_date', None) or getattr(planning, 'start_date', None)}"
-            if getattr(planning, "start_date", None) else ""
-        )
-        + _line("Timeframes", ", ".join(timeframe_labels) if timeframe_labels else "")
-        + _line("Frequency", _clean(getattr(planning, "frequency", "")))
-        + _line("Local Time Zone", _clean(getattr(planning, "local_time_zone", "")))
-        + _line("Max Altitude AGL", getattr(planning, "proposed_agl", None))
+        _line("operation_title", _clean(getattr(planning, "operation_title", "")))
+        + _line("start_date", getattr(planning, "start_date", None))
+        + _line("end_date", getattr(planning, "end_date", None))
+        + _line("timeframe", ", ".join(timeframe_labels) if timeframe_labels else "")
+        + _line("frequency", _clean(getattr(planning, "frequency", "")))
+        + _line("local_time_zone", _clean(getattr(planning, "local_time_zone", "")))
+        + _line("proposed_agl", getattr(planning, "proposed_agl", None))
     )
 
     location_block = (
-        _line("Venue Name", _clean(getattr(planning, "venue_name", "")))
-        + _line("Address", address)
-        + _line("Launch Location", _clean(getattr(planning, "launch_location", "")))
-        + _line(
-            "Latitude/Longitude",
-            f"{getattr(planning, 'location_latitude', None)}, {getattr(planning, 'location_longitude', None)}"
-            if (getattr(planning, "location_latitude", None) is not None and getattr(planning, "location_longitude", None) is not None)
-            else ""
-        )
-        + _line("Operational Radius", _clean(getattr(planning, "location_radius", "")))
-        + _line("Airspace Class", _clean(getattr(planning, "airspace_class", "")))
-        + _line("Nearest Airport (ICAO)", airport_icao)
-        + _line("Nearest Airport Name", airport_name)
-        + _line("Distance to Airport (NM)", distance_nm)
-        + _line("Responsible ARTCC", f"{artcc_name} ({artcc_id})" if (artcc_name or artcc_id) else "")
+        _line("venue_name", _clean(getattr(planning, "venue_name", "")))
+        + _line("street_address", _clean(getattr(planning, "street_address", "")))
+        + _line("location_city", _clean(getattr(planning, "location_city", "")))
+        + _line("location_state", _clean(getattr(planning, "location_state", "")))
+        + _line("zip_code", _clean(getattr(planning, "zip_code", "")))
+        + _line("address_compiled", address)
+        + _line("location_latitude", getattr(planning, "location_latitude", None))
+        + _line("location_longitude", getattr(planning, "location_longitude", None))
+        + _line("location_radius", _clean(getattr(planning, "location_radius", "")))
+        + _line("airspace_class", _clean(getattr(planning, "airspace_class", "")))
+        + _line("nearest_airport", _clean(getattr(planning, "nearest_airport", "")))
+        + _line("nearest_airport_ref.icao", airport_icao)
+        + _line("nearest_airport_ref.name", airport_name)
+        + _line("distance_to_airport_nm", distance_nm)
+        + _line("responsible_artcc", f"{artcc_name} ({artcc_id})" if (artcc_name or artcc_id) else "")
     )
 
-    aircraft = _clean(planning.aircraft_display())
-    aircraft_count = getattr(planning, "aircraft_count", None)
     aircraft_block = (
-        _line("Unmanned Aircraft System", aircraft)
-        + _line("Aircraft Count", aircraft_count)
-        + _line("Flight Duration", _clean(getattr(planning, "flight_duration", "")))
-        + _line("Flights Per Day", getattr(planning, "flights_per_day", None))
+        _line("aircraft", _clean(getattr(planning, "aircraft_display", lambda: "")()))
+        + _line("aircraft_manual", _clean(getattr(planning, "aircraft_manual", "")))
+        + _line("aircraft_count", _clean(getattr(planning, "aircraft_count", "")))
+        + _line("flight_duration", _clean(getattr(planning, "flight_duration", "")))
+        + _line("flights_per_day", getattr(planning, "flights_per_day", None))
     )
-
-    pilot_name = _clean(planning.pilot_display_name())
-    pilot_cert = _clean(planning.pilot_cert_display())
-    pilot_hours = getattr(planning, "pilot_flight_hours", None)
-
-    pilot_name_label = "Remote Pilot in Command" if section.section_key == "cover_page" else "RPIC Name"
 
     pilot_block = (
-        _line(pilot_name_label, pilot_name)
-        + _line("RPIC Certificate", pilot_cert)
-        + _line("RPIC Flight Hours", pilot_hours)
-        + _line(
-            "Visual Observer Used",
-            _bool_text(getattr(planning, "has_visual_observer", False))
-            if getattr(planning, "has_visual_observer", None) in (True, False) else ""
-        )
+        _line("pilot_name_manual", _clean(getattr(planning, "pilot_name_manual", "")))
+        + _line("pilot_cert_manual", _clean(getattr(planning, "pilot_cert_manual", "")))
+        + _line("pilot_display_name()", _clean(getattr(planning, "pilot_display_name", lambda: "")()))
+        + _line("pilot_cert_display()", _clean(getattr(planning, "pilot_cert_display", lambda: "")()))
+        + _line("pilot_flight_hours", getattr(planning, "pilot_flight_hours", None))
+        + _line("has_visual_observer", _bool_text(getattr(planning, "has_visual_observer", False)))
     )
 
     ops_block = (
-        _line("Purpose of Operations", ", ".join(purpose_labels) if purpose_labels else "")
-        + _line("Purpose Details", _clean(getattr(planning, "purpose_operations_details", "")))
-        + _line("Ground Environment", ", ".join(ground_labels) if ground_labels else "")
-        + _line("Ground Environment Other", _clean(getattr(planning, "ground_environment_other", "")))
-        + _line("Estimated Crowd Size", _clean(getattr(planning, "estimated_crowd_size", "")))
-        + _line(
-            "Drone Detection Used",
-            _bool_text(getattr(planning, "uses_drone_detection", False))
-            if getattr(planning, "uses_drone_detection", None) in (True, False) else ""
-        )
-        + _line(
-            "Flight Tracking Used",
-            _bool_text(getattr(planning, "uses_flight_tracking", False))
-            if getattr(planning, "uses_flight_tracking", None) in (True, False) else ""
-        )
-        + _line("Safety Features Notes", _clean(getattr(planning, "safety_features_notes", "")))
-        + _line("Prepared Procedures", ", ".join(procedure_labels) if procedure_labels else "")
+        _line("purpose_operations", ", ".join(purpose_labels) if purpose_labels else "")
+        + _line("purpose_operations_details", _clean(getattr(planning, "purpose_operations_details", "")))
+        + _line("ground_environment", ", ".join(ground_labels) if ground_labels else "")
+        + _line("ground_environment_other", _clean(getattr(planning, "ground_environment_other", "")))
+        + _line("estimated_crowd_size", _clean(getattr(planning, "estimated_crowd_size", "")))
+        + _line("uses_drone_detection", _bool_text(getattr(planning, "uses_drone_detection", False)))
+        + _line("uses_flight_tracking", _bool_text(getattr(planning, "uses_flight_tracking", False)))
+        + _line("safety_features_notes", _clean(getattr(planning, "safety_features_notes", "")))
+        + _line("prepared_procedures", ", ".join(procedure_labels) if procedure_labels else "")
     )
 
     waiver_block = (
-        _line(
-            "Operating under §107.39 waiver",
-            _bool_text(getattr(planning, "operates_under_10739", False))
-            if getattr(planning, "operates_under_10739", None) in (True, False) else ""
-        )
-        + _line("107.39 Waiver Number", _clean(getattr(planning, "oop_waiver_number", "")))
-        + _line(
-            "Operating under §107.145 waiver",
-            _bool_text(getattr(planning, "operates_under_107145", False))
-            if getattr(planning, "operates_under_107145", None) in (True, False) else ""
-        )
-        + _line("107.145 Waiver Number", _clean(getattr(planning, "mv_waiver_number", "")))
+        _line("operates_under_10739", _bool_text(getattr(planning, "operates_under_10739", False)))
+        + _line("oop_waiver_number", _clean(getattr(planning, "oop_waiver_number", "")))
+        + _line("operates_under_107145", _bool_text(getattr(planning, "operates_under_107145", False)))
+        + _line("mv_waiver_number", _clean(getattr(planning, "mv_waiver_number", "")))
+    )
+
+    containment_block = (
+        _line("operation_area_type", _clean(getattr(planning, "operation_area_type", "")))
+        + _line("containment_method", _clean(getattr(planning, "containment_method", "")))
+        + _line("containment_notes", _clean(getattr(planning, "containment_notes", "")))
+        + _line("corridor_length_ft", getattr(planning, "corridor_length_ft", None))
+        + _line("corridor_width_ft", getattr(planning, "corridor_width_ft", None))
+        + _line("max_groundspeed_mph", getattr(planning, "max_groundspeed_mph", None))
+    )
+
+    atc_block = (
+        _line("atc_facility_name", _clean(getattr(planning, "atc_facility_name", "")))
+        + _line("atc_coordination_method", _clean(getattr(planning, "atc_coordination_method", "")))
+        + _line("atc_phone", _clean(getattr(planning, "atc_phone", "")))
+        + _line("atc_frequency", _clean(getattr(planning, "atc_frequency", "")))
+        + _line("atc_checkin_procedure", _clean(getattr(planning, "atc_checkin_procedure", "")))
+        + _line("atc_deviation_triggers", _clean(getattr(planning, "atc_deviation_triggers", "")))
+    )
+
+    lost_link_block = (
+        _line("lost_link_behavior", _clean(getattr(planning, "lost_link_behavior", "")))
+        + _line("rth_altitude_ft_agl", getattr(planning, "rth_altitude_ft_agl", None))
+        + _line("lost_link_actions", _clean(getattr(planning, "lost_link_actions", "")))
+        + _line("flyaway_actions", _clean(getattr(planning, "flyaway_actions", "")))
+    )
+
+    weather_block = (
+        _line("max_wind_mph", getattr(planning, "max_wind_mph", None))
+        + _line("min_visibility_sm", getattr(planning, "min_visibility_sm", None))
+        + _line("weather_go_nogo", _clean(getattr(planning, "weather_go_nogo", "")))
+    )
+
+    crew_block = (
+        _line("crew_count", getattr(planning, "crew_count", None))
+        + _line("crew_briefing_procedure", _clean(getattr(planning, "crew_briefing_procedure", "")))
+        + _line("radio_discipline", _clean(getattr(planning, "radio_discipline", "")))
     )
 
     return f"""
@@ -507,7 +686,8 @@ RULES:
 - Use short paragraphs; bullets are allowed only when appropriate.
 - Do NOT invent details.
 - If data is missing, OMIT it entirely (do not write TBD).
-- This output must be ONLY the body text for this section (no headings).
+- Output must be ONLY the body text for this section (no headings).
+- Prefer procedural specificity over general statements when data supports it.
 
 {extra_section_instructions}
 
@@ -519,6 +699,12 @@ PLANNING DATA (only include what is provided below):
 {ops_block}
 {waiver_block}
 
+{containment_block}
+{atc_block}
+{lost_link_block}
+{weather_block}
+{crew_block}
+
 WRITE THE SECTION BODY TEXT ONLY.
 """.strip()
 
@@ -526,6 +712,7 @@ WRITE THE SECTION BODY TEXT ONLY.
 # ==========================================================
 # CONOPS VALIDATION
 # ==========================================================
+
 
 MIN_WORDS_BY_SECTION = {
     "cover_page": 20,
@@ -564,7 +751,7 @@ def validate_conops_section(section, *, user) -> dict:
         return any(_has_text(v) for v in vals)
 
     def _has_coords() -> bool:
-        return planning.location_latitude is not None and planning.location_longitude is not None
+        return getattr(planning, "location_latitude", None) is not None and getattr(planning, "location_longitude", None) is not None
 
     def _require(label: str, condition: bool):
         if not condition:
@@ -574,106 +761,108 @@ def validate_conops_section(section, *, user) -> dict:
     # Required planning fields per section
     # -------------------------
     if key == "cover_page":
-        _require("Operation title", _has_text(getattr(planning, "operation_title", "")))
-        _require("Start date", bool(getattr(planning, "start_date", None)))
+        _require("operation_title", _has_text(getattr(planning, "operation_title", "")))
+        _require("start_date", bool(getattr(planning, "start_date", None)))
         _require(
-            "Location (venue/address/city)",
+            "venue_name/street_address/location_city (at least one)",
             _has_any(
                 getattr(planning, "venue_name", ""),
                 getattr(planning, "street_address", ""),
                 getattr(planning, "location_city", ""),
             ),
         )
-        _require("Pilot name", _has_pilot_name(planning, section))
-        _require("Pilot certificate number", _has_text(planning.pilot_cert_display()))
-        _require("Approximate UAS flight hours", _has_flight_hours(planning, section))
-        _require("Aircraft", _has_aircraft(planning, section))
+        _require("pilot_display_name()", _has_pilot_name(planning, section))
+        _require("pilot_cert_display()", _has_text(getattr(planning, "pilot_cert_display", lambda: "")()))
+        _require("pilot_flight_hours", _has_flight_hours(planning, section))
+        _require("aircraft", _has_aircraft(planning, section))
 
     elif key == "purpose_of_operations":
-        _require("Purpose of operations (select at least one)", bool(getattr(planning, "purpose_operations", None)))
-        _require("Purpose details (recommended for clarity)", _has_text(getattr(planning, "purpose_operations_details", "")))
+        _require("purpose_operations (select at least one)", bool(getattr(planning, "purpose_operations", None)))
+        _require("purpose_operations_details (recommended)", _has_text(getattr(planning, "purpose_operations_details", "")))
 
     elif key == "scope_of_operations":
-        _require("Timeframe (select at least one)", bool(getattr(planning, "timeframe", None)))
-        _require("Frequency", _has_text(getattr(planning, "frequency", "")))
-        _require("Max altitude AGL", getattr(planning, "proposed_agl", None) is not None)
-        _require("Operational radius", _has_text(getattr(planning, "location_radius", "")))
+        _require("timeframe (select at least one)", bool(getattr(planning, "timeframe", None)))
+        _require("frequency", _has_text(getattr(planning, "frequency", "")))
+        _require("proposed_agl", getattr(planning, "proposed_agl", None) is not None)
+        _require("location_radius", _has_text(getattr(planning, "location_radius", "")))
 
     elif key == "operational_area_airspace":
         _require(
-            "Latitude/Longitude OR Street Address + ZIP",
+            "location_latitude/location_longitude OR (street_address + zip_code)",
             _has_coords()
             or (_has_text(getattr(planning, "street_address", "")) and _has_text(getattr(planning, "zip_code", ""))),
         )
-        _require("Airspace class", _has_text(getattr(planning, "airspace_class", "")))
-        _require("Operational radius", _has_text(getattr(planning, "location_radius", "")))
+        _require("airspace_class", _has_text(getattr(planning, "airspace_class", "")))
+        _require("location_radius", _has_text(getattr(planning, "location_radius", "")))
         _require(
-            "Nearest airport (recommended)",
+            "nearest_airport or nearest_airport_ref",
             _has_text(getattr(planning, "nearest_airport", "")) or bool(getattr(planning, "nearest_airport_ref_id", None)),
         )
 
     elif key == "aircraft_equipment":
-        _require("Aircraft", _has_aircraft(planning, section))
-        _require("Safety features notes", _has_text(getattr(planning, "safety_features_notes", "")))
+        _require("aircraft/aircraft_manual", _has_aircraft(planning, section))
+        _require("safety_features_notes", _has_text(getattr(planning, "safety_features_notes", "")))
 
     elif key == "crew_roles_responsibilities":
-        _require("Pilot name", _has_pilot_name(planning, section))
-        _require("Pilot certificate number", _has_text(planning.pilot_cert_display()))
-        _require("Pilot flight hours", _has_flight_hours(planning, section))
-        _require("VO usage selected (yes/no)", getattr(planning, "has_visual_observer", None) in (True, False))
+        _require("pilot_display_name()", _has_pilot_name(planning, section))
+        _require("pilot_cert_display()", _has_text(getattr(planning, "pilot_cert_display", lambda: "")()))
+        _require("pilot_flight_hours", _has_flight_hours(planning, section))
+        _require("has_visual_observer (yes/no)", getattr(planning, "has_visual_observer", None) in (True, False))
 
     elif key == "concept_of_operations":
         _require(
-            "Location (venue/address/city)",
+            "venue_name/street_address/location_city (at least one)",
             _has_any(
                 getattr(planning, "venue_name", ""),
                 getattr(planning, "street_address", ""),
                 getattr(planning, "location_city", ""),
             ),
         )
-        _require("Launch location", _has_text(getattr(planning, "launch_location", "")))
-        _require("Aircraft", _has_aircraft(planning, section))
-        _require("Flight duration", _has_text(getattr(planning, "flight_duration", "")))
-        _require("Flights per day", getattr(planning, "flights_per_day", None) is not None)
+        _require("launch_location", _has_text(getattr(planning, "launch_location", "")))
+        _require("aircraft/aircraft_manual", _has_aircraft(planning, section))
+        _require("flight_duration", _has_text(getattr(planning, "flight_duration", "")))
+        _require("flights_per_day", getattr(planning, "flights_per_day", None) is not None)
 
     elif key == "ground_operations":
-        _require("Launch location", _has_text(getattr(planning, "launch_location", "")))
-        _require("Prepared procedures (select at least one)", bool(getattr(planning, "prepared_procedures", None)))
+        _require("launch_location", _has_text(getattr(planning, "launch_location", "")))
+        _require("prepared_procedures (select at least one)", bool(getattr(planning, "prepared_procedures", None)))
 
     elif key == "communications_coordination":
-        _require("Airspace class", _has_text(getattr(planning, "airspace_class", "")))
+        _require("airspace_class", _has_text(getattr(planning, "airspace_class", "")))
         _require(
-            "Nearest airport",
+            "nearest_airport or nearest_airport_ref",
             _has_text(getattr(planning, "nearest_airport", "")) or bool(getattr(planning, "nearest_airport_ref_id", None)),
         )
-        _require("Distance to airport (NM)", getattr(planning, "distance_to_airport_nm", None) is not None)
-
-        airport = getattr(planning, "nearest_airport_ref", None)
-        if airport is not None and hasattr(airport, "artcc_name") and hasattr(airport, "artcc_id"):
-            _require("ARTCC name (recommended)", _has_text(getattr(airport, "artcc_name", "")))
-            _require("ARTCC ID (recommended)", _has_text(getattr(airport, "artcc_id", "")))
+        _require("distance_to_airport_nm", getattr(planning, "distance_to_airport_nm", None) is not None)
 
     elif key == "safety_systems_risk_mitigation":
-        _require("Safety features notes", _has_text(getattr(planning, "safety_features_notes", "")))
-        _require("Prepared procedures (select at least one)", bool(getattr(planning, "prepared_procedures", None)))
+        _require("safety_features_notes", _has_text(getattr(planning, "safety_features_notes", "")))
+        _require("prepared_procedures (select at least one)", bool(getattr(planning, "prepared_procedures", None)))
 
     elif key == "operational_limitations":
-        _require("Max altitude AGL", getattr(planning, "proposed_agl", None) is not None)
-        _require("Airspace class", _has_text(getattr(planning, "airspace_class", "")))
-        _require("Timeframe (select at least one)", bool(getattr(planning, "timeframe", None)))
+        _require("proposed_agl", getattr(planning, "proposed_agl", None) is not None)
+        _require("airspace_class", _has_text(getattr(planning, "airspace_class", "")))
+        _require("timeframe (select at least one)", bool(getattr(planning, "timeframe", None)))
 
     elif key == "emergency_contingency":
-        _require("Prepared procedures (select at least one)", bool(getattr(planning, "prepared_procedures", None)))
+        _require(
+            "lost_link_behavior OR lost_link_actions",
+            _has_any(getattr(planning, "lost_link_behavior", ""), getattr(planning, "lost_link_actions", "")),
+        )
+        _require(
+            "flyaway_actions OR atc_deviation_triggers",
+            _has_any(getattr(planning, "flyaway_actions", ""), getattr(planning, "atc_deviation_triggers", "")),
+        )
 
     elif key == "compliance_statement":
         if getattr(planning, "operates_under_10739", False):
             _require(
-                "107.39 waiver number or waiver document",
+                "oop_waiver_number or oop_waiver_document",
                 bool(getattr(planning, "oop_waiver_number", None)) or bool(getattr(planning, "oop_waiver_document_id", None)),
             )
         if getattr(planning, "operates_under_107145", False):
             _require(
-                "107.145 waiver number or waiver document",
+                "mv_waiver_number or mv_waiver_document",
                 bool(getattr(planning, "mv_waiver_number", None)) or bool(getattr(planning, "mv_waiver_document_id", None)),
             )
 

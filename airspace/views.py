@@ -12,17 +12,19 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import ListView, TemplateView
-
-from dal import autocomplete
+from django.http import HttpRequest, HttpResponse
 from weasyprint import HTML
+from dal import autocomplete
 
 from equipment.models import Equipment
 from flightlogs.models import FlightLog
 from pilot.models import PilotProfile
 
+from .forms import _qs_user_scoped
+from .utils import decimal_to_dms, dms_to_decimal, generate_short_description  # keep imported if used elsewhere
 from .constants.conops import CONOPS_SECTIONS
 from .forms import TIMEFRAME_CHOICES
-from .forms import WaiverApplicationDescriptionForm, WaiverPlanningForm
+from .forms import WaiverApplicationDescriptionForm, WaiverPlanningForm, WaiverReadinessForm
 from .models import ConopsSection, WaiverApplication, WaiverPlanning, Airport
 from .services import (
     ensure_conops_sections,
@@ -31,9 +33,13 @@ from .services import (
     validate_conops_section,
     planning_aircraft_summary,
 )
-from .utils import decimal_to_dms, dms_to_decimal, generate_short_description  # keep imported if used elsewhere
 
 logger = logging.getLogger(__name__)
+
+
+
+
+
 
 
 # -----------------------------------------------------------------------------
@@ -144,9 +150,6 @@ def waiver_planning_new(request):
             planning_obj.pilot_profile = form.cleaned_data.get("pilot_profile")
             planning_obj.aircraft = form.cleaned_data.get("aircraft")
 
-            planning_obj.pilot_profile_id = request.POST.get("pilot_profile") or None
-            planning_obj.aircraft_id = request.POST.get("aircraft") or None
-
             planning_obj.save()
             form.save_m2m()
 
@@ -167,7 +170,6 @@ def waiver_planning_new(request):
     else:
         form = WaiverPlanningForm(user=request.user, instance=planning)
 
-    # HARDEN: This was unscoped in your original (select_related user + all()).
     profiles = PilotProfile.objects.filter(user=request.user).select_related("user")
 
     pilot_profile_data = []
@@ -181,11 +183,25 @@ def waiver_planning_new(request):
                 "flight_hours": hours,
             }
         )
+        # Drone safety features data for JS auto-fill (UUID-safe, user-scoped)
+        equip_qs = Equipment.objects.filter(active=True, equipment_type="Drone")
+        equip_qs = _qs_user_scoped(equip_qs, request.user).select_related("drone_safety_profile")
+
+        drone_safety_data = []
+        for d in equip_qs:
+            profile = d.drone_safety_profile
+            drone_safety_data.append(
+                {
+                    "id": str(d.id),  # UUID -> string for JS and select values
+                    "safety_features": (getattr(profile, "safety_features", "") or "").strip(),
+                }
+            )
 
     context = {
         "form": form,
         "planning": planning,
         "pilot_profile_data": pilot_profile_data,
+        "drone_safety_data": drone_safety_data,
         "planning_mode": "edit" if planning else "new",
     }
 
@@ -843,3 +859,24 @@ class AirportAutocomplete(autocomplete.Select2QuerySetView):
             )
 
         return qs.order_by("icao")
+
+
+
+@login_required
+def waiver_readiness_checklist(request: HttpRequest) -> HttpResponse:
+    # Plain HTML "open/print" page (optional)
+    return HttpResponse(
+        render_to_string("airspace/waiver_readiness_checklist_pdf.html", {}),
+        content_type="text/html",
+    )
+
+
+@login_required
+def waiver_readiness_checklist_pdf(request: HttpRequest) -> HttpResponse:
+    html = render_to_string("airspace/waiver_readiness_checklist_pdf.html", {})
+
+    pdf_bytes = HTML(string=html, base_url=request.build_absolute_uri("/")).write_pdf()
+
+    resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+    resp["Content-Disposition"] = 'inline; filename="waiver-readiness-checklist.pdf"'
+    return resp

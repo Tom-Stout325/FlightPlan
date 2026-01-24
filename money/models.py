@@ -15,6 +15,7 @@ from django.utils.text import slugify
 from django.db import models
 from django.db import transaction as db_tx
 from django.db import transaction
+from django.http import Http404, HttpRequest, HttpResponse
 
 try:
     from django.contrib.postgres.indexes import GinIndex
@@ -24,6 +25,10 @@ except ImportError:
     SearchVectorField = None
 
 from project.common.models import OwnedModelMixin
+
+
+from encrypted_fields.fields import EncryptedCharField, EncryptedTextField
+
 
 
 
@@ -480,10 +485,6 @@ class Event(OwnedModelMixin):
             self.slug = _safe_slug(self.title, 100) or None
 
         super().save(*args, **kwargs)
-
-
-
-
 
 
 class Service(OwnedModelMixin):
@@ -1525,13 +1526,6 @@ class InvoiceItemV2(OwnedModelMixin):
 
 
 class Contractor(OwnedModelMixin):
-    """
-    Contractor / Subcontractor for W-9 tracking and 1099 preparation.
-
-    Security posture:
-    - Store only TIN last-4 (optional) + TIN type (SSN/EIN).
-    - Store the W-9 PDF as a document (S3), do NOT store full TIN in DB.
-    """
 
     # ------------------------------------------------------------------
     # Human-friendly ID (optional)
@@ -1691,3 +1685,115 @@ class Contractor(OwnedModelMixin):
         if self.tin_last4 and not self.tin_type:
             from django.core.exceptions import ValidationError
             raise ValidationError({"tin_type": "Select SSN or EIN when entering last-4 digits."})
+        
+        
+    def _save_w9_submission(contractor: Contractor, data: dict, request: HttpRequest) -> ContractorW9Submission:
+        """
+        Saves encrypted W-9 submission data and updates Contractor metadata:
+        - w9_status -> received
+        - w9_received_date -> today
+        - tin_type + tin_last4 -> derived from encrypted tin
+        - business_name/address fallback (optional)
+        """
+        ip = request.META.get("REMOTE_ADDR") or None
+        ua = (request.META.get("HTTP_USER_AGENT") or "")[:2000]
+
+        tin_digits = (data.get("tin") or "").strip()
+        tin_last4 = tin_digits[-4:] if len(tin_digits) >= 4 else ""
+
+        submission = ContractorW9Submission.objects.create(
+            user=contractor.user,
+            contractor=contractor,
+
+            full_name=data["full_name"],
+            business_name=data.get("business_name", "") or "",
+
+            tax_classification=data["tax_classification"],
+            llc_tax_class=data.get("llc_tax_class", "") or "",
+            other_tax_class=data.get("other_tax_class", "") or "",
+
+            address_line1=data["address_line1"],
+            address_line2=data["address_line2"],
+
+            tin_type=data["tin_type"],
+            tin=tin_digits,  # encrypted in the model
+
+            signature_name=data["signature_name"],
+            signature_data=data.get("signature_data", "") or "",
+            attested=True,
+
+            submitted_ip=ip,
+            submitted_ua=ua,
+        )
+
+        # Update Contractor metadata (non-sensitive)
+        contractor.tin_type = data["tin_type"]
+        contractor.tin_last4 = tin_last4
+
+        contractor.w9_status = Contractor.W9_RECEIVED
+        contractor.w9_received_date = timezone.localdate()
+
+        # Optional: helpful autofill if you want to keep Contractor info in sync
+        # (comment out if you do NOT want the contractor record changed)
+        if data.get("business_name"):
+            contractor.business_name = data["business_name"]
+
+        contractor.address1 = data["address_line1"]
+        # address_line2 is "City, state, ZIP" in the form; keep it simple
+        # or parse it later if you want structured city/state/zip.
+        # contractor.city/state/zip_code = ...
+        contractor.save()
+
+        return submission
+        
+
+
+
+
+
+
+
+
+
+class ContractorW9Submission(OwnedModelMixin):
+    contractor = models.ForeignKey(
+        "Contractor",
+        on_delete=models.PROTECT,
+        related_name="w9_submissions",
+    )
+
+    # ------------------------------------------------------------------
+    # W-9 data (encrypted)
+    # ------------------------------------------------------------------
+    # Required fields (enforced by your form; model stays non-blank)
+    full_name = EncryptedCharField(max_length=200, default="")
+    tax_classification = EncryptedCharField(max_length=30, default="")
+    address_line1 = EncryptedCharField(max_length=200, default="")
+    address_line2 = EncryptedCharField(max_length=200, default="")
+    tin_type = EncryptedCharField(max_length=10, default="")  # "ssn" or "ein"
+    tin = EncryptedCharField(max_length=32, default="")       # digits-only string (encrypted)
+
+    # Optional fields
+    business_name   = EncryptedCharField(max_length=200, blank=True, null=True)
+    llc_tax_class   = EncryptedCharField(max_length=5,   blank=True, null=True)
+    other_tax_class = EncryptedCharField(max_length=100, blank=True, null=True)
+
+    # ------------------------------------------------------------------
+    # Signature + attestation
+    # ------------------------------------------------------------------
+    signature_name = EncryptedCharField(max_length=200, default="")
+    signature_data  = EncryptedTextField(blank=True, null=True)
+    attested = models.BooleanField(default=False)
+
+    # ------------------------------------------------------------------
+    # Audit trail (not encrypted)
+    # ------------------------------------------------------------------
+    submitted_at = models.DateTimeField(default=timezone.now, db_index=True)
+    submitted_ip = models.GenericIPAddressField(null=True, blank=True)
+    submitted_ua = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["-submitted_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"W-9 for {self.contractor} @ {self.submitted_at:%Y-%m-%d}"

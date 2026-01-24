@@ -1,10 +1,22 @@
 # airspace/admin.py
 
+from __future__ import annotations
+
 from django.contrib import admin
+from django.core.exceptions import ValidationError
 
-from .models import WaiverPlanning, WaiverApplication, ConopsSection
+from .models import WaiverPlanning, WaiverApplication, ConopsSection, Airport
 
 
+
+@admin.register(Airport)
+class AirportAdmin(admin.ModelAdmin):
+    list_display = ("icao", "name", "city", "state", "active")
+    list_filter = ("active", "state")
+    search_fields = ("icao", "name", "city", "state")
+    ordering = ("icao",)
+    
+    
 class ConopsSectionInline(admin.TabularInline):
     model = ConopsSection
     extra = 0
@@ -61,6 +73,9 @@ class WaiverPlanningAdmin(admin.ModelAdmin):
         "pilot_name_manual",
         "pilot_cert_manual",
         "aircraft_manual",
+        "atc_facility_name",
+        "atc_phone",
+        "atc_frequency",
         "user__username",
         "user__email",
         "user__first_name",
@@ -68,22 +83,101 @@ class WaiverPlanningAdmin(admin.ModelAdmin):
     )
     date_hierarchy = "created_at"
     ordering = ("-created_at",)
-    autocomplete_fields = ()
     raw_id_fields = ("user",)
+    autocomplete_fields = ("aircraft", "pilot_profile", "oop_waiver_document", "mv_waiver_document", "nearest_airport_ref")
 
     fieldsets = (
         ("Ownership", {"fields": ("user",)}),
-        ("Operation Basics", {"fields": ("operation_title", "start_date", "end_date", "timeframe", "frequency", "local_time_zone", "proposed_agl")}),
+
+        (
+            "Operation Basics",
+            {"fields": ("operation_title", "start_date", "end_date", "timeframe", "frequency", "local_time_zone", "proposed_agl")},
+        ),
+
         ("Aircraft", {"fields": ("aircraft", "aircraft_manual")}),
+
         ("Pilot", {"fields": ("pilot_profile", "pilot_name_manual", "pilot_cert_manual", "pilot_flight_hours")}),
-        ("Existing Waivers", {"fields": ("operates_under_10739", "oop_waiver_document", "oop_waiver_number", "operates_under_107145", "mv_waiver_document", "mv_waiver_number")}),
+
+        (
+            "Existing Waivers",
+            {"fields": ("operates_under_10739", "oop_waiver_document", "oop_waiver_number", "operates_under_107145", "mv_waiver_document", "mv_waiver_number")},
+        ),
+
         ("Purpose", {"fields": ("purpose_operations", "purpose_operations_details")}),
-        ("Venue & Location", {"fields": ("venue_name", "street_address", "location_city", "location_state", "zip_code", "location_latitude", "location_longitude", "airspace_class", "location_radius", "nearest_airport")}),
-        ("Launch & Safety", {"fields": ("launch_location", "uses_drone_detection", "uses_flight_tracking", "has_visual_observer", "insurance_provider", "insurance_coverage_limit", "safety_features_notes")}),
-        ("Operational Profile", {"fields": ("aircraft_count", "flight_duration", "flights_per_day", "ground_environment", "ground_environment_other", "estimated_crowd_size", "prepared_procedures")}),
+
+        (
+            "Venue & Location",
+            {
+                "fields": (
+                    "venue_name",
+                    "street_address",
+                    "location_city",
+                    "location_state",
+                    "zip_code",
+                    "location_latitude",
+                    "location_longitude",
+                    "airspace_class",
+                    "location_radius",
+                    "nearest_airport",
+                    "nearest_airport_ref",
+                    "distance_to_airport_nm",
+                )
+            },
+        ),
+
+        (
+            "Launch & Safety",
+            {"fields": ("launch_location", "uses_drone_detection", "uses_flight_tracking", "has_visual_observer", "insurance_provider", "insurance_coverage_limit", "safety_features_notes")},
+        ),
+
+        (
+            "Operational Profile",
+            {
+                "fields": (
+                    "aircraft_count",
+                    "flight_duration",
+                    "flights_per_day",
+                    "ground_environment",
+                    "ground_environment_other",
+                    "estimated_crowd_size",
+                    "prepared_procedures",
+                    "operation_area_type",
+                    "containment_method",
+                    "containment_notes",
+                    "corridor_length_ft",
+                    "corridor_width_ft",
+                    "max_groundspeed_mph",
+                )
+            },
+        ),
+
+        (
+            "Emergency & Lost Link",
+            {"fields": ("lost_link_behavior", "rth_altitude_ft_agl", "lost_link_actions", "flyaway_actions")},
+        ),
+
+        (
+            "ATC & Communications",
+            {"fields": ("atc_facility_name", "atc_coordination_method", "atc_phone", "atc_frequency", "atc_checkin_procedure", "atc_deviation_triggers")},
+        ),
+
+        ("Weather & Crew", {"fields": ("max_wind_mph", "min_visibility_sm", "weather_go_nogo", "crew_count", "crew_briefing_procedure", "radio_discipline")}),
+
         ("Timestamps", {"fields": ("generated_description_at", "created_at", "updated_at")}),
     )
-    readonly_fields = ("generated_description_at", "created_at", "updated_at")
+
+    readonly_fields = ("generated_description_at", "created_at", "updated_at", "distance_to_airport_nm")
+
+    def save_model(self, request, obj, form, change):
+        """
+        Ensure model.clean()/full_clean() errors show as nice admin form errors.
+        """
+        try:
+            obj.full_clean()
+        except ValidationError as e:
+            form.add_error(None, e)
+            return
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(WaiverApplication)
@@ -109,6 +203,7 @@ class WaiverApplicationAdmin(admin.ModelAdmin):
     date_hierarchy = "created_at"
     ordering = ("-created_at",)
     raw_id_fields = ("user", "planning")
+    autocomplete_fields = ("planning",)
     inlines = (ConopsSectionInline,)
 
     fieldsets = (
@@ -124,6 +219,7 @@ class ConopsSectionAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "application",
+        "user",
         "section_key",
         "title",
         "locked",
@@ -143,5 +239,6 @@ class ConopsSectionAdmin(admin.ModelAdmin):
     )
     date_hierarchy = "updated_at"
     ordering = ("application_id", "id")
-    raw_id_fields = ("application",)
+    raw_id_fields = ("application", "user")
+    autocomplete_fields = ("application", "user")
     readonly_fields = ("generated_at", "validated_at", "updated_at")

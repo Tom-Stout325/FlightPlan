@@ -1,4 +1,5 @@
 {% extends "index.html" %}
+{% load static %}
 
 {% block title %}
   {% if planning_mode == "edit" %}Edit Waiver Planning{% else %}Waiver Planning{% endif %}
@@ -8,429 +9,996 @@
   {{ form.media.css }}
   <style>
     /* Keep checkboxes/radios from inheriting big text-input styling */
-    input[type="checkbox"],
-    input[type="radio"] {
-      width: auto;
-      margin: 0 0.35rem 0 0;
-      padding: 0;
-      border: none;
+    input[type="checkbox"], input[type="radio"]{
+      width:auto; margin:0 0.35rem 0 0; padding:0; border:none;
     }
 
-    .checkbox-group ul {
-      list-style: none;
-      padding-left: 0;
-      margin-bottom: 0;
+    .checkbox-group ul{ list-style:none; padding-left:0; margin-bottom:0; }
+    .checkbox-group li{ margin-bottom:0.25rem; }
+
+    /* Clean accordion headings */
+    .accordion-button{
+      font-weight: 600;
     }
 
-    .checkbox-group li {
-      margin-bottom: 0.25rem;
-    }
+    /* Small helper text density */
+    .form-text.compact{ margin-top:.25rem; font-size:.825rem; }
+
+    /* Make disabled-looking groups consistent height on mobile */
+    .stack-gap > *{ margin-bottom: .75rem; }
   </style>
 {% endblock %}
 
 {% block extra_js %}
   {{ form.media.js }}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
 
-  <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      // -------------------------
-      // Pilot profile auto-fill
-      // -------------------------
-      const pilotSelect = document.getElementById("id_pilot_profile");
-      const certInput = document.getElementById("id_pilot_cert_manual");
-      const hoursInput = document.getElementById("id_pilot_flight_hours");
+    // -------------------------
+    // Pilot profile auto-fill
+    // -------------------------
+    const pilotSelect = document.getElementById("id_pilot_profile");
+    const certInput   = document.getElementById("id_pilot_cert_manual");
+    const hoursInput  = document.getElementById("id_pilot_flight_hours");
 
-      if (pilotSelect) {
-        let profileMap = {};
-        const dataElement = document.getElementById("pilot-profile-data");
+    if (pilotSelect) {
+      let profileMap = {};
+      const dataElement = document.getElementById("pilot-profile-data");
 
-        if (dataElement) {
-          try {
-            const data = JSON.parse(dataElement.textContent);
-            data.forEach(function (item) {
-              profileMap[String(item.id)] = item;
-            });
-          } catch (e) {
-            console.error("Could not parse pilot profile data", e);
-          }
+      if (dataElement) {
+        try {
+          const data = JSON.parse(dataElement.textContent);
+          data.forEach(function (item) {
+            profileMap[String(item.id)] = item;
+          });
+        } catch (e) {
+          console.error("Could not parse pilot profile data", e);
         }
-
-        function updatePilotFields() {
-          const selectedId = pilotSelect.value;
-          const profile = profileMap[selectedId];
-          if (!profile) return;
-
-          if (certInput)
-            certInput.value = profile.license_number || "";
-
-          if (hoursInput)
-            hoursInput.value = profile.flight_hours || "";
-        }
-
-        pilotSelect.addEventListener("change", updatePilotFields);
-        updatePilotFields();
       }
 
-      // -------------------------
-      // Drone safety auto-fill
-      // -------------------------
-      const aircraftSelect = document.getElementById("id_aircraft");
-      const safetyTextarea = document.getElementById("id_safety_features_notes");
+      function updatePilotFields() {
+        const selectedId = String(pilotSelect.value || "");
+        const profile = profileMap[selectedId];
+        if (!profile) return;
 
-      if (aircraftSelect && safetyTextarea) {
-        let safetyMap = {};
-        const safetyDataElement = document.getElementById("drone-safety-data");
+        if (certInput)  certInput.value  = profile.license_number || "";
+        if (hoursInput) hoursInput.value = profile.flight_hours || "";
+      }
 
-        if (safetyDataElement) {
-          try {
-            const safetyData = JSON.parse(safetyDataElement.textContent);
-            safetyData.forEach(function (item) {
-              safetyMap[String(item.id)] = item.safety_features;
-            });
-          } catch (e) {
-            console.error("Could not parse drone safety data", e);
-          }
+      pilotSelect.addEventListener("change", updatePilotFields);
+      updatePilotFields();
+    }
+
+    // -------------------------
+    // Drone safety auto-fill
+    // -------------------------
+    const aircraftSelect = document.getElementById("id_aircraft");
+    const safetyTextarea = document.getElementById("id_safety_features_notes");
+
+    if (aircraftSelect && safetyTextarea) {
+      let safetyMap = {};
+      let userEdited = false;
+
+      const safetyDataElement = document.getElementById("drone-safety-data");
+
+      if (safetyDataElement) {
+        try {
+          const safetyData = JSON.parse(safetyDataElement.textContent);
+          safetyData.forEach(function (item) {
+            safetyMap[String(item.id)] = (item.safety_features || "").trim();
+          });
+        } catch (e) {
+          console.error("Could not parse drone safety data", e);
         }
-
-        function updateSafetyFeatures() {
-          const selectedId = aircraftSelect.value;
-          const textIsEmpty = !safetyTextarea.value.trim();
-          if (!selectedId || !textIsEmpty) return;
-
-          const safetyText = safetyMap[selectedId];
-          if (safetyText) safetyTextarea.value = safetyText;
-        }
-
-        aircraftSelect.addEventListener("change", updateSafetyFeatures);
-        updateSafetyFeatures();
+      } else {
+        console.warn("drone-safety-data element not found (drone_safety_data not in context?)");
       }
 
-      // -------------------------
-      // 107.39 / 107.145 toggles
-      // -------------------------
-      const oopToggle = document.getElementById("id_operates_under_10739");
-      const oopDetails = document.getElementById("oop-waiver-details");
-      if (oopToggle && oopDetails) {
-        const update = () => oopDetails.classList.toggle("d-none", !oopToggle.checked);
-        oopToggle.addEventListener("change", update);
-        update();
+      // Mark field as manually edited once the user types
+      safetyTextarea.addEventListener("input", function () {
+        userEdited = true;
+      });
+
+      function populateSafetyFeatures(force=false) {
+        const selectedId = String(aircraftSelect.value || "");
+        if (!selectedId) return;
+
+        const safetyText = (safetyMap[selectedId] || "").trim();
+        if (!safetyText) return;
+
+        if (!force && userEdited) return;
+
+        safetyTextarea.value = safetyText;
       }
 
-      const mvToggle = document.getElementById("id_operates_under_107145");
-      const mvDetails = document.getElementById("mv-waiver-details");
-      if (mvToggle && mvDetails) {
-        const update = () => mvDetails.classList.toggle("d-none", !mvToggle.checked);
-        mvToggle.addEventListener("change", update);
-        update();
-      }
-    });
-  </script>
+      // On aircraft change: reset "userEdited" and force refresh from profile
+      aircraftSelect.addEventListener("change", function () {
+        userEdited = false;
+        populateSafetyFeatures(true);
+      });
+
+      // Populate on initial load (edit mode too)
+      populateSafetyFeatures(true);
+    }
+
+    // -------------------------
+    // 107.39 / 107.145 toggles
+    // -------------------------
+    const oopToggle  = document.getElementById("id_operates_under_10739");
+    const oopDetails = document.getElementById("oop-waiver-details");
+    if (oopToggle && oopDetails) {
+      const update = () => oopDetails.classList.toggle("d-none", !oopToggle.checked);
+      oopToggle.addEventListener("change", update);
+      update();
+    }
+
+    const mvToggle  = document.getElementById("id_operates_under_107145");
+    const mvDetails = document.getElementById("mv-waiver-details");
+    if (mvToggle && mvDetails) {
+      const update = () => mvDetails.classList.toggle("d-none", !mvToggle.checked);
+      mvToggle.addEventListener("change", update);
+      update();
+    }
+
+    // -------------------------
+    // ATC method toggles (phone/radio hints)
+    // -------------------------
+    const atcMethod    = document.getElementById("id_atc_coordination_method");
+    const atcPhoneWrap = document.getElementById("atc-phone-wrap");
+    const atcFreqWrap  = document.getElementById("atc-freq-wrap");
+
+    function updateAtcVisibility() {
+      if (!atcMethod) return;
+      const v = String(atcMethod.value || "").toLowerCase();
+
+      const showPhone = (v === "phone" || v === "both" || v === "other");
+      const showRadio = (v === "radio" || v === "both" || v === "other");
+
+      if (atcPhoneWrap) atcPhoneWrap.classList.toggle("d-none", !showPhone);
+      if (atcFreqWrap)  atcFreqWrap.classList.toggle("d-none", !showRadio);
+    }
+
+    if (atcMethod) {
+      atcMethod.addEventListener("change", updateAtcVisibility);
+      updateAtcVisibility();
+    }
+
+  });
+</script>
+
 {% endblock %}
 
 {% block content %}
-<div class="container mt-4 mb-5" style="max-width: 900px;">
+<div class="container mt-4 mb-5" style="max-width: 980px;">
 
-  <div class="mb-3">
-    {% if planning %}
-      <a href="{% url 'airspace:waiver_planning_new' %}?planning_id={{ planning.id }}"
-         class="btn btn-primary btn-sm">
-        Start Waiver Draft
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h1 class="h4 mb-1">
+        {% if planning_mode == "edit" %}Edit Waiver Planning{% else %}Waiver Planning{% endif %}
+      </h1>
+      <p class="text-muted mb-0">
+        Step 1 — Capture operation, aircraft, pilot, airspace, and safety details used in the FAA waiver application.
+      </p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'airspace:waiver_planning_list' %}" class="btn btn-outline-secondary btn-sm">
+        ← Back
       </a>
-    {% endif %}
+      {% if planning %}
+        <a href="{% url 'airspace:waiver_planning_new' %}?planning_id={{ planning.id }}"
+           class="btn btn-primary btn-sm">
+          Start Waiver Draft
+        </a>
+      {% endif %}
+    </div>
   </div>
 
-  <div class="mb-4">
-    <h1 class="h4 mb-1">
-      {% if planning_mode == "edit" %}Edit Waiver Planning{% else %}Waiver Planning{% endif %}
-    </h1>
-    <p class="text-muted mb-0">
-      Step 1 – Capture operation, aircraft, pilot, location, and safety details that will be used in the FAA waiver application and Description of Operations.
-    </p>
-  </div>
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">
+      {{ form.non_field_errors }}
+    </div>
+  {% endif %}
 
   <div class="card shadow-sm">
     <div class="card-body">
-      <form method="post" novalidate enctype="multipart/form-data">
 
+      <form method="post" novalidate enctype="multipart/form-data">
         {% csrf_token %}
 
-        {# ----------------------------- #}
-        {# Operation Basics              #}
-        {# ----------------------------- #}
-        <h2 class="h6 text-uppercase text-muted mb-3">Operation Basics</h2>
+        {# Hidden fields (controlled server-side) #}
+        {{ form.location_latitude }}
+        {{ form.location_longitude }}
 
-        <div class="row g-3 mb-4">
-          <div class="col-12">
-            <label class="form-label fw-semibold" for="{{ form.operation_title.id_for_label }}">Operation title</label>
-            {{ form.operation_title }}
-            <div class="form-text">Short title (e.g., “NHRA Nationals FPV Coverage”).</div>
-            {{ form.operation_title.errors }}
-          </div>
+        <div class="accordion" id="planningAccordion">
 
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold" for="{{ form.start_date.id_for_label }}">Start date</label>
-            {{ form.start_date }}
-            {{ form.start_date.errors }}
-          </div>
-
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold" for="{{ form.end_date.id_for_label }}">End date</label>
-            {{ form.end_date }}
-            <div class="form-text">Leave blank if single-day operation.</div>
-            {{ form.end_date.errors }}
-          </div>
-        </div>
-
-        <div class="row g-3 mb-4">
-          <div class="col-12 col-md-5">
-            <label class="form-label fw-semibold" for="{{ form.timeframe.id_for_label }}">Timeframe</label>
-            {{ form.timeframe.errors }}
-
-            <div class="checkbox-group">
-              {% for choice in form.timeframe %}
-                <div class="form-check">
-                  {{ choice.tag }}
-                  <label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label>
-                </div>
-              {% endfor %}
-            </div>
-
-            <div class="form-text mt-1">Select all time windows when operations may occur.</div>
-          </div>
-
-          <div class="col-12 col-md-3">
-            <label class="form-label fw-semibold" for="{{ form.frequency.id_for_label }}">Frequency</label>
-            {{ form.frequency }}
-            {{ form.frequency.errors }}
-          </div>
-
-          <div class="col-12 col-md-4">
-            <label class="form-label fw-semibold" for="{{ form.local_time_zone.id_for_label }}">Local time zone</label>
-            {{ form.local_time_zone }}
-            {{ form.local_time_zone.errors }}
-          </div>
-        </div>
-
-        <div class="row g-3 mb-4">
-          <div class="col-12 col-md-4">
-            <label class="form-label fw-semibold" for="{{ form.proposed_agl.id_for_label }}">Proposed AGL (ft)</label>
-            {{ form.proposed_agl }}
-            {{ form.proposed_agl.errors }}
-          </div>
-        </div>
-
-        {# ----------------------------- #}
-        {# Aircraft                      #}
-        {# ----------------------------- #}
-        <h2 class="h6 text-uppercase text-muted mb-3">Aircraft</h2>
-        <div class="row g-3 mb-4">
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold" for="{{ form.aircraft.id_for_label }}">Drone model (from Equipment)</label>
-            {{ form.aircraft }}
-            {{ form.aircraft.errors }}
-          </div>
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold" for="{{ form.aircraft_manual.id_for_label }}">Other / additional drones</label>
-            {{ form.aircraft_manual }}
-            <div class="form-text">Comma-separated full model (e.g., “DJI Avata 2, DJI Mini 4 Pro”).</div>
-            {{ form.aircraft_manual.errors }}
-          </div>
-        </div>
-
-        {# ----------------------------- #}
-        {# Pilot                         #}
-        {# ----------------------------- #}
-        <h2 class="h6 text-uppercase text-muted mb-3">Pilot</h2>
-        <div class="row g-3 mb-4">
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold" for="{{ form.pilot_profile.id_for_label }}">Pilot (from Pilot Profile)</label>
-            {{ form.pilot_profile }}
-            {{ form.pilot_profile.errors }}
-          </div>
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold" for="{{ form.pilot_name_manual.id_for_label }}">Pilot Name (manual)</label>
-            {{ form.pilot_name_manual }}
-            {{ form.pilot_name_manual.errors }}
-          </div>
-
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold" for="{{ form.pilot_cert_manual.id_for_label }}">Part 107 Certificate Number</label>
-            {{ form.pilot_cert_manual }}
-            {{ form.pilot_cert_manual.errors }}
-          </div>
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold" for="{{ form.pilot_flight_hours.id_for_label }}">Approximate UAS flight hours</label>
-            {{ form.pilot_flight_hours }}
-            {{ form.pilot_flight_hours.errors }}
-          </div>
-        </div>
-
-        {# ----------------------------- #}
-        {# Venue & Location               #}
-        {# ----------------------------- #}
-        <h2 class="h6 text-uppercase text-muted mb-3">Venue & Location</h2>
-        <div class="row g-3 mb-3">
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold" for="{{ form.venue_name.id_for_label }}">Venue Name</label>
-            {{ form.venue_name }}
-            {{ form.venue_name.errors }}
-          </div>
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold" for="{{ form.street_address.id_for_label }}">Street Address</label>
-            {{ form.street_address }}
-            {{ form.street_address.errors }}
-          </div>
-        </div>
-
-        <div class="row g-3 mb-3">
-          <div class="col-12 col-md-4">
-            <label class="form-label fw-semibold" for="{{ form.location_city.id_for_label }}">City</label>
-            {{ form.location_city }}
-            {{ form.location_city.errors }}
-          </div>
-          <div class="col-6 col-md-4">
-            <label class="form-label fw-semibold" for="{{ form.location_state.id_for_label }}">State</label>
-            {{ form.location_state }}
-            {{ form.location_state.errors }}
-          </div>
-          <div class="col-6 col-md-4">
-            <label class="form-label fw-semibold" for="{{ form.zip_code.id_for_label }}">ZIP Code</label>
-            {{ form.zip_code }}
-            {{ form.zip_code.errors }}
-          </div>
-        </div>
-
-        <hr class="text-primary w-50 mx-auto my-5">
-
-        <div class="row g-3 mb-3">
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold" for="{{ form.airspace_class.id_for_label }}">Class of Airspace</label>
-            {{ form.airspace_class }}
-            {{ form.airspace_class.errors }}
-          </div>
-        </div>
-
-        {# ----------------------------- #}
-        {# Coordinates (DMS)             #}
-        {# ----------------------------- #}
-        <h2 class="h6 text-uppercase text-muted mb-2">Centerpoint Coordinates (DMS)</h2>
-
-        <div class="row g-1 small text-muted mb-1">
-          <div class="col-6">
-            <div class="row g-1">
-              <div class="col-3 text-center">Deg</div>
-              <div class="col-3 text-center">Min</div>
-              <div class="col-3 text-center">Sec</div>
-              <div class="col-3 text-center">Dir</div>
-            </div>
-          </div>
-          <div class="col-6 d-none d-md-block">
-            <div class="row g-1">
-              <div class="col-3 text-center">Deg</div>
-              <div class="col-3 text-center">Min</div>
-              <div class="col-3 text-center">Sec</div>
-              <div class="col-3 text-center">Dir</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="row g-3 mb-3">
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold">Latitude (DMS)</label>
-            <div class="row g-2">
-              <div class="col-3">{{ form.lat_deg }}</div>
-              <div class="col-3">{{ form.lat_min }}</div>
-              <div class="col-3">{{ form.lat_sec }}</div>
-              <div class="col-3">{{ form.lat_dir }}</div>
-            </div>
-          </div>
-
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold">Longitude (DMS)</label>
-            <div class="row g-2">
-              <div class="col-3">{{ form.lon_deg }}</div>
-              <div class="col-3">{{ form.lon_min }}</div>
-              <div class="col-3">{{ form.lon_sec }}</div>
-              <div class="col-3">{{ form.lon_dir }}</div>
-            </div>
-          </div>
-        </div>
-
-        {# ----------------------------- #}
-        {# Radius + Nearest Airport      #}
-        {# ----------------------------- #}
-        <div class="row g-3 mb-2">
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold" for="{{ form.location_radius.id_for_label }}">{{ form.location_radius.label }}</label>
-            {{ form.location_radius }}
-            {{ form.location_radius.errors }}
-          </div>
-
-          <div class="col-12 col-md-6">
-            <label class="form-label fw-semibold" for="{{ form.nearest_airport_ref.id_for_label }}">
-              Nearest airport (NASR)
-            </label>
-            {{ form.nearest_airport_ref }}
-            <div class="form-text">
-              Start typing ICAO or airport name. Select a match (preferred).
-            </div>
-            {{ form.nearest_airport_ref.errors }}
-          </div>
-        </div>
-
-        <div class="accordion mb-3" id="airportFallbackAccordion">
+          {# ------------------------------------------------------------------ #}
+          {# Operation Basics                                                    #}
+          {# ------------------------------------------------------------------ #}
           <div class="accordion-item">
-            <h2 class="accordion-header" id="airportFallbackHeading">
-              <button class="accordion-button collapsed py-2" type="button"
-                      data-bs-toggle="collapse" data-bs-target="#airportFallbackBody"
-                      aria-expanded="false" aria-controls="airportFallbackBody">
-                Manual airport entry (fallback)
+            <h2 class="accordion-header" id="headingBasics">
+              <button class="accordion-button" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#collapseBasics"
+                      aria-expanded="true" aria-controls="collapseBasics">
+                Operation Basics
               </button>
             </h2>
-            <div id="airportFallbackBody" class="accordion-collapse collapse"
-                 aria-labelledby="airportFallbackHeading" data-bs-parent="#airportFallbackAccordion">
+            <div id="collapseBasics" class="accordion-collapse collapse show"
+                 aria-labelledby="headingBasics" data-bs-parent="#planningAccordion">
               <div class="accordion-body">
-                <label class="form-label fw-semibold" for="{{ form.nearest_airport.id_for_label }}">
-                  Nearest airport (manual)
-                </label>
-                {{ form.nearest_airport }}
-                <div class="form-text">Use only if the NASR picker can’t find your airport.</div>
-                {{ form.nearest_airport.errors }}
+
+                <div class="row g-3">
+                  <div class="col-12">
+                    <label class="form-label fw-semibold" for="{{ form.operation_title.id_for_label }}">Operation title</label>
+                    {{ form.operation_title }}
+                    <div class="form-text compact">Short title (e.g., “NHRA Nationals FPV Coverage”).</div>
+                    {{ form.operation_title.errors }}
+                  </div>
+
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.start_date.id_for_label }}">Start date</label>
+                    {{ form.start_date }}
+                    {{ form.start_date.errors }}
+                  </div>
+
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.end_date.id_for_label }}">End date</label>
+                    {{ form.end_date }}
+                    <div class="form-text compact">Leave blank if single-day operation.</div>
+                    {{ form.end_date.errors }}
+                  </div>
+
+                  <div class="col-12 col-md-5">
+                    <label class="form-label fw-semibold" for="{{ form.timeframe.id_for_label }}">Timeframe</label>
+                    {{ form.timeframe.errors }}
+                    <div class="checkbox-group">
+                      {% for choice in form.timeframe %}
+                        <div class="form-check">
+                          {{ choice.tag }}
+                          <label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label>
+                        </div>
+                      {% endfor %}
+                    </div>
+                    <div class="form-text compact">Select all windows when operations may occur.</div>
+                  </div>
+
+                  <div class="col-12 col-md-3">
+                    <label class="form-label fw-semibold" for="{{ form.frequency.id_for_label }}">Frequency</label>
+                    {{ form.frequency }}
+                    {{ form.frequency.errors }}
+                  </div>
+
+                  <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.local_time_zone.id_for_label }}">Local time zone</label>
+                    {{ form.local_time_zone }}
+                    {{ form.local_time_zone.errors }}
+                  </div>
+
+                  <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.proposed_agl.id_for_label }}">Proposed AGL (ft)</label>
+                    {{ form.proposed_agl }}
+                    {{ form.proposed_agl.errors }}
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>
-        </div>
 
-        {% if planning %}
-          <div class="mt-2">
-            {% if planning.nearest_airport_ref %}
-              <div class="alert alert-light border py-2 mb-0">
-                <div class="fw-semibold small">Selected Airport</div>
-                <div>
-                  {{ planning.nearest_airport_ref.icao }} — {{ planning.nearest_airport_ref.name }}
-                  {% if planning.distance_to_airport_nm %}
-                    <span class="text-muted">({{ planning.distance_to_airport_nm }} NM)</span>
-                  {% endif %}
+          {# ------------------------------------------------------------------ #}
+          {# Aircraft                                                            #}
+          {# ------------------------------------------------------------------ #}
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingAircraft">
+              <button class="accordion-button collapsed" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#collapseAircraft"
+                      aria-expanded="false" aria-controls="collapseAircraft">
+                Aircraft
+              </button>
+            </h2>
+            <div id="collapseAircraft" class="accordion-collapse collapse"
+                 aria-labelledby="headingAircraft" data-bs-parent="#planningAccordion">
+              <div class="accordion-body">
+                <div class="row g-3">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.aircraft.id_for_label }}">Drone (from Equipment)</label>
+                    {{ form.aircraft }}
+                    {{ form.aircraft.errors }}
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.aircraft_manual.id_for_label }}">Other / additional drones</label>
+                    {{ form.aircraft_manual }}
+                    <div class="form-text compact">Comma-separated (e.g., “DJI Avata 2, DJI Mini 4 Pro”).</div>
+                    {{ form.aircraft_manual.errors }}
+                  </div>
+                    <div class="row g-3">
+                  <div class="col-12">
+                    <label class="form-label fw-semibold" for="{{ form.safety_features_notes.id_for_label }}">Drone Safety Features</label>
+                    {{ form.safety_features_notes }}
+                    <div class="form-text compact">If a drone safety profile exists, this may auto-fill.</div>
+                    {{ form.safety_features_notes.errors }}
+                  </div>
+                </div>
                 </div>
               </div>
-            {% elif planning.nearest_airport %}
-              <div class="alert alert-warning py-2 mb-0">
-                <div class="small mb-0">
-                  Manual airport set to <strong>{{ planning.nearest_airport }}</strong>.
-                </div>
-              </div>
-            {% endif %}
+            </div>
           </div>
-        {% endif %}
 
-        <hr class="text-primary my-5">
+          {# ------------------------------------------------------------------ #}
+          {# Pilot                                                               #}
+          {# ------------------------------------------------------------------ #}
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingPilot">
+              <button class="accordion-button collapsed" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#collapsePilot"
+                      aria-expanded="false" aria-controls="collapsePilot">
+                Pilot
+              </button>
+            </h2>
+            <div id="collapsePilot" class="accordion-collapse collapse"
+                 aria-labelledby="headingPilot" data-bs-parent="#planningAccordion">
+              <div class="accordion-body">
+                <div class="row g-3">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.pilot_profile.id_for_label }}">Pilot (from Pilot Profile)</label>
+                    {{ form.pilot_profile }}
+                    {{ form.pilot_profile.errors }}
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.pilot_name_manual.id_for_label }}">Pilot name (manual)</label>
+                    {{ form.pilot_name_manual }}
+                    {{ form.pilot_name_manual.errors }}
+                  </div>
 
-        <div class="d-flex justify-content-between align-items-center mt-4">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.pilot_cert_manual.id_for_label }}">Part 107 certificate number</label>
+                    {{ form.pilot_cert_manual }}
+                    {{ form.pilot_cert_manual.errors }}
+                  </div>
+
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.pilot_flight_hours.id_for_label }}">Approx. UAS flight hours</label>
+                    {{ form.pilot_flight_hours }}
+                    {{ form.pilot_flight_hours.errors }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {# ------------------------------------------------------------------ #}
+          {# Venue & Location / Airspace                                         #}
+          {# ------------------------------------------------------------------ #}
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingLocation">
+              <button class="accordion-button collapsed" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#collapseLocation"
+                      aria-expanded="false" aria-controls="collapseLocation">
+                Venue, Location & Airspace
+              </button>
+            </h2>
+            <div id="collapseLocation" class="accordion-collapse collapse"
+                 aria-labelledby="headingLocation" data-bs-parent="#planningAccordion">
+              <div class="accordion-body">
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.venue_name.id_for_label }}">Venue name</label>
+                    {{ form.venue_name }}
+                    {{ form.venue_name.errors }}
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.street_address.id_for_label }}">Street address</label>
+                    {{ form.street_address }}
+                    {{ form.street_address.errors }}
+                  </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                  <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.location_city.id_for_label }}">City</label>
+                    {{ form.location_city }}
+                    {{ form.location_city.errors }}
+                  </div>
+                  <div class="col-6 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.location_state.id_for_label }}">State</label>
+                    {{ form.location_state }}
+                    {{ form.location_state.errors }}
+                  </div>
+                  <div class="col-6 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.zip_code.id_for_label }}">ZIP</label>
+                    {{ form.zip_code }}
+                    {{ form.zip_code.errors }}
+                  </div>
+                </div>
+
+                <hr class="text-primary w-50 mx-auto my-4">
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.airspace_class.id_for_label }}">Airspace class</label>
+                    {{ form.airspace_class }}
+                    {{ form.airspace_class.errors }}
+                  </div>
+
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.location_radius.id_for_label }}">{{ form.location_radius.label }}</label>
+                    {{ form.location_radius }}
+                    {{ form.location_radius.errors }}
+                  </div>
+                </div>
+
+                <h3 class="h6 text-uppercase text-muted mt-3 mb-2">Centerpoint Coordinates (DMS)</h3>
+
+                <div class="row g-1 small text-muted mb-1">
+                  <div class="col-12">
+                    <div class="row g-1">
+                      <div class="col-3 text-center">Deg</div>
+                      <div class="col-3 text-center">Min</div>
+                      <div class="col-3 text-center">Sec</div>
+                      <div class="col-3 text-center">Dir</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold">Latitude</label>
+                    <div class="row g-2">
+                      <div class="col-3">{{ form.lat_deg }}</div>
+                      <div class="col-3">{{ form.lat_min }}</div>
+                      <div class="col-3">{{ form.lat_sec }}</div>
+                      <div class="col-3">{{ form.lat_dir }}</div>
+                    </div>
+                  </div>
+
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold">Longitude</label>
+                    <div class="row g-2">
+                      <div class="col-3">{{ form.lon_deg }}</div>
+                      <div class="col-3">{{ form.lon_min }}</div>
+                      <div class="col-3">{{ form.lon_sec }}</div>
+                      <div class="col-3">{{ form.lon_dir }}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row g-3 mb-2">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.nearest_airport_ref.id_for_label }}">Nearest airport (NASR)</label>
+                    {{ form.nearest_airport_ref }}
+                    <div class="form-text compact">Type ICAO or airport name. Select a match (preferred).</div>
+                    {{ form.nearest_airport_ref.errors }}
+                  </div>
+
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.distance_to_airport_nm.id_for_label }}">Distance to airport (NM)</label>
+                    {{ form.distance_to_airport_nm }}
+                    <div class="form-text compact">Optional (if you’ve measured it).</div>
+                    {{ form.distance_to_airport_nm.errors }}
+                  </div>
+                </div>
+
+                <div class="accordion mt-3" id="airportFallbackAccordion">
+                  <div class="accordion-item">
+                    <h2 class="accordion-header" id="airportFallbackHeading">
+                      <button class="accordion-button collapsed py-2" type="button"
+                              data-bs-toggle="collapse" data-bs-target="#airportFallbackBody"
+                              aria-expanded="false" aria-controls="airportFallbackBody">
+                        Manual airport entry (fallback)
+                      </button>
+                    </h2>
+                    <div id="airportFallbackBody" class="accordion-collapse collapse"
+                         aria-labelledby="airportFallbackHeading" data-bs-parent="#airportFallbackAccordion">
+                      <div class="accordion-body">
+                        <label class="form-label fw-semibold" for="{{ form.nearest_airport.id_for_label }}">Nearest airport (manual)</label>
+                        {{ form.nearest_airport }}
+                        <div class="form-text compact">Use only if NASR lookup can’t find your airport.</div>
+                        {{ form.nearest_airport.errors }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {% if planning %}
+                  <div class="mt-3">
+                    {% if planning.nearest_airport_ref %}
+                      <div class="alert alert-light border py-2 mb-0">
+                        <div class="fw-semibold small">Selected Airport</div>
+                        <div>
+                          {{ planning.nearest_airport_ref.icao }} — {{ planning.nearest_airport_ref.name }}
+                          {% if planning.distance_to_airport_nm %}
+                            <span class="text-muted">({{ planning.distance_to_airport_nm }} NM)</span>
+                          {% endif %}
+                        </div>
+                      </div>
+                    {% elif planning.nearest_airport %}
+                      <div class="alert alert-warning py-2 mb-0">
+                        <div class="small mb-0">
+                          Manual airport set to <strong>{{ planning.nearest_airport }}</strong>.
+                        </div>
+                      </div>
+                    {% endif %}
+                  </div>
+                {% endif %}
+
+              </div>
+            </div>
+          </div>
+
+          {# ------------------------------------------------------------------ #}
+          {# Waivers: §107.39 and §107.145                                       #}
+          {# ------------------------------------------------------------------ #}
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingWaivers">
+              <button class="accordion-button collapsed" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#collapseWaivers"
+                      aria-expanded="false" aria-controls="collapseWaivers">
+                Existing Waivers (If Applicable)
+              </button>
+            </h2>
+            <div id="collapseWaivers" class="accordion-collapse collapse"
+                 aria-labelledby="headingWaivers" data-bs-parent="#planningAccordion">
+              <div class="accordion-body">
+
+                <div class="row g-3">
+                  <div class="col-12 col-md-6">
+                    <div class="form-check form-switch">
+                      {{ form.operates_under_10739 }}
+                      <label class="form-check-label fw-semibold" for="{{ form.operates_under_10739.id_for_label }}">
+                        Operating under §107.39 (Over People)
+                      </label>
+                    </div>
+                    {{ form.operates_under_10739.errors }}
+                  </div>
+
+                  <div class="col-12 col-md-6">
+                    <div class="form-check form-switch">
+                      {{ form.operates_under_107145 }}
+                      <label class="form-check-label fw-semibold" for="{{ form.operates_under_107145.id_for_label }}">
+                        Operating under §107.145 (Moving Vehicles)
+                      </label>
+                    </div>
+                    {{ form.operates_under_107145.errors }}
+                  </div>
+                </div>
+
+                <div id="oop-waiver-details" class="mt-3">
+                  <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                      <label class="form-label fw-semibold" for="{{ form.oop_waiver_document.id_for_label }}">§107.39 waiver document</label>
+                      {{ form.oop_waiver_document }}
+                      {{ form.oop_waiver_document.errors }}
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <label class="form-label fw-semibold" for="{{ form.oop_waiver_number.id_for_label }}">§107.39 waiver number</label>
+                      {{ form.oop_waiver_number }}
+                      {{ form.oop_waiver_number.errors }}
+                    </div>
+                  </div>
+                </div>
+
+                <div id="mv-waiver-details" class="mt-3">
+                  <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                      <label class="form-label fw-semibold" for="{{ form.mv_waiver_document.id_for_label }}">§107.145 waiver document</label>
+                      {{ form.mv_waiver_document }}
+                      {{ form.mv_waiver_document.errors }}
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <label class="form-label fw-semibold" for="{{ form.mv_waiver_number.id_for_label }}">§107.145 waiver number</label>
+                      {{ form.mv_waiver_number }}
+                      {{ form.mv_waiver_number.errors }}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          {# ------------------------------------------------------------------ #}
+          {# Safety & Insurance                                                   #}
+          {# ------------------------------------------------------------------ #}
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingSafety">
+              <button class="accordion-button collapsed" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#collapseSafety"
+                      aria-expanded="false" aria-controls="collapseSafety">
+                Safety, VO & Insurance
+              </button>
+            </h2>
+            <div id="collapseSafety" class="accordion-collapse collapse"
+                 aria-labelledby="headingSafety" data-bs-parent="#planningAccordion">
+              <div class="accordion-body">
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12 col-md-4">
+                    <div class="form-check form-switch">
+                      {{ form.uses_drone_detection }}
+                      <label class="form-check-label fw-semibold" for="{{ form.uses_drone_detection.id_for_label }}">
+                        Drone detection in use
+                      </label>
+                    </div>
+                    {{ form.uses_drone_detection.errors }}
+                  </div>
+
+                  <div class="col-12 col-md-4">
+                    <div class="form-check form-switch">
+                      {{ form.uses_flight_tracking }}
+                      <label class="form-check-label fw-semibold" for="{{ form.uses_flight_tracking.id_for_label }}">
+                        Flight tracking in use
+                      </label>
+                    </div>
+                    {{ form.uses_flight_tracking.errors }}
+                  </div>
+
+                  <div class="col-12 col-md-4">
+                    <div class="form-check form-switch">
+                      {{ form.has_visual_observer }}
+                      <label class="form-check-label fw-semibold" for="{{ form.has_visual_observer.id_for_label }}">
+                        Visual observer used
+                      </label>
+                    </div>
+                    {{ form.has_visual_observer.errors }}
+                  </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.insurance_provider.id_for_label }}">Insurance provider</label>
+                    {{ form.insurance_provider }}
+                    {{ form.insurance_provider.errors }}
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.insurance_coverage_limit.id_for_label }}">Coverage limit</label>
+                    {{ form.insurance_coverage_limit }}
+                    {{ form.insurance_coverage_limit.errors }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {# ------------------------------------------------------------------ #}
+          {# Purpose & Operational Profile                                        #}
+          {# ------------------------------------------------------------------ #}
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingProfile">
+              <button class="accordion-button collapsed" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#collapseProfile"
+                      aria-expanded="false" aria-controls="collapseProfile">
+                Purpose & Operational Profile
+              </button>
+            </h2>
+            <div id="collapseProfile" class="accordion-collapse collapse"
+                 aria-labelledby="headingProfile" data-bs-parent="#planningAccordion">
+              <div class="accordion-body">
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12">
+                    <label class="form-label fw-semibold" for="{{ form.purpose_operations.id_for_label }}">Purpose of drone operations</label>
+                    {{ form.purpose_operations.errors }}
+                    <div class="checkbox-group">
+                      {% for choice in form.purpose_operations %}
+                        <div class="form-check">
+                          {{ choice.tag }}
+                          <label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <label class="form-label fw-semibold" for="{{ form.purpose_operations_details.id_for_label }}">Purpose details</label>
+                    {{ form.purpose_operations_details }}
+                    {{ form.purpose_operations_details.errors }}
+                  </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.aircraft_count.id_for_label }}">Aircraft count</label>
+                    {{ form.aircraft_count }}
+                    {{ form.aircraft_count.errors }}
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.flight_duration.id_for_label }}">Typical flight duration</label>
+                    {{ form.flight_duration }}
+                    {{ form.flight_duration.errors }}
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.flights_per_day.id_for_label }}">Flights per day</label>
+                    {{ form.flights_per_day }}
+                    {{ form.flights_per_day.errors }}
+                  </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.estimated_crowd_size.id_for_label }}">Estimated crowd size</label>
+                    {{ form.estimated_crowd_size }}
+                    {{ form.estimated_crowd_size.errors }}
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.launch_location.id_for_label }}">Launch / recovery location</label>
+                    {{ form.launch_location }}
+                    {{ form.launch_location.errors }}
+                  </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12">
+                    <label class="form-label fw-semibold" for="{{ form.ground_environment.id_for_label }}">Ground environment</label>
+                    {{ form.ground_environment.errors }}
+                    <div class="checkbox-group">
+                      {% for choice in form.ground_environment %}
+                        <div class="form-check">
+                          {{ choice.tag }}
+                          <label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <label class="form-label fw-semibold" for="{{ form.ground_environment_other.id_for_label }}">Ground environment (other)</label>
+                    {{ form.ground_environment_other }}
+                    {{ form.ground_environment_other.errors }}
+                  </div>
+                </div>
+
+                <div class="row g-3">
+                  <div class="col-12">
+                    <label class="form-label fw-semibold" for="{{ form.prepared_procedures.id_for_label }}">Prepared procedures</label>
+                    {{ form.prepared_procedures.errors }}
+                    <div class="checkbox-group">
+                      {% for choice in form.prepared_procedures %}
+                        <div class="form-check">
+                          {{ choice.tag }}
+                          <label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          {# ------------------------------------------------------------------ #}
+          {# Containment / Area Definition (Controlled airspace)                  #}
+          {# ------------------------------------------------------------------ #}
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingContainment">
+              <button class="accordion-button collapsed" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#collapseContainment"
+                      aria-expanded="false" aria-controls="collapseContainment">
+                Containment & Area Definition (Controlled Airspace)
+              </button>
+            </h2>
+            <div id="collapseContainment" class="accordion-collapse collapse"
+                 aria-labelledby="headingContainment" data-bs-parent="#planningAccordion">
+              <div class="accordion-body">
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.operation_area_type.id_for_label }}">Operation area type</label>
+                    {{ form.operation_area_type }}
+                    {{ form.operation_area_type.errors }}
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.containment_method.id_for_label }}">Containment method</label>
+                    {{ form.containment_method }}
+                    {{ form.containment_method.errors }}
+                  </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12">
+                    <label class="form-label fw-semibold" for="{{ form.containment_notes.id_for_label }}">Containment notes</label>
+                    {{ form.containment_notes }}
+                    <div class="form-text compact">Describe how containment is enforced/verified on-site.</div>
+                    {{ form.containment_notes.errors }}
+                  </div>
+                </div>
+
+                <div class="row g-3">
+                  <div class="col-6 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.corridor_length_ft.id_for_label }}">Corridor length (ft)</label>
+                    {{ form.corridor_length_ft }}
+                    {{ form.corridor_length_ft.errors }}
+                  </div>
+                  <div class="col-6 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.corridor_width_ft.id_for_label }}">Corridor width (ft)</label>
+                    {{ form.corridor_width_ft }}
+                    {{ form.corridor_width_ft.errors }}
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.max_groundspeed_mph.id_for_label }}">Max groundspeed (mph)</label>
+                    {{ form.max_groundspeed_mph }}
+                    {{ form.max_groundspeed_mph.errors }}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          {# ------------------------------------------------------------------ #}
+          {# Emergency / Lost Link                                                #}
+          {# ------------------------------------------------------------------ #}
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingEmergency">
+              <button class="accordion-button collapsed" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#collapseEmergency"
+                      aria-expanded="false" aria-controls="collapseEmergency">
+                Emergency / Lost Link
+              </button>
+            </h2>
+            <div id="collapseEmergency" class="accordion-collapse collapse"
+                 aria-labelledby="headingEmergency" data-bs-parent="#planningAccordion">
+              <div class="accordion-body">
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.lost_link_behavior.id_for_label }}">Lost link behavior</label>
+                    {{ form.lost_link_behavior }}
+                    {{ form.lost_link_behavior.errors }}
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.rth_altitude_ft_agl.id_for_label }}">RTH altitude (ft AGL)</label>
+                    {{ form.rth_altitude_ft_agl }}
+                    {{ form.rth_altitude_ft_agl.errors }}
+                  </div>
+                </div>
+
+                <div class="row g-3">
+                  <div class="col-12">
+                    <label class="form-label fw-semibold" for="{{ form.lost_link_actions.id_for_label }}">Lost link actions</label>
+                    {{ form.lost_link_actions }}
+                    {{ form.lost_link_actions.errors }}
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label fw-semibold" for="{{ form.flyaway_actions.id_for_label }}">Flyaway actions</label>
+                    {{ form.flyaway_actions }}
+                    {{ form.flyaway_actions.errors }}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          {# ------------------------------------------------------------------ #}
+          {# ATC / Communications                                                 #}
+          {# ------------------------------------------------------------------ #}
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingATC">
+              <button class="accordion-button collapsed" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#collapseATC"
+                      aria-expanded="false" aria-controls="collapseATC">
+                ATC / Communications (Controlled Airspace)
+              </button>
+            </h2>
+            <div id="collapseATC" class="accordion-collapse collapse"
+                 aria-labelledby="headingATC" data-bs-parent="#planningAccordion">
+              <div class="accordion-body">
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.atc_facility_name.id_for_label }}">ATC facility name</label>
+                    {{ form.atc_facility_name }}
+                    {{ form.atc_facility_name.errors }}
+                  </div>
+
+                  <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold" for="{{ form.atc_coordination_method.id_for_label }}">Coordination method</label>
+                    {{ form.atc_coordination_method }}
+                    {{ form.atc_coordination_method.errors }}
+                  </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12 col-md-6" id="atc-phone-wrap">
+                    <label class="form-label fw-semibold" for="{{ form.atc_phone.id_for_label }}">ATC phone</label>
+                    {{ form.atc_phone }}
+                    {{ form.atc_phone.errors }}
+                  </div>
+
+                  <div class="col-12 col-md-6" id="atc-freq-wrap">
+                    <label class="form-label fw-semibold" for="{{ form.atc_frequency.id_for_label }}">ATC frequency</label>
+                    {{ form.atc_frequency }}
+                    {{ form.atc_frequency.errors }}
+                  </div>
+                </div>
+
+                <div class="row g-3">
+                  <div class="col-12">
+                    <label class="form-label fw-semibold" for="{{ form.atc_checkin_procedure.id_for_label }}">Check-in / coordination procedure</label>
+                    {{ form.atc_checkin_procedure }}
+                    {{ form.atc_checkin_procedure.errors }}
+                  </div>
+
+                  <div class="col-12">
+                    <label class="form-label fw-semibold" for="{{ form.atc_deviation_triggers.id_for_label }}">Deviation / termination triggers</label>
+                    {{ form.atc_deviation_triggers }}
+                    {{ form.atc_deviation_triggers.errors }}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          {# ------------------------------------------------------------------ #}
+          {# Weather & Crew                                                       #}
+          {# ------------------------------------------------------------------ #}
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingWeather">
+              <button class="accordion-button collapsed" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#collapseWeather"
+                      aria-expanded="false" aria-controls="collapseWeather">
+                Weather & Crew
+              </button>
+            </h2>
+            <div id="collapseWeather" class="accordion-collapse collapse"
+                 aria-labelledby="headingWeather" data-bs-parent="#planningAccordion">
+              <div class="accordion-body">
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.max_wind_mph.id_for_label }}">Max wind (mph)</label>
+                    {{ form.max_wind_mph }}
+                    {{ form.max_wind_mph.errors }}
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.min_visibility_sm.id_for_label }}">Min visibility (SM)</label>
+                    {{ form.min_visibility_sm }}
+                    {{ form.min_visibility_sm.errors }}
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.radio_discipline.id_for_label }}">Radio discipline</label>
+                    {{ form.radio_discipline }}
+                    {{ form.radio_discipline.errors }}
+                  </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12">
+                    <label class="form-label fw-semibold" for="{{ form.weather_go_nogo.id_for_label }}">Weather go/no-go criteria</label>
+                    {{ form.weather_go_nogo }}
+                    {{ form.weather_go_nogo.errors }}
+                  </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                  <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.crew_count.id_for_label }}">Crew count</label>
+                    {{ form.crew_count }}
+                    {{ form.crew_count.errors }}
+                  </div>
+                  <div class="col-12 col-md-8">
+                    <label class="form-label fw-semibold" for="{{ form.crew_briefing_procedure.id_for_label }}">Crew briefing procedure</label>
+                    {{ form.crew_briefing_procedure }}
+                    {{ form.crew_briefing_procedure.errors }}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+        </div> {# /accordion #}
+
+        <hr class="text-primary my-4">
+
+        <div class="d-flex justify-content-between align-items-center">
           <a href="{% url 'airspace:waiver_planning_list' %}" class="btn btn-outline-secondary btn-sm">
             ← Back to Waivers
           </a>
           <button type="submit" class="btn btn-primary">
-            {% if planning_mode == "edit" %}Save Planning{% else %}Save & Continue to Waiver Form{% endif %}
+            {% if planning_mode == "edit" %}Save Planning{% else %}Save & Continue{% endif %}
           </button>
         </div>
 

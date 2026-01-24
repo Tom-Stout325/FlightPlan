@@ -7,13 +7,8 @@ from .models import PilotProfile, Training
 
 @admin.register(PilotProfile)
 class PilotProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "license_number", "license_date")
-    search_fields = (
-        "user__username",
-        "user__first_name",
-        "user__last_name",
-        "license_number",
-    )
+    search_fields = ("user__username", "user__email", "user__first_name", "user__last_name", "license_number")
+    list_display = ("id", "user", "license_number")
     list_select_related = ("user",)
 
 

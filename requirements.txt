@@ -6,8 +6,9 @@ boto3==1.37.37
 botocore==1.37.37
 Brotli==1.1.0
 certifi==2025.11.12
-cffi==1.17.1
+cffi==2.0.0
 crispy-bootstrap5==2025.4
+cryptography==46.0.3
 cssselect2==0.8.0
 distro==1.9.0
 dj-database-url==2.3.0
@@ -16,6 +17,7 @@ django-autocomplete-light==3.12.1
 django-bootstrap-v5==1.0.11
 django-crispy-forms==2.4
 django-environ==0.12.0
+django-fernet-encrypted-fields==0.3.1
 django-formtools==2.5.1
 django-jazzmin==3.0.1
 django-redis==5.4.0

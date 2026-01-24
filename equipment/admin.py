@@ -5,7 +5,9 @@ from .models import DroneSafetyProfile, Equipment
 
 @admin.register(Equipment)
 class EquipmentAdmin(admin.ModelAdmin):
-    list_display = ("user", "name", "brand", "model")
+    search_fields = ("brand", "model", "serial_number", "faa_number")
+    list_display = ("id", "brand", "model", "equipment_type", "user")
+    list_filter = ("equipment_type",)
 
     def get_fields(self, request, obj=None):
         fields = list(super().get_fields(request, obj))

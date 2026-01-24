@@ -5,7 +5,6 @@ from django.db import models
 
 
 class DroneIncidentReport(models.Model):
-    # ✅ NEW: ownership
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

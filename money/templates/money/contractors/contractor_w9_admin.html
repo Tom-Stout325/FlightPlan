@@ -1,0 +1,89 @@
+{% extends "index.html" %}
+{% load humanize %}
+
+{% block title %}W-9 Submission{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-2 px-md-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h1 class="h5 mb-0">W-9 Submission</h1>
+      <div class="text-muted small">{{ contractor.display_name }}</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="{% url 'money:contractor_detail' contractor.pk %}">Back</a>
+  </div>
+
+  {% if submission %}
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="text-muted small mb-2">
+          Submitted: {{ submission.submitted_at|date:"M j, Y" }} • {{ submission.submitted_at|time:"g:i A" }}
+        </div>
+
+        <div class="row g-3">
+          <div class="col-12 col-md-6">
+            <div class="text-muted">Name</div>
+            <div class="fw-semibold text-primary">{{ submission.full_name }}</div>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <div class="text-muted">Business name</div>
+            <div class="fw-semibold text-primary">{{ submission.business_name|default:"—" }}</div>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <div class="text-muted">Tax classification</div>
+            <div class="fw-semibold text-primary">{{ submission.tax_classification }}</div>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <div class="text-muted">LLC tax class</div>
+            <div>{{ submission.llc_tax_class|default:"—" }}</div>
+          </div>
+
+          <div class="col-12">
+            <div class="text-muted">Address</div>
+            <div class="fw-semibold text-primary">{{ submission.address_line1 }}<br>{{ submission.address_line2 }}</div>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <div class="text-muted">TIN type</div>
+            <div class="fw-semibold text-primary">{{ submission.tin_type|upper }}</div>
+          </div>
+
+        <div class="col-12 col-md-6">
+        <div class="text-muted">TIN</div>
+
+        {% if show_tin %}
+            <div class="fw-semibold text-primary">
+            {{ submission.tin }}
+            </div>
+        {% else %}
+            <div class="d-flex align-items-center gap-2">
+            <span class="fw-semibold text-primary">
+                {{ submission.tin_type|upper }} • ****{{ contractor.tin_last4 }}
+            </span>
+            <a class="btn btn-sm btn-outline-danger"
+                href="?show_tin=1"
+                onclick="return confirm('This will reveal a sensitive tax ID. Continue?');">
+                Reveal
+            </a>
+            </div>
+        {% endif %}
+        </div>
+
+
+          <div class="col-12">
+            <div class="text-muted">Attestation</div>
+            <div>{% if submission.attested %}<span class="badge bg-success">Attested</span>{% else %}<span class="badge bg-secondary">Not attested</span>{% endif %}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="alert alert-warning">
+      No W-9 submission found for this contractor yet.
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

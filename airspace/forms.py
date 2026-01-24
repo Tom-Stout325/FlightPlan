@@ -5,15 +5,23 @@ from decimal import Decimal, InvalidOperation
 
 from django import forms
 from dal import autocomplete
+from django.contrib import messages
+from django.utils import timezone
+from uuid import UUID
 
 from equipment.models import Equipment
 from pilot.models import PilotProfile
+from .models import Airport, WaiverApplication, WaiverPlanning, Airport
+from documents.models import GeneralDocument
 
-from .models import Airport, WaiverApplication, WaiverPlanning
+from .models import _validate_controlled_airspace_required_fields  # uses your helper in models.py
 
-# NOTE: We intentionally do NOT import dms_to_decimal from utils here
-# because the file previously redefined it, which is confusing.
-# If you have a canonical util, we can switch to that later.
+
+
+
+
+
+
 
 
 TZ_CHOICES = [
@@ -96,15 +104,18 @@ def _dms_to_decimal(deg, minutes, seconds, direction) -> Decimal:
 
 def _qs_user_scoped(qs, user):
     """
-    If the underlying model has a user_id field, scope by it.
+    If the queryset's model has a 'user' field, scope by it.
     Otherwise return qs unchanged (for global tables like Airport).
     """
     if user is None:
         return qs
+
     model = qs.model
-    if hasattr(model, "user_id") or any(f.name == "user" for f in model._meta.fields):
+    if any(f.name == "user" for f in model._meta.fields):
         return qs.filter(user=user)
+
     return qs
+
 
 
 class WaiverPlanningForm(forms.ModelForm):
@@ -197,6 +208,7 @@ class WaiverPlanningForm(forms.ModelForm):
             "location_radius",
             "nearest_airport_ref",
             "nearest_airport",
+            "distance_to_airport_nm",
             "launch_location",
 
             # --- 107.39 OOP ---
@@ -228,10 +240,41 @@ class WaiverPlanningForm(forms.ModelForm):
             "ground_environment_other",
             "prepared_procedures",
 
+            # --- Area definition / containment ---
+            "operation_area_type",
+            "containment_method",
+            "containment_notes",
+            "corridor_length_ft",
+            "corridor_width_ft",
+            "max_groundspeed_mph",
+
+            # --- Emergency / lost link ---
+            "lost_link_behavior",
+            "rth_altitude_ft_agl",
+            "lost_link_actions",
+            "flyaway_actions",
+
+            # --- ATC / communications ---
+            "atc_facility_name",
+            "atc_coordination_method",
+            "atc_phone",
+            "atc_frequency",
+            "atc_checkin_procedure",
+            "atc_deviation_triggers",
+
+            # --- Weather & crew ---
+            "max_wind_mph",
+            "min_visibility_sm",
+            "weather_go_nogo",
+            "crew_count",
+            "crew_briefing_procedure",
+            "radio_discipline",
+
             # hidden / stored decimals (we control saving behavior)
             "location_latitude",
             "location_longitude",
         ]
+
 
         widgets = {
             "operation_title": forms.TextInput(
@@ -287,13 +330,42 @@ class WaiverPlanningForm(forms.ModelForm):
             # Keep decimals hidden (we control these)
             "location_latitude": forms.HiddenInput(),
             "location_longitude": forms.HiddenInput(),
+            "operation_area_type": forms.Select(attrs={"class": "form-select"}),
+            "containment_method": forms.Select(attrs={"class": "form-select"}),
+            "containment_notes": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+            "corridor_length_ft": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "corridor_width_ft": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "max_groundspeed_mph": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+
+            "lost_link_behavior": forms.Select(attrs={"class": "form-select"}),
+            "rth_altitude_ft_agl": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "lost_link_actions": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "flyaway_actions": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+
+            "atc_facility_name": forms.TextInput(attrs={"class": "form-control"}),
+            "atc_coordination_method": forms.Select(attrs={"class": "form-select"}),
+            "atc_phone": forms.TextInput(attrs={"class": "form-control"}),
+            "atc_frequency": forms.TextInput(attrs={"class": "form-control"}),
+            "atc_checkin_procedure": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "atc_deviation_triggers": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+
+            "max_wind_mph": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "min_visibility_sm": forms.NumberInput(attrs={"class": "form-control", "step": "0.1", "min": 0}),
+            "weather_go_nogo": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "crew_count": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "crew_briefing_procedure": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "radio_discipline": forms.Select(attrs={"class": "form-select"}),
+
+            
         }
 
     def __init__(self, *args, user=None, **kwargs):
         self.user = user
         super().__init__(*args, **kwargs)
 
-        # Bootstrap classes (avoid stomping DAL widgets)
+        if self.user is not None:
+            self.instance.user = self.user
+
         for name, field in self.fields.items():
             w = field.widget
             if w.__class__.__module__.startswith("dal"):
@@ -303,18 +375,15 @@ class WaiverPlanningForm(forms.ModelForm):
             elif isinstance(w, (forms.TextInput, forms.Textarea, forms.NumberInput, forms.DateInput)):
                 w.attrs.setdefault("class", "form-control")
 
-        # Local time zone default
         if not (self.initial.get("local_time_zone") or getattr(self.instance, "local_time_zone", None)):
             self.initial["local_time_zone"] = TZ_CHOICES[0][0] if TZ_CHOICES else None
 
-        # Radius dropdown choices
         if "location_radius" in self.fields:
             self.fields["location_radius"].widget = forms.Select(
                 choices=[("", "Select Radius")] + RADIUS_CHOICES,
                 attrs={"class": "form-select"},
             )
 
-        # DMS helpers styling
         for name in ["lat_deg", "lat_min", "lat_sec", "lon_deg", "lon_min", "lon_sec"]:
             if name in self.fields:
                 self.fields[name].widget.attrs.setdefault("class", "form-control form-control-sm")
@@ -322,10 +391,12 @@ class WaiverPlanningForm(forms.ModelForm):
             if name in self.fields:
                 self.fields[name].widget.attrs.setdefault("class", "form-select form-select-sm")
 
-        # Pilot profiles scoped to user
         if "pilot_profile" in self.fields:
-            qs = PilotProfile.objects.select_related("user").all()
-            qs = _qs_user_scoped(qs, self.user).order_by("user__first_name", "user__last_name", "user__username")
+            qs = PilotProfile.objects.select_related("user")
+            if self.user is not None:
+                qs = qs.filter(user=self.user)
+
+            qs = qs.order_by("user__first_name", "user__last_name", "user__username")
             self.fields["pilot_profile"].queryset = qs
 
             def label_from_instance(obj):
@@ -334,26 +405,25 @@ class WaiverPlanningForm(forms.ModelForm):
 
             self.fields["pilot_profile"].label_from_instance = label_from_instance
 
-        # Aircraft: scope to user if Equipment is owned, always active drones
+
         if "aircraft" in self.fields:
             qs = Equipment.objects.filter(active=True, equipment_type="Drone")
             qs = _qs_user_scoped(qs, self.user).order_by("brand", "model")
             self.fields["aircraft"].queryset = qs
 
-        # Waiver documents: if GeneralDocument is user-owned, scope it
         for doc_field in ("oop_waiver_document", "mv_waiver_document"):
             if doc_field in self.fields:
                 qs = self.fields[doc_field].queryset
-                # queryset exists because FK field is on the model
                 self.fields[doc_field].queryset = _qs_user_scoped(qs, self.user)
 
-        # Airport FK sanity queryset (global table)
         if "nearest_airport_ref" in self.fields:
             self.fields["nearest_airport_ref"].queryset = Airport.objects.filter(active=True).order_by("icao")
+
 
     def _selected_pilot(self):
         """
         Only return a pilot profile owned by the current user (when user is provided).
+        PilotProfile pk is int (default).
         """
         if self.is_bound:
             raw = (self.data.get("pilot_profile") or "").strip()
@@ -368,29 +438,35 @@ class WaiverPlanningForm(forms.ModelForm):
             return None
         return pilot
 
+
     def _selected_aircraft(self):
         """
         Only return an aircraft owned by the current user (when user is provided).
+        UUID-safe (Equipment.pk is UUIDField).
         """
         if self.is_bound:
             raw = (self.data.get("aircraft") or "").strip()
-            if raw.isdigit():
-                qs = Equipment.objects.filter(pk=int(raw), equipment_type="Drone")
-                qs = _qs_user_scoped(qs, self.user)
-                return qs.first()
-            return None
+            if not raw:
+                return None
+
+            try:
+                aircraft_id = UUID(raw)
+            except (ValueError, TypeError):
+                return None
+
+            qs = Equipment.objects.filter(pk=aircraft_id, equipment_type="Drone")
+            qs = _qs_user_scoped(qs, self.user)
+            return qs.first()
 
         ac = getattr(self.instance, "aircraft", None)
         if ac and self.user is not None and hasattr(ac, "user_id") and ac.user_id != self.user.id:
             return None
         return ac
 
+
+
     def clean(self):
         cleaned = super().clean()
-
-        # -------------------------
-        # Reject cross-user FK posts early (nice form errors)
-        # -------------------------
         if self.user is not None:
             pilot = cleaned.get("pilot_profile")
             if pilot is not None and hasattr(pilot, "user_id") and pilot.user_id != self.user.id:
@@ -493,3 +569,161 @@ class WaiverApplicationDescriptionForm(forms.ModelForm):
                 }
             )
         }
+
+
+
+
+
+
+
+
+
+
+
+class WaiverReadinessForm(forms.Form):
+    """
+    Worksheet form: collect required info before building a WaiverPlanning + WaiverApplication.
+    This does NOT save anything by default.
+    """
+
+    # -------------------------
+    # Operation basics
+    # -------------------------
+    operation_title         = forms.CharField(required=True, help_text="Short title for this operation (e.g., 'NHRA Nationals FPV Coverage').")
+    start_date              = forms.DateField(required=True, widget=forms.DateInput(attrs={"type": "date"}), help_text="First date on which operations will occur.")
+    end_date                = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}), help_text="Last date on which operations will occur (optional if single day).")
+    timeframe               = forms.MultipleChoiceField(required=False, choices=WaiverPlanning.TIMEFRAME_CHOICES, widget=forms.CheckboxSelectMultiple, help_text="Select all timeframes you expect to operate.")
+    frequency               = forms.ChoiceField(required=False, choices=[("", "---------")] + WaiverPlanning.FREQUENCY_CHOICES, help_text="How often operations will occur during this date range.")
+    local_time_zone         = forms.CharField(required=False, help_text="Local time zone (e.g., America/New_York).")
+    proposed_agl            = forms.IntegerField(required=False, min_value=1, help_text="Maximum planned altitude AGL in feet.")
+
+    # -------------------------
+    # Aircraft
+    # -------------------------
+    aircraft                = forms.ModelChoiceField(required=False, queryset=Equipment.objects.none(), help_text="Select a drone from your equipment list (optional).")
+    aircraft_manual         = forms.CharField(required=False, help_text="If needed, manually describe any additional aircraft types.")
+
+    # -------------------------
+    # Pilot
+    # -------------------------
+    pilot_profile           = forms.ModelChoiceField(required=False, queryset=PilotProfile.objects.none(), help_text="Select a pilot profile (optional).")
+    pilot_name_manual       = forms.CharField(required=False, help_text="If not using a profile, enter the RPIC full name.")
+    pilot_cert_manual       = forms.CharField(required=False, help_text="If not using a profile, enter the Part 107 certificate number.")
+    pilot_flight_hours      = forms.DecimalField(required=False, max_digits=7, decimal_places=1, help_text="Approximate total UAS flight hours.")
+
+    # -------------------------
+    # Waivers
+    # -------------------------
+    operates_under_10739    = forms.BooleanField(required=False, help_text="Check if operating under an approved §107.39 waiver.")
+    oop_waiver_document     = forms.ModelChoiceField(required=False, queryset=GeneralDocument.objects.none(), help_text="Select your approved §107.39 waiver document (optional).")
+    oop_waiver_number       = forms.CharField(required=False, help_text="Example: 107W-2024-01234 (optional if document contains it).")
+
+    operates_under_107145   = forms.BooleanField(required=False, help_text="Check if operating under an approved §107.145 waiver.")
+    mv_waiver_document      = forms.ModelChoiceField(required=False, queryset=GeneralDocument.objects.none(), help_text="Select your approved §107.145 waiver document (optional).")
+    mv_waiver_number        = forms.CharField(required=False, help_text="Example: 107W-2024-04567 (optional if document contains it).")
+
+    # -------------------------
+    # Purpose of Operations
+    # -------------------------
+    purpose_operations      = forms.MultipleChoiceField(required=False, choices=WaiverPlanning.PURPOSE_OPERATIONS_CHOICES, widget=forms.CheckboxSelectMultiple, help_text="Select all purposes that apply.")
+    purpose_operations_details = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}), help_text="Add context: what exactly you’re doing, why, and how.")
+
+    # -------------------------
+    # Venue & Location
+    # -------------------------
+    venue_name              = forms.CharField(required=False, help_text="Venue name (e.g., 'Lucas Oil Raceway').")
+    street_address          = forms.CharField(required=False, help_text="Street address of the venue or operation area.")
+    location_city           = forms.CharField(required=False, help_text="City where operations occur.")
+    location_state          = forms.CharField(required=False, help_text="State where operations occur.")
+    zip_code                = forms.CharField(required=False, help_text="ZIP code for the operation location.")
+    location_latitude       = forms.DecimalField(required=False, max_digits=9, decimal_places=6, help_text="Decimal latitude for center point (optional but recommended).")
+    location_longitude      = forms.DecimalField(required=False, max_digits=9, decimal_places=6, help_text="Decimal longitude for center point (optional but recommended).")
+    airspace_class          = forms.ChoiceField(required=False, choices=[("", "---------")] + WaiverPlanning.AIRSPACE_CLASS_CHOICES, help_text="Airspace class at the operation area (B/C/D/E/G).")
+    location_radius         = forms.CharField(required=False, help_text="Radius / footprint description (e.g., '0.5 NM' or 'venue footprint').")
+    nearest_airport         = forms.CharField(required=False, help_text="Nearest airport identifier/name (e.g., 'KIND').")
+    nearest_airport_ref     = forms.ModelChoiceField(required=False, queryset=Airport.objects.all(), help_text="Select an airport reference (preferred).")
+
+    # -------------------------
+    # Launch & Safety
+    # -------------------------
+    launch_location         = forms.CharField(required=False, help_text="Typical launch/staging location description.")
+    uses_drone_detection    = forms.BooleanField(required=False, help_text="Will you use a drone detection system (e.g., AirSentinel)?")
+    uses_flight_tracking    = forms.BooleanField(required=False, help_text="Will you monitor ADS-B/flight tracking (e.g., FlightAware)?")
+    has_visual_observer     = forms.BooleanField(required=False, help_text="Will Visual Observers be used?")
+    insurance_provider      = forms.CharField(required=False, help_text="Insurance provider name (optional).")
+    insurance_coverage_limit= forms.CharField(required=False, help_text="Coverage limit (e.g., '$5,000,000') (optional).")
+    safety_features_notes   = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}), help_text="Safety features, redundancies, geofencing, briefing notes, etc.")
+
+    # -------------------------
+    # Operational Profile
+    # -------------------------
+    aircraft_count          = forms.ChoiceField(required=False, choices=[("", "---------")] + WaiverPlanning.OP_AIRCRAFT_COUNT_CHOICES, help_text="Single/multiple aircraft (sequential/simultaneous).")
+    flight_duration         = forms.CharField(required=False, help_text="Typical flight duration (e.g., 5–10 min).")
+    flights_per_day         = forms.IntegerField(required=False, min_value=0, help_text="Approximate flights per day.")
+    ground_environment      = forms.MultipleChoiceField(required=False, choices=WaiverPlanning.GROUND_ENVIRONMENT_CHOICES, widget=forms.CheckboxSelectMultiple, help_text="Select environment types present.")
+    ground_environment_other= forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}), help_text="Add any environment types not listed.")
+    estimated_crowd_size    = forms.CharField(required=False, help_text="Estimated maximum crowd size (optional).")
+    prepared_procedures     = forms.MultipleChoiceField(required=False, choices=WaiverPlanning.PREPARED_PROCEDURES_CHOICES, widget=forms.CheckboxSelectMultiple, help_text="Select procedures/checklists used.")
+
+    operation_area_type     = forms.ChoiceField(required=False, choices=WaiverPlanning._meta.get_field("operation_area_type").choices, help_text="Radius/corridor/polygon/site.")
+    containment_method      = forms.ChoiceField(required=False, choices=[("", "---------")] + WaiverPlanning._meta.get_field("containment_method").choices, help_text="How the area is contained (geofence/markers/etc.).")
+    containment_notes       = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}), help_text="How containment is briefed, verified, and enforced on-site.")
+    corridor_length_ft      = forms.IntegerField(required=False, min_value=0, help_text="If corridor operations: length in feet.")
+    corridor_width_ft       = forms.IntegerField(required=False, min_value=0, help_text="If corridor operations: width in feet.")
+    max_groundspeed_mph     = forms.IntegerField(required=False, min_value=0, help_text="Max groundspeed in mph (optional).")
+
+    # -------------------------
+    # Emergency / Lost Link
+    # -------------------------
+    lost_link_behavior      = forms.ChoiceField(required=False, choices=[("", "---------")] + WaiverPlanning._meta.get_field("lost_link_behavior").choices, help_text="RTH / hover / land.")
+    rth_altitude_ft_agl     = forms.IntegerField(required=False, min_value=0, help_text="If using RTH: the programmed RTH altitude (ft AGL).")
+    lost_link_actions       = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}), help_text="Step-by-step actions for a lost link.")
+    flyaway_actions         = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}), help_text="Step-by-step actions for a flyaway (tracking, last-known location, notifications).")
+
+    # -------------------------
+    # ATC / Communications
+    # -------------------------
+    atc_facility_name       = forms.CharField(required=False, help_text="Tower/TRACON/approach/airport ops facility name if known.")
+    atc_coordination_method = forms.ChoiceField(required=False, choices=[("", "---------")] + WaiverPlanning._meta.get_field("atc_coordination_method").choices, help_text="Phone / radio / both / other.")
+    atc_phone               = forms.CharField(required=False, help_text="If phone coordination: best contact number.")
+    atc_frequency           = forms.CharField(required=False, help_text="If radio coordination: frequency.")
+    atc_checkin_procedure   = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}), help_text="When/how you check-in, what info you provide, and termination steps.")
+    atc_deviation_triggers  = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}), help_text="Triggers for immediate termination or coordination (traffic, weather, etc.).")
+
+    # -------------------------
+    # Weather & Crew
+    # -------------------------
+    max_wind_mph            = forms.IntegerField(required=False, min_value=0, help_text="Max wind in mph (optional).")
+    min_visibility_sm       = forms.DecimalField(required=False, max_digits=4, decimal_places=1, help_text="Minimum visibility in statute miles (optional).")
+    weather_go_nogo         = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}), help_text="Additional go/no-go rules (gust spread, precip, lightning, ceiling).")
+    crew_count              = forms.IntegerField(required=False, min_value=0, help_text="Total crew count (optional).")
+    crew_briefing_procedure = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}), help_text="Pre-ops briefing: boundaries, roles, comms, abort triggers.")
+    radio_discipline        = forms.ChoiceField(required=False, choices=[("", "---------")] + WaiverPlanning._meta.get_field("radio_discipline").choices, help_text="Sterile vs standard comms discipline.")
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # User-scoped dropdowns
+        if user is not None:
+            self.fields["aircraft"].queryset = Equipment.objects.filter(user=user, equipment_type="Drone").order_by("id")
+            self.fields["pilot_profile"].queryset = PilotProfile.objects.filter(user=user).order_by("id")
+
+            gd_qs = GeneralDocument.objects.all()
+            if hasattr(GeneralDocument, "user_id"):
+                gd_qs = gd_qs.filter(user=user)
+            self.fields["oop_waiver_document"].queryset = gd_qs.order_by("-id")
+            self.fields["mv_waiver_document"].queryset = gd_qs.order_by("-id")
+
+    def apply_controlled_airspace_validation(self, *, user) -> None:
+        """
+        Run the same controlled-airspace requirements you enforce on the model,
+        but against this worksheet’s cleaned_data.
+        """
+        # Build an in-memory WaiverPlanning instance with your exact field names
+        planning = WaiverPlanning(user=user, **self.cleaned_data)
+        ca_errors = _validate_controlled_airspace_required_fields(planning) or {}
+        for field, msgs in ca_errors.items():
+            if isinstance(msgs, str):
+                msgs = [msgs]
+            for msg in msgs:
+                self.add_error(field, msg)
