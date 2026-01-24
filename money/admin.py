@@ -7,6 +7,15 @@ from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Q
 from django.utils.safestring import mark_safe
 from django.utils import timezone
+from django.conf import settings
+
+from django.urls import reverse
+from django.utils import timezone
+
+from money.emails import W9EmailContext, send_w9_request_email
+from money.utils import make_contractor_w9_token
+
+
 
 from .models import (
     Category,
@@ -726,6 +735,7 @@ class ContractorAdmin(admin.ModelAdmin):
     # Actions
     # ----------
     actions = (
+        "send_w9_request_email_action",
         "mark_w9_requested_today",
         "mark_w9_received_today",
         "mark_w9_verified",
@@ -825,3 +835,60 @@ class ContractorAdmin(admin.ModelAdmin):
                     | Q(last_name__icontains=parts[0], first_name__icontains=parts[1])
                 )
         return qs, use_distinct
+
+
+
+
+
+@admin.action(description="Send W-9 request email (secure link)")
+def send_w9_request_email_action(self, request, queryset):
+    """
+    Sends the W-9 request email to selected contractors.
+    Also updates: w9_status=requested, w9_sent_date=today
+    """
+    today = timezone.localdate()
+
+    sent = 0
+    skipped_no_email = 0
+    failed = 0
+
+    business_name = getattr(settings, "BRAND_NAME", "Airborne Images")
+    business_phone = ""  # optional — add BRAND_PHONE later if you want
+    support_email = getattr(settings, "BRAND_EMAIL", settings.DEFAULT_FROM_EMAIL)
+
+
+    for contractor in queryset:
+        if not contractor.email:
+            skipped_no_email += 1
+            continue
+
+        token = make_contractor_w9_token(contractor.id)
+        path = reverse("money:contractor_w9", kwargs={"token": token})
+        link = request.build_absolute_uri(path)
+
+        contractor_name = f"{contractor.first_name} {contractor.last_name}".strip()
+
+        try:
+            ctx = W9EmailContext(
+                contractor_name=contractor_name or "there",
+                w9_portal_link=link,
+                support_email=support_email or "",
+                business_name=business_name,
+                business_phone=business_phone,
+            )
+            send_w9_request_email(to_email=contractor.email, ctx=ctx)
+
+            # Update tracking fields
+            contractor.w9_status = contractor.W9_REQUESTED
+            contractor.w9_sent_date = today
+            contractor.save(update_fields=["w9_status", "w9_sent_date"])
+            sent += 1
+        except Exception:
+            failed += 1
+
+    if sent:
+        self.message_user(request, f"Sent {sent} W-9 request email(s).")
+    if skipped_no_email:
+        self.message_user(request, f"Skipped {skipped_no_email} contractor(s) with no email address.", level="WARNING")
+    if failed:
+        self.message_user(request, f"Failed to send {failed} email(s). Check server logs.", level="ERROR")

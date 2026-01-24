@@ -1,0 +1,44 @@
+{# money/templates/money/contractors/w9_portal.html #}
+{% extends "index.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}W-9 Submission{% endblock %}
+
+{% block content %}
+<div class="container my-4" style="max-width: 720px;">
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <h1 class="h4 mb-2">W-9 Submission</h1>
+      <p class="text-muted mb-3">
+        Hi {{ contractor.first_name }}, you can either complete our secure W-9 form online,
+        or upload a completed IRS W-9 PDF.
+      </p>
+
+      <div class="d-grid gap-2 mb-4">
+        {# If you already built the internal form page, wire this to it #}
+        {# <a class="btn btn-primary" href="{{ w9_fill_url }}">Fill W-9 Online</a> #}
+
+        <a class="btn btn-outline-primary" href="{{ irs_w9_pdf_url }}" target="_blank" rel="noopener">
+          Download IRS Form W-9 (PDF)
+        </a>
+      </div>
+
+      <hr class="my-4">
+
+      <h2 class="h6 mb-2">Upload Completed W-9 (PDF)</h2>
+      <form method="post" enctype="multipart/form-data" class="mt-2">
+        {% csrf_token %}
+        {{ form|crispy }}
+        <div class="d-grid">
+          <button class="btn btn-success" type="submit">
+            Upload W-9
+          </button>
+        </div>
+        <p class="small text-muted mt-2 mb-0">
+          Please do not email tax information. Upload is the secure method.
+        </p>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

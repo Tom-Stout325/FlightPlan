@@ -5,6 +5,7 @@ from __future__ import annotations
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Column, Fieldset, Layout, Row, Submit
 from django import forms
+from django.core.exceptions import ValidationError
 
 from money.models import Contractor
 
@@ -109,3 +110,32 @@ class ContractorForm(forms.ModelForm):
                 Row(Column("is_active", css_class="col-12"), css_class="g-3"),
             ),
         )
+
+
+
+class ContractorW9UploadForm(forms.ModelForm):
+    class Meta:
+        model = Contractor
+        fields = ["w9_document"]
+
+    def clean_w9_document(self):
+        f = self.cleaned_data.get("w9_document")
+        if not f:
+            return f
+
+        # Basic file checks (cheap + effective)
+        name = (f.name or "").lower()
+        if not name.endswith(".pdf"):
+            raise ValidationError("Please upload a PDF file.")
+
+        # If the upload handler provides content_type, enforce it (not always present)
+        content_type = getattr(f, "content_type", "") or ""
+        if content_type and content_type not in ("application/pdf",):
+            raise ValidationError("Please upload a valid PDF.")
+
+        # Size limit (adjust as you want)
+        max_mb = 10
+        if f.size and f.size > max_mb * 1024 * 1024:
+            raise ValidationError(f"PDF must be under {max_mb}MB.")
+
+        return f

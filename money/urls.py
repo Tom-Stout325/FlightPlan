@@ -122,7 +122,10 @@ from .views.contractors import (
     ContractorDeleteView,
     contractor_w9,
     contractor_w9_admin,
+    contractor_w9_thanks,
 )
+
+
 
 app_name = "money"
 
@@ -295,5 +298,7 @@ urlpatterns = [
     
     path("contractors/w9/<str:token>/", contractor_w9, name="contractor_w9"),
     path("contractors/<int:pk>/w9/", contractor_w9_admin, name="contractor_w9_admin"),
+    path("contractors/w9/<str:token>/thanks/", contractor_w9_thanks, name="contractor_w9_thanks"),
+
 
 ]

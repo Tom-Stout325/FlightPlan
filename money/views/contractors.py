@@ -12,18 +12,29 @@ from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_GET
 
 
-from money.forms.contractors.contractors import ContractorForm
+from money.forms.contractors.contractors import ContractorForm, ContractorW9UploadForm
 from money.models import Contractor, Transaction, ContractorW9Submission
+
+from money.utils.utils_token import parse_contractor_w9_token
+
+
+
+
+
+
+
+IRS_W9_PDF_URL = "https://www.irs.gov/pub/irs-pdf/fw9.pdf"
+
 
 
 class UserScopedQuerysetMixin:
     def get_queryset(self):
         qs = super().get_queryset()
         return qs.filter(user=self.request.user)
-
-
 
 
 
@@ -362,4 +373,56 @@ def contractor_w9_admin(request: HttpRequest, pk: int) -> HttpResponse:
             "submission": submission,
             "show_tin": show_tin,
         },
+    )
+
+
+
+
+
+
+
+@require_http_methods(["GET", "POST"])
+def contractor_w9(request, token: str):
+    contractor_id = parse_contractor_w9_token(token)
+    contractor = get_object_or_404(Contractor, pk=contractor_id, is_active=True)
+
+    # Upload handler
+    form = ContractorW9UploadForm(request.POST or None, request.FILES or None, instance=contractor)
+
+    if request.method == "POST":
+        if form.is_valid():
+            form.save()
+
+            # Update status metadata
+            contractor.w9_status = Contractor.W9_RECEIVED
+            contractor.w9_received_date = timezone.localdate()
+            contractor.save(update_fields=["w9_status", "w9_received_date"])
+
+            return redirect("money:contractor_w9_thanks", token=token)
+
+    ctx = {
+        "contractor": contractor,
+        "form": form,
+        "irs_w9_pdf_url": IRS_W9_PDF_URL,
+        # If you have a separate “fill form” route, link it here:
+        # "w9_fill_url": reverse("money:contractor_w9_fill", kwargs={"token": token}),
+        "token": token,
+    }
+    return render(request, "money/contractors/w9_portal.html", ctx)
+
+
+# money/views_contractors_w9.py
+
+
+
+
+@require_GET
+def contractor_w9_thanks(request, token: str):
+    contractor_id = parse_contractor_w9_token(token)
+    contractor = get_object_or_404(Contractor, pk=contractor_id, is_active=True)
+
+    return render(
+        request,
+        "money/contractors/w9_thanks.html",
+        {"contractor": contractor},
     )
