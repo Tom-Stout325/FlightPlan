@@ -50,8 +50,13 @@ def send_w9_request_email(*, to_email: str, ctx: W9EmailContext) -> None:
     if not from_email:
         raise ValueError("DEFAULT_FROM_EMAIL (or SERVER_EMAIL) must be set to send emails.")
 
+    # Clean recipient (defensive)
+    to_email = (to_email or "").strip()
+    to_email = to_email.strip("[]").replace("'", "").replace('"', "").strip()
+
     bcc: list[str] = []
-    brand_bcc = getattr(settings, "BRAND_BCC", None)
+    brand_bcc = (getattr(settings, "BRAND_BCC", "") or "").strip()
+    brand_bcc = brand_bcc.strip("[]").replace("'", "").replace('"', "").strip()
     if brand_bcc:
         bcc.append(brand_bcc)
 
@@ -60,6 +65,7 @@ def send_w9_request_email(*, to_email: str, ctx: W9EmailContext) -> None:
         body=body,
         from_email=from_email,
         to=[to_email],
-        bcc=bcc,
+        bcc=bcc or None,
     )
     msg.send(fail_silently=False)
+
