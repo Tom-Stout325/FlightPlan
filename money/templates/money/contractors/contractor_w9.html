@@ -4,6 +4,31 @@
 
 {% block title %}W-9 Intake{% endblock %}
 
+
+{% block extra_css %}
+<style>
+  /* Clean, Safari-safe radio alignment */
+  .form-check {
+    display: flex;
+    align-items: center;        /* vertical alignment */
+    gap: .5rem;                 /* space between radio + text */
+    margin-bottom: .35rem;      /* space between options */
+  }
+
+  .form-check-input {
+    margin: 0;                  /* remove Safari default offset */
+    flex-shrink: 0;
+  }
+
+  .form-check-label {
+    margin: 0;
+    line-height: 1.3;
+    cursor: pointer;
+  }
+</style>
+{% endblock %}
+
+
 {% block extra_js %}
 <script>
   (function () {
