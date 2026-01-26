@@ -168,13 +168,14 @@
         </div>
 
         <div class="col-12">
-          <h5 class="mt-2 mb-2">Tax Classification</h5>
-          <div class="text-muted small mb-2">Federal tax classification (W-9)</div>
+          <h5 class="mt-2 mb-2">Federal Tax Classification</h5>
+          <div class="text-muted small mb-2">How is your business taxes?</div>
           {{ form.tax_classification|as_crispy_field }}
 
           <div class="alert alert-info py-2 small mb-0">
             <strong>LLC help:</strong> If you choose <strong>LLC</strong>, select how the LLC is taxed:
             <strong>C</strong> (C-Corp), <strong>S</strong> (S-Corp), or <strong>P</strong> (Partnership).
+            <br>
             Single-member LLCs (“disregarded entity”) usually choose <strong>Individual / Sole proprietor</strong>.
           </div>
 
