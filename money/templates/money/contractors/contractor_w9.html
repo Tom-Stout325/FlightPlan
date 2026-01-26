@@ -264,3 +264,72 @@
     const dpr = window.devicePixelRatio || 1;
 
     // reset transform each time to avoid compounding scale
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    canvas.width = Math.floor(rect.width * dpr);
+    canvas.height = Math.floor(rect.height * dpr);
+    ctx.scale(dpr, dpr);
+
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#111";
+  }
+
+  function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches && e.touches[0];
+    const clientX = touch ? touch.clientX : e.clientX;
+    const clientY = touch ? touch.clientY : e.clientY;
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  }
+
+  function start(e) {
+    e.preventDefault();
+    drawing = true;
+    last = getPos(e);
+  }
+
+  function move(e) {
+    if (!drawing) return;
+    e.preventDefault();
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    last = pos;
+  }
+
+  function end(e) {
+    if (!drawing) return;
+    e.preventDefault();
+    drawing = false;
+    last = null;
+    hiddenInput.value = canvas.toDataURL("image/png");
+  }
+
+  function clearSig() {
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    hiddenInput.value = "";
+  }
+
+  resizeCanvas();
+  window.addEventListener("resize", () => {
+    resizeCanvas();
+    hiddenInput.value = "";
+  });
+
+  canvas.addEventListener("mousedown", start);
+  canvas.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", end);
+
+  canvas.addEventListener("touchstart", start, { passive: false });
+  canvas.addEventListener("touchmove", move, { passive: false });
+  window.addEventListener("touchend", end, { passive: false });
+
+  clearBtn.addEventListener("click", clearSig);
+})();
+</script>
+{% endblock %}
