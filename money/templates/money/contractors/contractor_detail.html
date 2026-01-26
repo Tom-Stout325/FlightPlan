@@ -6,115 +6,104 @@
 {% block content %}
 <div class="container-fluid px-2 px-md-3">
 
-  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
-    <div>
-      <h1 class="h4 mb-0">{{ contractor.display_name }}</h1>
-      <div class="text-muted small">
-        {% if contractor.business_name %}{{ contractor.first_name }} {{ contractor.last_name }} • {% endif %}
-        {{ contractor.get_entity_type_display }}
-        {% if contractor.contractor_number %} • {{ contractor.contractor_number }}{% endif %}
+  <!-- Top row: Contractor info + Actions -->
+  <div class="row g-2 mb-3">
+    <!-- Contractor info -->
+    <div class="col-12 col-lg-4 card shadow-sm h-100">
+      <h1 class="h3 mb-0 text-primary text-center mt-5">{{ contractor.display_name }}</h1>
+      <hr class="text-primary w-50 mx-auto">
+      <div class="text-muted small my-3">
+        <ul>
+          <li> Name: <span class="fw-bold">{{ contractor.first_name }} {{ contractor.last_name }}</span></li>
+          <li>Contractor #:  <span class="fw-bold">{{ contractor.contractor_number }}</span></li>
+          <li>Type:  <span class="fw-bold">{{ contractor.get_entity_type_display }}</span></li>
+          <li>Email: <span class="fw-bold">{{contractor.email }}</span></li>
+          <li>Phone: <span class="fw-bold">{{ contractor.phone }}</span></li>
+        </ul>
       </div>
-    </div>
-
-
-    <div class="d-flex flex-wrap gap-2 align-items-center">
-      <a class="btn btn-outline-secondary border"
-        href="{% url 'money:contractor_list' %}">
-        <i class="fa-solid fa-arrow-left me-1"></i>
-        Back
-      </a>
-
-      <form method="post"
-            action="{% url 'money:contractor_send_w9_email' contractor.pk %}"
-            class="d-inline m-0 p-0 bg-transparent border-0">
-        {% csrf_token %}
-        <button class="btn btn-success d-flex align-items-center gap-1"
-                {% if not contractor.email %}disabled{% endif %}>
-          <i class="fa-solid fa-paper-plane"></i>
-          <span>Send W-9</span>
-        </button>
-      </form>
-      <a class="btn btn-outline-primary"
-        href="{% url 'money:contractor_edit' contractor.pk %}">
-        <i class="fa-solid fa-pen-to-square"></i>
-        Edit
-      </a>
-
-
-
-
-      <div class="d-flex flex-wrap gap-2 mt-3">
-        <a class="btn btn-sm btn-outline-primary"
-          href="{% url 'money:contractor_1099_copy_b' contractor.id selected_year %}" target= "_blank">
-          <i class="fa-solid fa-file-pdf me-1"></i> 1099-NEC Copy B
+      <hr class="text-primary w-50 mx-auto">
+      <div class="mt-2 flex-wrap text-center">
+        <a class="text-success text-decoration-none" href="{% url 'money:contractor_list' %}">
+          <i class="fa-solid fa-arrow-left me-1"></i>Back
         </a>
-
-        <a class="btn btn-sm btn-outline-primary"
-          href="{% url 'money:contractor_1099_copy_1' contractor.id selected_year %}" target= "_blank">
-          <i class="fa-solid fa-file-pdf me-1"></i> 1099-NEC Copy 1
+        &nbsp;&nbsp;
+        <a class="text-decoration-none" href="{% url 'money:contractor_edit' contractor.pk %}">
+          <i class="fa-solid fa-pen-to-square me-1"></i>Edit
         </a>
       </div>
     </div>
 
+    <!-- Actions -->
+    <div class="col-12 col-lg-8">
+      <div class="card shadow-sm h-100">
+        <div class="card-body p-3">
+          <div class="fw-semibold mb-2">Actions</div>
 
+          <div class="row g-2">
+            <div class="col-12 col-md-6">
+              <form method="post"
+                    action="{% url 'money:contractor_send_w9_email' contractor.pk %}">
+                {% csrf_token %}
+                <button class="btn btn-primary w-100 d-flex align-items-center justify-content-center gap-2"
+                        {% if not contractor.email %}disabled{% endif %}>
+                  <i class="fa-solid fa-paper-plane"></i>
+                  Send W-9
+                </button>
+              </form>
+            </div>
 
-<div class="d-flex flex-wrap gap-2 mt-3">
+            <div class="col-12 col-md-6">
+              <form method="post"
+                    action="{% url 'money:contractor_1099_generate_store' contractor.id selected_year %}">
+                {% csrf_token %}
+                <button class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2">
+                  <i class="fa-solid fa-box-archive"></i>
+                  Store 1099 PDFs
+                </button>
+              </form>
+            </div>
 
-  <form method="post"
-        action="{% url 'money:contractor_1099_generate_store' contractor.id selected_year %}"
-        class="d-inline m-0 p-0">
-    {% csrf_token %}
-    <button class="btn btn-sm btn-outline-secondary">
-      <i class="fa-solid fa-box-archive me-1"></i> Store 1099 PDFs
-    </button>
-  </form>
+            <div class="col-12 col-md-6">
+              <a class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center gap-2"
+                 href="{% url 'money:contractor_1099_copy_b' contractor.id selected_year %}"
+                 target="_blank">
+                <i class="fa-solid fa-file-pdf"></i>
+                View Copy B
+              </a>
+            </div>
 
-  <a class="btn btn-sm btn-outline-primary"
-     href="{% url 'money:contractor_1099_copy_b_stored' contractor.id selected_year %}"
-     target="_blank" rel="noopener">
-    <i class="fa-solid fa-file-pdf me-1"></i> Copy B
-  </a>
+            <div class="col-12 col-md-6">
+              <a class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center gap-2"
+                 href="{% url 'money:contractor_1099_copy_1' contractor.id selected_year %}"
+                 target="_blank">
+                <i class="fa-solid fa-file-pdf"></i>
+                View Copy 1
+              </a>
+            </div>
 
-  <a class="btn btn-sm btn-outline-primary"
-     href="{% url 'money:contractor_1099_copy_1_stored' contractor.id selected_year %}"
-     target="_blank" rel="noopener">
-    <i class="fa-solid fa-file-pdf me-1"></i> Copy 1
-  </a>
+            <div class="col-12">
+              <form method="post"
+                    action="{% url 'money:contractor_1099_email_copy_b' contractor.id selected_year %}">
+                {% csrf_token %}
+                <button class="btn btn-success w-100 d-flex align-items-center justify-content-center gap-2"
+                        {% if not contractor.email %}disabled{% endif %}>
+                  <i class="fa-solid fa-paper-plane"></i>
+                  Email Copy B
+                </button>
+              </form>
+            </div>
+          </div>
 
-  <form method="post"
-        action="{% url 'money:contractor_1099_email_copy_b' contractor.id selected_year %}"
-        class="d-inline m-0 p-0">
-    {% csrf_token %}
-    <button class="btn btn-sm btn-success"
-            {% if not contractor.email %}disabled{% endif %}>
-      <i class="fa-solid fa-paper-plane me-1"></i> Email Copy B
-    </button>
-  </form>
-
-</div>
-
-
-
-
-
-
-</div>
-
-
-
-
-
-
-
-
-
-
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Main content row -->
   <div class="row g-2">
     <div class="col-12 col-lg-4">
       <div class="card shadow-sm">
         <div class="card-body">
           <div class="fw-semibold mb-2">W-9</div>
-
           <div class="d-flex justify-content-between align-items-center">
             <div class="text-muted small">Status</div>
               <span class="badge
@@ -129,9 +118,7 @@
                   {{ contractor.get_w9_status_display }}
                 {% endif %}
               </span>
-
           </div>
-
           <div class="mt-2 small text-muted">
             Sent: {{ contractor.w9_sent_date|default:"—" }}<br>
             Received: {{ contractor.w9_received_date|default:"—" }}
@@ -169,6 +156,22 @@
 
           <hr>
 
+          {% if stored_1099 %}
+            <div class="small text-muted mt-2">
+              <div class="fw-bold mb-2"> 1099-NEC Status</div>
+              Stored 1099 for {{ stored_1099.tax_year }} • Generated {{ stored_1099.generated_at|date:"M j, Y g:i A" }}
+              {% if stored_1099.emailed_at %}
+                • Emailed {{ stored_1099.emailed_at|date:"M j, Y g:i A" }} ({{ stored_1099.email_count }}x) to {{ stored_1099.emailed_to }}
+              {% endif %}
+            </div>
+          {% else %}
+            <div class="small text-muted mt-2">
+              No stored 1099 for {{ selected_year }}.
+            </div>
+          {% endif %}
+
+          <hr>
+          
           <div class="fw-semibold mb-2">Contact</div>
           <div class="small text-muted">
             {% if contractor.email %}{{ contractor.email }}<br>{% endif %}
@@ -259,3 +262,7 @@
 
 </div>
 {% endblock %}
+
+
+
+

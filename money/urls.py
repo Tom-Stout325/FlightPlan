@@ -121,12 +121,12 @@ from .views.contractors import (
 )
 
 from .views.contractor_1099 import (
-    contractor_1099_copy_b,
-    contractor_1099_copy_1,
+    contractor_1099_copy_1, 
     contractor_1099_generate_store,
     contractor_1099_copy_b_stored,
     contractor_1099_copy_1_stored,
     contractor_1099_email_copy_b,
+    contractor_1099_copy_b,
 )
 
 
@@ -290,7 +290,7 @@ urlpatterns = [
     path("company-profiles/<int:pk>/delete/", CompanyProfileDeleteView.as_view(), name="companyprofile_delete"),
     path("company-profiles/<int:pk>/activate/", companyprofile_activate, name="companyprofile_activate"),
     
- # ---------------------------------------------------------------------
+    # ---------------------------------------------------------------------
     # Contractors (W-9 / 1099)
     # ---------------------------------------------------------------------
     path("contractors/", ContractorListView.as_view(), name="contractor_list"),
@@ -309,13 +309,13 @@ urlpatterns = [
     path("contractors/w9/<str:token>/upload/", contractor_w9_upload, name="contractor_w9_upload"),
 
     # 1099-NEC outputs (separate PDFs)
-    path("contractors/<int:contractor_id>/1099/<int:tax_year>/copy-b/", contractor_1099_copy_b, name="contractor_1099_copy_b",),
-    path("contractors/<int:contractor_id>/1099/<int:tax_year>/copy-1/", contractor_1099_copy_1, name="contractor_1099_copy_1",),
     
     path("contractors/<int:contractor_id>/1099/<int:tax_year>/generate/", contractor_1099_generate_store, name="contractor_1099_generate_store"),
-
-    path("contractors/<int:contractor_id>/1099/<int:tax_year>/copy-b/", contractor_1099_copy_b_stored, name="contractor_1099_copy_b_stored"),
-    path("contractors/<int:contractor_id>/1099/<int:tax_year>/copy-1/", contractor_1099_copy_1_stored, name="contractor_1099_copy_1_stored"),
-
+    path("contractors/<int:contractor_id>/1099/<int:tax_year>/copy-b/", contractor_1099_copy_b_stored, name="contractor_1099_copy_b"),
+    path("contractors/<int:contractor_id>/1099/<int:tax_year>/copy-1/", contractor_1099_copy_1_stored, name="contractor_1099_copy_1"),
     path("contractors/<int:contractor_id>/1099/<int:tax_year>/email-copy-b/", contractor_1099_email_copy_b, name="contractor_1099_email_copy_b"),
+    path("contractors/<int:contractor_id>/1099/<int:tax_year>/preview/copy-1/", contractor_1099_copy_1, name="contractor_1099_copy_1_preview",),
+    path("contractors/<int:contractor_id>/1099/<int:tax_year>/preview/copy-b/", contractor_1099_copy_b, name="contractor_1099_copy_b_preview",),
+
+
 ]

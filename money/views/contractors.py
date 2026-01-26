@@ -16,7 +16,7 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from money.forms.contractors.contractors import ContractorForm, ContractorW9UploadForm  
-from money.models import Contractor, ContractorW9Submission, Transaction
+from money.models import Contractor, ContractorW9Submission, Transaction, Contractor1099
 
 from ..emails import W9EmailContext, send_w9_request_email
 
@@ -124,6 +124,17 @@ class ContractorDetailView(LoginRequiredMixin, UserScopedQuerysetMixin, DetailVi
             .dates("date", "year")
         )
         year_choices = sorted({d.year for d in years} | {timezone.localdate().year}, reverse=True)
+        
+        stored_1099 = (
+            Contractor1099.objects
+            .filter(user=self.request.user, contractor=contractor, tax_year=year)
+            .only("id", "tax_year", "copy_b_pdf", "copy_1_pdf", "generated_at", "emailed_at", "emailed_to", "email_count")
+            .first()
+        )
+
+        has_1099_copy_b = bool(stored_1099 and stored_1099.copy_b_pdf)
+        has_1099_copy_1 = bool(stored_1099 and stored_1099.copy_1_pdf)
+
 
         ctx.update(
             {
@@ -133,6 +144,11 @@ class ContractorDetailView(LoginRequiredMixin, UserScopedQuerysetMixin, DetailVi
                 "transaction_total": total,
                 "current_page": "contractors",
                 "has_w9_submission": has_w9_submission,
+
+                # 1099 storage/audit
+                "stored_1099": stored_1099,
+                "has_1099_copy_b": has_1099_copy_b,
+                "has_1099_copy_1": has_1099_copy_1,
             }
         )
         return ctx
