@@ -32,7 +32,7 @@
                   {% endif %}
                 </div>
                 <div class="small text-muted text-truncate">Slug: {{ p.slug }}</div>
-                <div class="small text-muted text-truncate">{{ p.city }}, {{ p.state_province }}</div>
+                <div class="small text-muted text-truncate">{{ p.city }}, {{ p.state }}</div>
               </div>
               {% if p.logo %}
                 <img src="{{ p.logo.url }}" alt="{{ p.logo_alt_text|default:p.name_for_display }}"
@@ -83,7 +83,7 @@
                   </a>
                 </td>
                 <td class="text-muted">{{ p.slug }}</td>
-                <td class="text-muted">{{ p.city }}, {{ p.state_province }}</td>
+                <td class="text-muted">{{ p.city }}, {{ p.state }}</td>
                 <td>
                   {% if p.is_active %}
                     <span class="badge text-bg-success">Active</span>

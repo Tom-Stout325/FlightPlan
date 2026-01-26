@@ -51,7 +51,7 @@
               </div>
 
               <span class="badge
-                {% if c.w9_status == 'verified' %} bg-success
+                {% if c.w9_status == c.W9_VERIFIED %} bg-success
                 {% elif c.w9_status == 'received' %} bg-primary
                 {% elif c.w9_status == 'requested' %} bg-warning text-dark
                 {% else %} bg-secondary

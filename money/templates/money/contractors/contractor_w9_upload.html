@@ -1,0 +1,36 @@
+{% extends "index.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}Upload W-9{% endblock %}
+
+{% block content %}
+<div class="container py-3">
+  <div class="mb-3">
+    <h1 class="h4 mb-1">Upload Your W-9</h1>
+    <div class="text-muted small">
+      Please upload a completed IRS Form W-9 (PDF or image). For your security, do not email SSN/EIN.
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <div class="mb-3">
+        <a class="btn btn-sm btn-outline-secondary" href="{{ irs_w9_pdf_url }}" target="_blank" rel="noopener">
+          Download IRS W-9 PDF
+        </a>
+      </div>
+
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        <div class="mb-3">
+          {{ form.w9_document.errors }}
+          {{ form.w9_document }}
+        </div>
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </form>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -17,31 +17,50 @@
     </div>
 
 
-<div class="d-flex flex-wrap gap-2 align-items-center">
-  <a class="btn btn-outline-secondary border"
-     href="{% url 'money:contractor_list' %}">
-    <i class="fa-solid fa-arrow-left me-1"></i>
-    Back
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <a class="btn btn-outline-secondary border"
+        href="{% url 'money:contractor_list' %}">
+        <i class="fa-solid fa-arrow-left me-1"></i>
+        Back
+      </a>
+
+      <form method="post"
+            action="{% url 'money:contractor_send_w9_email' contractor.pk %}"
+            class="d-inline m-0 p-0 bg-transparent border-0">
+        {% csrf_token %}
+        <button class="btn btn-success d-flex align-items-center gap-1"
+                {% if not contractor.email %}disabled{% endif %}>
+          <i class="fa-solid fa-paper-plane"></i>
+          <span>Send W-9</span>
+        </button>
+      </form>
+      <a class="btn btn-outline-primary"
+        href="{% url 'money:contractor_edit' contractor.pk %}">
+        <i class="fa-solid fa-pen-to-square"></i>
+        Edit
+      </a>
+
+
+
+
+      <div class="d-flex flex-wrap gap-2 mt-3">
+  <a class="btn btn-sm btn-outline-primary"
+     href="{% url 'money:contractor_1099_copy_b' contractor.id selected_year %}" target= "_blank">
+    <i class="fa-solid fa-file-pdf me-1"></i> 1099-NEC Copy B
   </a>
-  <form method="post"
-        action="{% url 'money:contractor_send_w9_email' contractor.pk %}"
-        class="d-inline m-0 p-0 bg-transparent border-0">
-    {% csrf_token %}
-    <button class="btn btn-success d-flex align-items-center gap-1"
-            {% if not contractor.email %}disabled{% endif %}>
-      <i class="fa-solid fa-paper-plane"></i>
-      <span>Send W-9</span>
-    </button>
-  </form>
-  <a class="btn btn-outline-primary"
-     href="{% url 'money:contractor_edit' contractor.pk %}">
-    <i class="fa-solid fa-pen-to-square"></i>
-    Edit
+
+  <a class="btn btn-sm btn-outline-primary"
+     href="{% url 'money:contractor_1099_copy_1' contractor.id selected_year %}" target= "_blank">
+    <i class="fa-solid fa-file-pdf me-1"></i> 1099-NEC Copy 1
   </a>
-</div> 
+</div>
 
 
 
+
+
+
+    </div>
   </div>
 
   <div class="row g-2">
@@ -52,14 +71,19 @@
 
           <div class="d-flex justify-content-between align-items-center">
             <div class="text-muted small">Status</div>
-            <span class="badge
-              {% if contractor.w9_status == 'verified' %} bg-success
-              {% elif contractor.w9_status == 'received' %} bg-primary
-              {% elif contractor.w9_status == 'requested' %} bg-warning text-dark
-              {% else %} bg-secondary
-              {% endif %}">
-              {{ contractor.get_w9_status_display }}
-            </span>
+              <span class="badge
+                {% if contractor.w9_status == contractor.W9_VERIFIED %} bg-success
+                {% elif contractor.w9_status == contractor.W9_RECEIVED or has_w9_submission or contractor.w9_received_date %} bg-primary
+                {% elif contractor.w9_status == contractor.W9_REQUESTED or contractor.w9_sent_date %} bg-warning text-dark
+                {% else %} bg-secondary
+                {% endif %}">
+                {% if contractor.w9_status == contractor.W9_RECEIVED or has_w9_submission or contractor.w9_received_date %}
+                  Received
+                {% else %}
+                  {{ contractor.get_w9_status_display }}
+                {% endif %}
+              </span>
+
           </div>
 
           <div class="mt-2 small text-muted">

@@ -113,6 +113,32 @@ class ContractorForm(forms.ModelForm):
 
 
 
+
+def clean_w9_document(self):
+    f = self.cleaned_data.get("w9_document")
+    if not f:
+        return f
+
+    name = (f.name or "").lower()
+    if not name.endswith(".pdf"):
+        raise ValidationError("Please upload a PDF file.")
+
+    if f.size and f.size > 10 * 1024 * 1024:
+        raise ValidationError("PDF must be under 10MB.")
+
+    # 🔐 PDF magic header check
+    try:
+        header = f.read(5)
+        f.seek(0)
+        if header != b"%PDF-":
+            raise ValidationError("Uploaded file is not a valid PDF.")
+    except Exception:
+        raise ValidationError("Could not validate PDF file.")
+
+    return f
+
+
+
 class ContractorW9UploadForm(forms.ModelForm):
     class Meta:
         model = Contractor

@@ -16,6 +16,7 @@ from django.db import models
 from django.db import transaction as db_tx
 from django.db import transaction
 from django.http import Http404, HttpRequest, HttpResponse
+import uuid
 
 try:
     from django.contrib.postgres.indexes import GinIndex
@@ -26,9 +27,9 @@ except ImportError:
 
 from project.common.models import OwnedModelMixin
 
+from money.constants.us_states import US_STATE_CHOICES
 
 from encrypted_fields.fields import EncryptedCharField, EncryptedTextField
-
 
 
 
@@ -487,6 +488,8 @@ class Event(OwnedModelMixin):
         super().save(*args, **kwargs)
 
 
+
+
 class Service(OwnedModelMixin):
     service = models.CharField(max_length=500, blank=True, null=True)
 
@@ -911,7 +914,8 @@ class CompanyProfile(models.Model):
     address_line1            = models.CharField(max_length=255)
     address_line2            = models.CharField(max_length=255, blank=True)
     city                     = models.CharField(max_length=100)
-    state_province           = models.CharField(max_length=100)
+    state                    = models.CharField(max_length=2, choices=US_STATE_CHOICES, blank=True)
+
     postal_code              = models.CharField(max_length=20)
     country                  = models.CharField(max_length=100, default="United States")
     main_phone               = models.CharField(max_length=50, blank=True)
@@ -927,6 +931,8 @@ class CompanyProfile(models.Model):
     pay_to_name              = models.CharField(max_length=255, blank=True)
     remittance_address       = models.TextField(blank=True)
 
+    state_1099_reporting_enabled = models.BooleanField(default=False, help_text="Enable state 1099 reporting boxes (Boxes 5–7) on 1099 PDFs.")
+   
     default_terms            = models.CharField(max_length=100, blank=True, help_text='e.g., "Net 30".')
     default_net_days         = models.PositiveIntegerField(default=30)
     default_late_fee_policy  = models.CharField(max_length=255, blank=True)
@@ -986,7 +992,7 @@ class CompanyProfile(models.Model):
         if self.address_line2:
             lines.append(self.address_line2)
 
-        city_line = ", ".join(filter(None, [self.city, self.state_province]))
+        city_line = ", ".join(filter(None, [self.city, self.state]))
         if self.postal_code:
             city_line = f"{city_line} {self.postal_code}" if city_line else self.postal_code
         if city_line:
@@ -999,7 +1005,7 @@ class CompanyProfile(models.Model):
     def clean(self):
         missing = []
         if self.is_active:
-            for f in ("legal_name", "address_line1", "city", "state_province", "postal_code", "country"):
+            for f in ("legal_name", "address_line1", "city", "state", "postal_code", "country"):
                 if not getattr(self, f, None):
                     missing.append(f)
             if not self.logo:
@@ -1520,9 +1526,33 @@ class InvoiceItemV2(OwnedModelMixin):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # ------------------------------------------------------------------
 # CONTRACTORS
 # ------------------------------------------------------------------
+
+def contractor_w9_upload_path(instance, filename):
+    contractor_key = instance.pk or "unsaved"
+    return f"money/tax-documents/w9/{contractor_key}/{uuid.uuid4()}.pdf"
+
 
 
 class Contractor(OwnedModelMixin):
@@ -1530,29 +1560,29 @@ class Contractor(OwnedModelMixin):
     # ------------------------------------------------------------------
     # Human-friendly ID (optional)
     # ------------------------------------------------------------------
-    contractor_number = models.CharField(max_length=20, blank=True, help_text="Optional human-friendly ID, e.g. C-00023",)
+    contractor_number    = models.CharField(max_length=20, blank=True, help_text="Optional human-friendly ID, e.g. C-00023",)
 
     # ------------------------------------------------------------------
     # Identity
     # ------------------------------------------------------------------
-    first_name = models.CharField(max_length=80)
-    last_name = models.CharField(max_length=80)
-    business_name = models.CharField(max_length=200, blank=True)
+    first_name           = models.CharField(max_length=80)
+    last_name            = models.CharField(max_length=80)
+    business_name        = models.CharField(max_length=200, blank=True)
 
     # ------------------------------------------------------------------
     # Contact
     # ------------------------------------------------------------------
-    email = models.EmailField(blank=True)
-    phone = models.CharField(max_length=30, blank=True)
+    email                = models.EmailField(blank=True)
+    phone                = models.CharField(max_length=30, blank=True)
 
     # ------------------------------------------------------------------
     # Mailing address (for 1099 delivery fallback)
     # ------------------------------------------------------------------
-    address1 = models.CharField(max_length=200, blank=True)
-    address2 = models.CharField(max_length=200, blank=True)
-    city = models.CharField(max_length=120, blank=True)
-    state = models.CharField(max_length=2,blank=True, validators=[RegexValidator(r"^[A-Z]{2}$", "Use 2-letter state code (e.g., IN).")], help_text="2-letter state code",)
-    zip_code = models.CharField( max_length=10, blank=True,validators=[RegexValidator(r"^\d{5}(-\d{4})?$", "Use ZIP format 12345 or 12345-6789.")],)
+    address1             = models.CharField(max_length=200, blank=True)
+    address2             = models.CharField(max_length=200, blank=True)
+    city                 = models.CharField(max_length=100)
+    state                = models.CharField(max_length=2, choices=US_STATE_CHOICES, blank=True)
+    zip_code             = models.CharField( max_length=10, blank=True,validators=[RegexValidator(r"^\d{5}(-\d{4})?$", "Use ZIP format 12345 or 12345-6789.")],)
 
     # ------------------------------------------------------------------
     # Tax classification
@@ -1575,7 +1605,7 @@ class Contractor(OwnedModelMixin):
         (OTHER, "Other"),
     ]
 
-    entity_type = models.CharField(max_length=30, choices=ENTITY_TYPE_CHOICES)
+    entity_type           = models.CharField(max_length=30, choices=ENTITY_TYPE_CHOICES)
 
     SSN = "ssn"
     EIN = "ein"
@@ -1584,10 +1614,10 @@ class Contractor(OwnedModelMixin):
         (EIN, "EIN"),
     ]
 
-    tin_type = models.CharField(max_length=3, choices=TIN_TYPE_CHOICES, blank=True)
-    tin_last4 = models.CharField(max_length=4, blank=True, validators=[RegexValidator(r"^\d{4}$", "Enter last 4 digits.")], help_text="Last 4 digits only. Do not store full TIN.",)
+    tin_type              = models.CharField(max_length=3, choices=TIN_TYPE_CHOICES, blank=True)
+    tin_last4             = models.CharField(max_length=4, blank=True, validators=[RegexValidator(r"^\d{4}$", "Enter last 4 digits.")], help_text="Last 4 digits only. Do not store full TIN.",)
 
-    is_1099_eligible = models.BooleanField( default=True, help_text="Whether this contractor should receive a 1099 (default True; you can override).",)
+    is_1099_eligible      = models.BooleanField( default=True, help_text="Whether this contractor should receive a 1099 (default True; you can override).",)
 
     # ------------------------------------------------------------------
     # W-9 tracking (metadata + document)
@@ -1604,23 +1634,23 @@ class Contractor(OwnedModelMixin):
         (W9_VERIFIED, "Verified"),
     ]
 
-    w9_status = models.CharField(max_length=20, choices=W9_STATUS_CHOICES, default=W9_NOT_REQUESTED,)
-    w9_sent_date = models.DateField(null=True, blank=True)
-    w9_received_date = models.DateField(null=True, blank=True)
-    w9_document = models.FileField(upload_to="money/tax-documents/w9/%Y/", blank=True, help_text="Store W-9 PDF (S3). Do not store full TIN in DB.",)
-
-    notes = models.TextField(blank=True)
+    w9_status             = models.CharField(max_length=20, choices=W9_STATUS_CHOICES, default=W9_NOT_REQUESTED,)
+    w9_sent_date          = models.DateField(null=True, blank=True)
+    w9_received_date      = models.DateField(null=True, blank=True)
+    w9_document           = models.FileField( upload_to=contractor_w9_upload_path,   blank=True, null=True, help_text="Store W-9 PDF (S3). Do not store full TIN in DB.",)
+    
+    notes                 = models.TextField(blank=True)
 
     # ------------------------------------------------------------------
     # 1099 e-delivery consent
     # ------------------------------------------------------------------
-    edelivery_consent = models.BooleanField(default=False)
+    edelivery_consent      = models.BooleanField(default=False)
     edelivery_consent_date = models.DateTimeField(null=True, blank=True)
 
     # ------------------------------------------------------------------
     # Housekeeping
     # ------------------------------------------------------------------
-    is_active = models.BooleanField(default=True)
+    is_active              = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["last_name", "first_name", "id"]
@@ -1640,7 +1670,8 @@ class Contractor(OwnedModelMixin):
     def __str__(self) -> str:
         return self.display_name
 
-    @property
+
+    @property    
     def display_name(self) -> str:
         
         if self.business_name:
@@ -1658,65 +1689,83 @@ class Contractor(OwnedModelMixin):
             raise ValidationError({"tin_type": "Select SSN or EIN when entering last-4 digits."})
         
         
-    def _save_w9_submission(contractor: Contractor, data: dict, request: HttpRequest) -> ContractorW9Submission:
+
+    def _save_w9_submission(
+        contractor: Contractor,
+        data: dict,
+        request: HttpRequest,
+    ) -> ContractorW9Submission:
         """
         Saves encrypted W-9 submission data and updates Contractor metadata:
-        - w9_status -> received
-        - w9_received_date -> today
-        - tin_type + tin_last4 -> derived from encrypted tin
-        - business_name/address fallback (optional)
+
+        - w9_status -> received (unless already verified)
+        - w9_received_date -> today (preserve if already set)
+        - tin_type + tin_last4 -> derived from encrypted tin (store only last4 on Contractor)
+        - business_name/address fallback (optional; only if provided)
         """
         ip = request.META.get("REMOTE_ADDR") or None
         ua = (request.META.get("HTTP_USER_AGENT") or "")[:2000]
 
-        tin_digits = (data.get("tin") or "").strip()
+        # Normalize TIN to digits-only (handles dashes/spaces)
+        tin_raw = (data.get("tin") or "").strip()
+        tin_digits = "".join(ch for ch in tin_raw if ch.isdigit())
         tin_last4 = tin_digits[-4:] if len(tin_digits) >= 4 else ""
 
-        submission = ContractorW9Submission.objects.create(
-            user=contractor.user,
-            contractor=contractor,
+        with transaction.atomic():
+            submission = ContractorW9Submission.objects.create(
+                user=contractor.user,
+                contractor=contractor,
 
-            full_name=data["full_name"],
-            business_name=data.get("business_name", "") or "",
+                full_name=data["full_name"],
+                business_name=(data.get("business_name") or "").strip(),
 
-            tax_classification=data["tax_classification"],
-            llc_tax_class=data.get("llc_tax_class", "") or "",
-            other_tax_class=data.get("other_tax_class", "") or "",
+                tax_classification=data["tax_classification"],
+                llc_tax_class=(data.get("llc_tax_class") or "").strip(),
+                other_tax_class=(data.get("other_tax_class") or "").strip(),
 
-            address_line1=data["address_line1"],
-            address_line2=data["address_line2"],
+                address_line1=(data["address_line1"] or "").strip(),
+                address_line2=(data["address_line2"] or "").strip(),
 
-            tin_type=data["tin_type"],
-            tin=tin_digits,  # encrypted in the model
+                tin_type=data["tin_type"],
+                tin=tin_digits,  # encrypted in the model field
 
-            signature_name=data["signature_name"],
-            signature_data=data.get("signature_data", "") or "",
-            attested=True,
+                signature_name=(data["signature_name"] or "").strip(),
+                signature_data=(data.get("signature_data") or "").strip(),
+                attested=True,
 
-            submitted_ip=ip,
-            submitted_ua=ua,
-        )
+                submitted_ip=ip,
+                submitted_ua=ua,
+            )
 
-        # Update Contractor metadata (non-sensitive)
-        contractor.tin_type = data["tin_type"]
-        contractor.tin_last4 = tin_last4
+            # Update Contractor metadata (non-sensitive)
+            contractor.tin_type = data["tin_type"]
+            contractor.tin_last4 = tin_last4
 
-        contractor.w9_status = Contractor.W9_RECEIVED
-        contractor.w9_received_date = timezone.localdate()
+            # Status: never downgrade VERIFIED back to RECEIVED
+            if contractor.w9_status != Contractor.W9_VERIFIED:
+                contractor.w9_status = Contractor.W9_RECEIVED
 
-        # Optional: helpful autofill if you want to keep Contractor info in sync
-        # (comment out if you do NOT want the contractor record changed)
-        if data.get("business_name"):
-            contractor.business_name = data["business_name"]
+            # Preserve an existing received date if already set
+            contractor.w9_received_date = contractor.w9_received_date or timezone.localdate()
 
-        contractor.address1 = data["address_line1"]
-        # address_line2 is "City, state, ZIP" in the form; keep it simple
-        # or parse it later if you want structured city/state/zip.
-        # contractor.city/state/zip_code = ...
-        contractor.save()
+            update_fields = ["tin_type", "tin_last4", "w9_received_date"]
+            if contractor.w9_status != Contractor.W9_VERIFIED:
+                update_fields.append("w9_status")
+
+            # Optional: keep Contractor info in sync (only set if provided)
+            business_name = (data.get("business_name") or "").strip()
+            if business_name:
+                contractor.business_name = business_name
+                update_fields.append("business_name")
+
+            address1 = (data.get("address_line1") or "").strip()
+            if address1 and address1 != (contractor.address1 or ""):
+                contractor.address1 = address1
+                update_fields.append("address1")
+
+            contractor.save(update_fields=update_fields)
 
         return submission
-        
 
 
 

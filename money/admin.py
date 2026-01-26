@@ -237,13 +237,15 @@ class CompanyProfileAdmin(UserScopedAdminMixin, admin.ModelAdmin):
         "is_active",
         "vehicle_expense_method",
         "updated_at",
+        "state_1099_reporting_enabled",
     )
-    list_filter = ("is_active", "state_province", "city")
+    list_filter = ("is_active", "state", "city", "state_1099_reporting_enabled",)
     search_fields = (
         "legal_name",
         "display_name",
         "slug",
         "vehicle_expense_method",
+        "state_1099_reporting_enabled",
     )
     ordering = ("-is_active", "slug")
     actions = ("make_active",)
@@ -266,7 +268,7 @@ class CompanyProfileAdmin(UserScopedAdminMixin, admin.ModelAdmin):
         ("Address & Contact", {
             "fields": (
                 ("address_line1", "address_line2"),
-                ("city", "state_province", "postal_code"),
+                ("city", "state", "postal_code"),
                 ("country",),
                 ("main_phone", "support_email", "invoice_reply_to_email"),
                 ("billing_contact_name", "billing_contact_email"),
@@ -274,6 +276,7 @@ class CompanyProfileAdmin(UserScopedAdminMixin, admin.ModelAdmin):
         }),
         ("Tax & Remittance", {
             "fields": (
+                ("state_1099_reporting_enabled",),
                 ("tax_id_ein",),
                 ("pay_to_name",),
                 ("remittance_address",),
@@ -867,7 +870,7 @@ def send_w9_request_email_action(self, request, queryset):
         link = request.build_absolute_uri(path)
 
         contractor_name = f"{contractor.first_name} {contractor.last_name}".strip()
-
+        
         try:
             ctx = W9EmailContext(
                 contractor_name=contractor_name or "there",
@@ -878,13 +881,20 @@ def send_w9_request_email_action(self, request, queryset):
             )
             send_w9_request_email(to_email=contractor.email, ctx=ctx)
 
-            # Update tracking fields
-            contractor.w9_status = contractor.W9_REQUESTED
+            # Update tracking fields (never downgrade RECEIVED/VERIFIED back to REQUESTED)
+            update_fields = ["w9_sent_date"]
             contractor.w9_sent_date = today
-            contractor.save(update_fields=["w9_status", "w9_sent_date"])
+
+            if contractor.w9_status in (contractor.W9_NOT_REQUESTED, contractor.W9_REQUESTED):
+                contractor.w9_status = contractor.W9_REQUESTED
+                update_fields.append("w9_status")
+
+            contractor.save(update_fields=update_fields)
             sent += 1
+
         except Exception:
             failed += 1
+
 
     if sent:
         self.message_user(request, f"Sent {sent} W-9 request email(s).")

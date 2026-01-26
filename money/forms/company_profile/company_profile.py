@@ -34,7 +34,7 @@ class CompanyProfileForm(forms.ModelForm):
             "address_line1",
             "address_line2",
             "city",
-            "state_province",
+            "state",
             "postal_code",
             "country",
             "main_phone",
@@ -43,6 +43,7 @@ class CompanyProfileForm(forms.ModelForm):
             "billing_contact_name",
             "billing_contact_email",
             "tax_id_ein",
+            "state_1099_reporting_enabled",
             "vehicle_expense_method",
             "pay_to_name",
             "remittance_address",
@@ -107,7 +108,7 @@ class CompanyProfileForm(forms.ModelForm):
             ),
             Div(
                 Div(Field("city"), css_class="col-12 col-md-4"),
-                Div(Field("state_province"), css_class="col-12 col-md-4"),
+                Div(Field("state"), css_class="col-12 col-md-4"),
                 Div(Field("postal_code"), css_class="col-12 col-md-4"),
                 css_class="row g-3 mt-0",
             ),
@@ -127,10 +128,17 @@ class CompanyProfileForm(forms.ModelForm):
                 css_class="row g-3 mt-0",
             ),
             Div(
-                Div(Field("tax_id_ein"), css_class="col-12 col-md-6"),
-                Div(Field("vehicle_expense_method"), css_class="col-12 col-md-6"),
+                Div(Field("tax_id_ein"), css_class="col-12 col-md-4"),
+                Div(
+                    Field("state_1099_reporting_enabled", wrapper_class="form-check form-switch mt-2"),
+                    css_class="col-12 col-md-4",
+                ),
+                Div(Field("vehicle_expense_method"), css_class="col-12 col-md-4"),
                 css_class="row g-3 mt-0",
             ),
+
+
+
             Div(css_class="my-2"),
 
             Div(

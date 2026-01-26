@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'bootstrap5',
     'dal',
     'dal_select2',
+
     
     'accounts',
     'clients',

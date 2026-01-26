@@ -1,0 +1,55 @@
+{% extends "index.html" %}
+{% load static %}
+
+{% block title %}W-9 Received{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+  <div class="mx-auto" style="max-width: 720px;">
+    <div class="card shadow-sm border-0">
+      <div class="card-body p-4">
+
+        <div class="d-flex align-items-start gap-3">
+          <div class="rounded-circle bg-success bg-opacity-10 d-flex align-items-center justify-content-center"
+               style="width: 44px; height: 44px;">
+            <i class="fa-solid fa-circle-check text-success fs-4"></i>
+          </div>
+
+          <div class="flex-grow-1">
+            <h1 class="h4 mb-1">Thanks — we received your W-9</h1>
+            <p class="text-muted mb-0">
+              Your document has been securely uploaded.
+            </p>
+          </div>
+        </div>
+
+        <hr class="my-4">
+
+        {% if contractor %}
+          <div class="small text-muted mb-3">
+            Contractor: <strong class="text-dark">{{ contractor }}</strong>
+          </div>
+        {% endif %}
+
+        <div class="alert alert-light border mb-4">
+          <div class="d-flex gap-2">
+            <i class="fa-solid fa-shield-halved mt-1"></i>
+            <div>
+              <div class="fw-semibold">Security notice</div>
+              <div class="small text-muted">
+                For your protection, tax documents are stored privately and are only accessible to authorized users.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-center text-muted small mt-3 mb-0">
+      You may now close this window.
+    </p>
+  </div>
+
+</div>
+{% endblock %}

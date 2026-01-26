@@ -115,15 +115,14 @@ from .views.company_profiles import (
 )
 
 from .views.contractors import (
-    ContractorListView,
-    ContractorCreateView,
-    ContractorDetailView,
-    ContractorUpdateView,
-    ContractorDeleteView,
-    contractor_w9,
-    contractor_w9_admin,
-    contractor_w9_thanks,
-    contractor_send_w9_email,
+    ContractorListView, ContractorCreateView, ContractorDetailView,
+    ContractorUpdateView, ContractorDeleteView,
+    contractor_w9_fill, contractor_w9_thanks, contractor_w9_admin, contractor_send_w9_email, contractor_w9_upload,
+)
+
+from .views.contractor_1099 import (
+    contractor_1099_copy_b,
+    contractor_1099_copy_1,
 )
 
 
@@ -288,7 +287,7 @@ urlpatterns = [
     path("company-profiles/<int:pk>/delete/", CompanyProfileDeleteView.as_view(), name="companyprofile_delete"),
     path("company-profiles/<int:pk>/activate/", companyprofile_activate, name="companyprofile_activate"),
     
-    # ---------------------------------------------------------------------
+ # ---------------------------------------------------------------------
     # Contractors (W-9 / 1099)
     # ---------------------------------------------------------------------
     path("contractors/", ContractorListView.as_view(), name="contractor_list"),
@@ -296,12 +295,17 @@ urlpatterns = [
     path("contractors/<int:pk>/", ContractorDetailView.as_view(), name="contractor_detail"),
     path("contractors/<int:pk>/edit/", ContractorUpdateView.as_view(), name="contractor_edit"),
     path("contractors/<int:pk>/delete/", ContractorDeleteView.as_view(), name="contractor_delete"),
-    
-    path("contractors/w9/<str:token>/", contractor_w9, name="contractor_w9"),
-    path("contractors/<int:pk>/w9/", contractor_w9_admin, name="contractor_w9_admin"),
+
+    # Secure contractor W-9 link (tokenized)
+    path("contractors/w9/<str:token>/", contractor_w9_fill, name="contractor_w9_fill"),
     path("contractors/w9/<str:token>/thanks/", contractor_w9_thanks, name="contractor_w9_thanks"),
 
-    path("contractors/<int:pk>/send-w9/", contractor_send_w9_email, name="contractor_send_w9_email",
-),
+    # Admin-side W-9 actions
+    path("contractors/<int:pk>/w9/", contractor_w9_admin, name="contractor_w9_admin"),
+    path("contractors/<int:pk>/send-w9/", contractor_send_w9_email, name="contractor_send_w9_email"),
+    path("contractors/w9/<str:token>/upload/", contractor_w9_upload, name="contractor_w9_upload"),
 
+    # 1099-NEC outputs (separate PDFs)
+    path("contractors/<int:contractor_id>/1099/<int:tax_year>/copy-b/", contractor_1099_copy_b, name="contractor_1099_copy_b",),
+    path("contractors/<int:contractor_id>/1099/<int:tax_year>/copy-1/", contractor_1099_copy_1, name="contractor_1099_copy_1",),
 ]
