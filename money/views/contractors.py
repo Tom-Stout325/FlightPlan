@@ -125,13 +125,6 @@ class ContractorDetailView(LoginRequiredMixin, UserScopedQuerysetMixin, DetailVi
         )
         year_choices = sorted({d.year for d in years} | {timezone.localdate().year}, reverse=True)
 
-        try:
-            send_w9_request_email(...)
-            messages.success(request, "W-9 email sent.")
-        except Exception:
-            logger.exception("W-9 email send failed (contractor_id=%s)", contractor.pk)
-            messages.error(request, "Email failed to send. Please try again or check email settings/logs.")
-
         ctx.update(
             {
                 "selected_year": year,
@@ -368,6 +361,9 @@ def contractor_w9_admin(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
+logger = logging.getLogger(__name__)
+
+
 @login_required
 @require_POST
 def contractor_send_w9_email(request: HttpRequest, pk: int) -> HttpResponse:
@@ -389,34 +385,48 @@ def contractor_send_w9_email(request: HttpRequest, pk: int) -> HttpResponse:
     business_phone = getattr(settings, "BRAND_PHONE", "")
     support_email = getattr(settings, "BRAND_EMAIL", getattr(settings, "DEFAULT_FROM_EMAIL", ""))
 
+    contractor_name = f"{(contractor.first_name or '').strip()} {(contractor.last_name or '').strip()}".strip() or "there"
+
+    ctx = W9EmailContext(
+        contractor_name=contractor_name,
+        w9_fill_link=fill_link,
+        w9_upload_link=upload_link,
+        support_email=support_email,
+        business_name=business_name,
+        business_phone=business_phone,
+    )
+
     try:
-        ctx = W9EmailContext(
-            contractor_name=f"{(contractor.first_name or '').strip()} {(contractor.last_name or '').strip()}".strip() or "there",
-            w9_fill_link=fill_link,
-            w9_upload_link=upload_link,
-            support_email=support_email,
-            business_name=business_name,
-            business_phone=business_phone,
-        )
+        # Send exactly once
         send_w9_request_email(to_email=contractor.email, ctx=ctx)
 
-        contractor.w9_status = Contractor.W9_REQUESTED
-        contractor.w9_sent_date = timezone.localdate()
-        contractor.save(update_fields=["w9_status", "w9_sent_date"])
+        # Tracking: never downgrade RECEIVED/VERIFIED back to REQUESTED
+        today = timezone.localdate()
+        update_fields = ["w9_sent_date"]
+        contractor.w9_sent_date = today
+
+        if contractor.w9_status in (Contractor.W9_NOT_REQUESTED, Contractor.W9_REQUESTED):
+            contractor.w9_status = Contractor.W9_REQUESTED
+            update_fields.append("w9_status")
+
+        contractor.save(update_fields=update_fields)
 
         messages.success(request, f"W-9 request email sent to {contractor.email}.")
+        return redirect("money:contractor_detail", pk=contractor.pk)
+
     except Exception:
+        logger.exception(
+            "W-9 email send failed (contractor_id=%s to=%s host=%s user=%s)",
+            contractor.pk,
+            contractor.email,
+            getattr(settings, "EMAIL_HOST", ""),
+            getattr(settings, "EMAIL_HOST_USER", ""),
+        )
         messages.error(request, "Email failed to send. Please try again or check email settings/logs.")
 
-        try:
-            send_w9_request_email(to_email=contractor.email, ctx=ctx)
-        except Exception:
-            logger.exception("Office365 send failed (contractor_id=%s to=%s)", contractor.pk, contractor.email)
-        raise  # temporarily re-raise so you see it in Heroku logs
-
-
-    return redirect("money:contractor_detail", pk=contractor.pk)
-
+        # Temporary: re-raise in production ONLY while debugging so you see the traceback.
+        # Remove after you capture the real SMTP error.
+        raise
 
 
 
