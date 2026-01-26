@@ -7,10 +7,25 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Sum
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
+from django.core.files.base import ContentFile
+from django.core.mail import EmailMessage
+from django.urls import reverse
+from django.contrib import messages
+from django.shortcuts import redirect
+from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from money.constants.state_1099 import STATES_REQUIRE_BOX7_STATE_INCOME
-from money.models import CompanyProfile, Contractor, ContractorW9Submission, Transaction
 from money.utils.pdf_1099nec import COPY_B_AND_1_LAYOUT, render_1099nec_copy_b_and_1
+
+from money.models import (
+            CompanyProfile, 
+            Contractor, 
+            ContractorW9Submission, 
+            Transaction,
+            Contractor1099,
+)
+
 
 
 # --------------------------------------------------------------------------------------
@@ -145,7 +160,49 @@ def _no_store(resp: HttpResponse) -> HttpResponse:
     return resp
 
 
+
+def _get_or_create_1099_record(*, request: HttpRequest, contractor: Contractor, tax_year: int) -> Contractor1099:
+    obj, _ = Contractor1099.objects.get_or_create(
+        user=request.user,
+        contractor=contractor,
+        tax_year=tax_year,
+        defaults={"generated_at": timezone.now()},
+    )
+    return obj
+
+
+def _store_1099_pdfs(*, obj: Contractor1099, values: dict) -> Contractor1099:
+    pdfs = render_1099nec_copy_b_and_1(
+        values=values,
+        layout=COPY_B_AND_1_LAYOUT(),
+        output_mode="separate",
+    )
+
+    b_name = "1099_nec_copy_b.pdf"
+    one_name = "1099_nec_copy_1.pdf"
+
+    b_data = pdfs.get(b_name)
+    one_data = pdfs.get(one_name)
+    if not b_data or not one_data:
+        raise Http404("Could not generate 1099 PDFs.")
+
+    # Overwrite behavior: if a file already exists, delete it before saving new content
+    # so S3 keys remain stable.
+    if obj.copy_b_pdf:
+        obj.copy_b_pdf.delete(save=False)
+    if obj.copy_1_pdf:
+        obj.copy_1_pdf.delete(save=False)
+
+    obj.copy_b_pdf.save(b_name, ContentFile(b_data), save=False)
+    obj.copy_1_pdf.save(one_name, ContentFile(one_data), save=False)
+
+    obj.generated_at = timezone.now()
+    obj.save()
+    return obj
+
+
 _ALLOWED_1099_FILES = {"1099_nec_copy_b.pdf", "1099_nec_copy_1.pdf"}
+
 
 
 def _render_and_extract(*, values: dict, filename: str) -> bytes:
@@ -164,6 +221,8 @@ def _render_and_extract(*, values: dict, filename: str) -> bytes:
     if not data:
         raise Http404(f"Could not generate {filename}.")
     return data
+
+
 
 
 def _build_values_or_404(*, request: HttpRequest, contractor: Contractor, company: CompanyProfile, tax_year: int) -> dict:
@@ -201,9 +260,46 @@ def _build_values_or_404(*, request: HttpRequest, contractor: Contractor, compan
     }
 
 
+def _serve_stored_pdf(*, request: HttpRequest, contractor: Contractor, tax_year: int, which: str) -> HttpResponse:
+    obj = Contractor1099.objects.filter(user=request.user, contractor=contractor, tax_year=tax_year).first()
+
+    if not obj or (which == "b" and not obj.copy_b_pdf) or (which == "1" and not obj.copy_1_pdf):
+        # generate + store automatically
+        company = _active_company_profile_or_404()
+        values = _build_values_or_404(request=request, contractor=contractor, company=company, tax_year=tax_year)
+
+        obj = obj or _get_or_create_1099_record(request=request, contractor=contractor, tax_year=tax_year)
+        _store_1099_pdfs(obj=obj, values=values)
+
+    f = obj.copy_b_pdf if which == "b" else obj.copy_1_pdf
+    if not f:
+        raise Http404("1099 PDF not available.")
+
+    # Stream via filefield
+    resp = HttpResponse(f.open("rb").read(), content_type="application/pdf")
+    filename = "1099_nec_copy_b.pdf" if which == "b" else "1099_nec_copy_1.pdf"
+    resp["Content-Disposition"] = f'inline; filename="{filename}"'
+    return _no_store(resp)
+
+
 # --------------------------------------------------------------------------------------
 # Views
 # --------------------------------------------------------------------------------------
+
+
+@login_required
+def contractor_1099_copy_b_stored(request: HttpRequest, contractor_id: int, tax_year: int) -> HttpResponse:
+    tax_year = _selected_year_or_404(tax_year)
+    contractor = get_object_or_404(Contractor, pk=contractor_id, user=request.user, is_active=True)
+    return _serve_stored_pdf(request=request, contractor=contractor, tax_year=tax_year, which="b")
+
+
+@login_required
+def contractor_1099_copy_1_stored(request: HttpRequest, contractor_id: int, tax_year: int) -> HttpResponse:
+    tax_year = _selected_year_or_404(tax_year)
+    contractor = get_object_or_404(Contractor, pk=contractor_id, user=request.user, is_active=True)
+    return _serve_stored_pdf(request=request, contractor=contractor, tax_year=tax_year, which="1")
+
 
 @login_required
 def contractor_1099_copy_b(request: HttpRequest, contractor_id: int, tax_year: int) -> HttpResponse:
@@ -227,6 +323,8 @@ def contractor_1099_copy_b(request: HttpRequest, contractor_id: int, tax_year: i
     return _no_store(resp)
 
 
+
+
 @login_required
 def contractor_1099_copy_1(request: HttpRequest, contractor_id: int, tax_year: int) -> HttpResponse:
     tax_year = _selected_year_or_404(tax_year)
@@ -247,3 +345,79 @@ def contractor_1099_copy_1(request: HttpRequest, contractor_id: int, tax_year: i
     resp = HttpResponse(data, content_type="application/pdf")
     resp["Content-Disposition"] = f'inline; filename="{filename}"'
     return _no_store(resp)
+
+
+
+
+@login_required
+@require_POST
+def contractor_1099_generate_store(request: HttpRequest, contractor_id: int, tax_year: int) -> HttpResponse:
+    tax_year = _selected_year_or_404(tax_year)
+    contractor = get_object_or_404(Contractor, pk=contractor_id, user=request.user, is_active=True)
+    company = _active_company_profile_or_404()
+
+    values = _build_values_or_404(request=request, contractor=contractor, company=company, tax_year=tax_year)
+
+    obj = _get_or_create_1099_record(request=request, contractor=contractor, tax_year=tax_year)
+    _store_1099_pdfs(obj=obj, values=values)
+
+    messages.success(request, f"Stored 1099-NEC PDFs for {tax_year}.")
+    return redirect("money:contractor_detail", pk=contractor.pk)
+
+
+
+
+
+
+
+
+
+
+
+
+
+@login_required
+@require_POST
+def contractor_1099_email_copy_b(request: HttpRequest, contractor_id: int, tax_year: int) -> HttpResponse:
+    tax_year = _selected_year_or_404(tax_year)
+    contractor = get_object_or_404(Contractor, pk=contractor_id, user=request.user, is_active=True)
+
+    if not contractor.email:
+        messages.error(request, "Contractor has no email address on file.")
+        return redirect("money:contractor_detail", pk=contractor.pk)
+
+    obj = Contractor1099.objects.filter(user=request.user, contractor=contractor, tax_year=tax_year).first()
+    if not obj or not obj.copy_b_pdf:
+        # Ensure it exists
+        company = _active_company_profile_or_404()
+        values = _build_values_or_404(request=request, contractor=contractor, company=company, tax_year=tax_year)
+        obj = obj or _get_or_create_1099_record(request=request, contractor=contractor, tax_year=tax_year)
+        _store_1099_pdfs(obj=obj, values=values)
+
+    company = _active_company_profile_or_404()
+    payer_name = _payer_display_name(company)
+
+    subject = f"{tax_year} Form 1099-NEC (Copy B)"
+    body = (
+        f"Hello {contractor.display_name},\n\n"
+        f"Attached is your {tax_year} Form 1099-NEC (Copy B) from {payer_name}.\n\n"
+        "Thank you."
+    )
+
+    email = EmailMessage(
+        subject=subject,
+        body=body,
+        to=[contractor.email],
+    )
+    # attach file bytes
+    pdf_bytes = obj.copy_b_pdf.open("rb").read()
+    email.attach("1099-NEC_CopyB.pdf", pdf_bytes, "application/pdf")
+    email.send(fail_silently=False)
+
+    obj.emailed_at = timezone.now()
+    obj.emailed_to = contractor.email
+    obj.email_count = (obj.email_count or 0) + 1
+    obj.save(update_fields=["emailed_at", "emailed_to", "email_count"])
+
+    messages.success(request, f"Emailed Copy B to {contractor.email}.")
+    return redirect("money:contractor_detail", pk=contractor.pk)

@@ -123,8 +123,11 @@ from .views.contractors import (
 from .views.contractor_1099 import (
     contractor_1099_copy_b,
     contractor_1099_copy_1,
+    contractor_1099_generate_store,
+    contractor_1099_copy_b_stored,
+    contractor_1099_copy_1_stored,
+    contractor_1099_email_copy_b,
 )
-
 
 
 app_name = "money"
@@ -308,4 +311,11 @@ urlpatterns = [
     # 1099-NEC outputs (separate PDFs)
     path("contractors/<int:contractor_id>/1099/<int:tax_year>/copy-b/", contractor_1099_copy_b, name="contractor_1099_copy_b",),
     path("contractors/<int:contractor_id>/1099/<int:tax_year>/copy-1/", contractor_1099_copy_1, name="contractor_1099_copy_1",),
+    
+    path("contractors/<int:contractor_id>/1099/<int:tax_year>/generate/", contractor_1099_generate_store, name="contractor_1099_generate_store"),
+
+    path("contractors/<int:contractor_id>/1099/<int:tax_year>/copy-b/", contractor_1099_copy_b_stored, name="contractor_1099_copy_b_stored"),
+    path("contractors/<int:contractor_id>/1099/<int:tax_year>/copy-1/", contractor_1099_copy_1_stored, name="contractor_1099_copy_1_stored"),
+
+    path("contractors/<int:contractor_id>/1099/<int:tax_year>/email-copy-b/", contractor_1099_email_copy_b, name="contractor_1099_email_copy_b"),
 ]

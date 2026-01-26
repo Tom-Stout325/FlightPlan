@@ -44,15 +44,53 @@
 
 
       <div class="d-flex flex-wrap gap-2 mt-3">
+        <a class="btn btn-sm btn-outline-primary"
+          href="{% url 'money:contractor_1099_copy_b' contractor.id selected_year %}" target= "_blank">
+          <i class="fa-solid fa-file-pdf me-1"></i> 1099-NEC Copy B
+        </a>
+
+        <a class="btn btn-sm btn-outline-primary"
+          href="{% url 'money:contractor_1099_copy_1' contractor.id selected_year %}" target= "_blank">
+          <i class="fa-solid fa-file-pdf me-1"></i> 1099-NEC Copy 1
+        </a>
+      </div>
+    </div>
+
+
+
+<div class="d-flex flex-wrap gap-2 mt-3">
+
+  <form method="post"
+        action="{% url 'money:contractor_1099_generate_store' contractor.id selected_year %}"
+        class="d-inline m-0 p-0">
+    {% csrf_token %}
+    <button class="btn btn-sm btn-outline-secondary">
+      <i class="fa-solid fa-box-archive me-1"></i> Store 1099 PDFs
+    </button>
+  </form>
+
   <a class="btn btn-sm btn-outline-primary"
-     href="{% url 'money:contractor_1099_copy_b' contractor.id selected_year %}" target= "_blank">
-    <i class="fa-solid fa-file-pdf me-1"></i> 1099-NEC Copy B
+     href="{% url 'money:contractor_1099_copy_b_stored' contractor.id selected_year %}"
+     target="_blank" rel="noopener">
+    <i class="fa-solid fa-file-pdf me-1"></i> Copy B
   </a>
 
   <a class="btn btn-sm btn-outline-primary"
-     href="{% url 'money:contractor_1099_copy_1' contractor.id selected_year %}" target= "_blank">
-    <i class="fa-solid fa-file-pdf me-1"></i> 1099-NEC Copy 1
+     href="{% url 'money:contractor_1099_copy_1_stored' contractor.id selected_year %}"
+     target="_blank" rel="noopener">
+    <i class="fa-solid fa-file-pdf me-1"></i> Copy 1
   </a>
+
+  <form method="post"
+        action="{% url 'money:contractor_1099_email_copy_b' contractor.id selected_year %}"
+        class="d-inline m-0 p-0">
+    {% csrf_token %}
+    <button class="btn btn-sm btn-success"
+            {% if not contractor.email %}disabled{% endif %}>
+      <i class="fa-solid fa-paper-plane me-1"></i> Email Copy B
+    </button>
+  </form>
+
 </div>
 
 
@@ -60,8 +98,16 @@
 
 
 
-    </div>
-  </div>
+</div>
+
+
+
+
+
+
+
+
+
 
   <div class="row g-2">
     <div class="col-12 col-lg-4">

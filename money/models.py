@@ -1817,3 +1817,43 @@ class ContractorW9Submission(OwnedModelMixin):
 
     def __str__(self) -> str:
         return f"W-9 for {self.contractor} @ {self.submitted_at:%Y-%m-%d}"
+    
+    
+    
+    
+    
+    
+    
+def contractor_1099_upload_path(instance: "Contractor1099", filename: str) -> str:
+    return f"tax/1099/{instance.user_id}/{instance.tax_year}/contractor_{instance.contractor_id}/{filename}"
+
+
+
+
+class Contractor1099(OwnedModelMixin):
+    contractor           = models.ForeignKey("money.Contractor", on_delete=models.CASCADE, related_name="forms_1099",)
+    tax_year             = models.PositiveIntegerField(validators=[MinValueValidator(2000), MaxValueValidator(2100)], db_index=True,)
+    copy_b_pdf           = models.FileField(upload_to=contractor_1099_upload_path, blank=True, null=True,)
+    copy_1_pdf           = models.FileField(upload_to=contractor_1099_upload_path, blank=True, null=True,)
+    generated_at         = models.DateTimeField(default=timezone.now)
+
+    # Email/audit for Copy B only
+    emailed_at           = models.DateTimeField(blank=True, null=True)
+    emailed_to           = models.EmailField(blank=True)
+    email_count          = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-tax_year", "-generated_at", "-id"]
+        indexes = [
+            models.Index(fields=["user", "tax_year"]),
+            models.Index(fields=["user", "contractor", "tax_year"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "contractor", "tax_year"],
+                name="uniq_1099_per_user_contractor_year",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"1099 {self.tax_year} — {self.contractor}"
