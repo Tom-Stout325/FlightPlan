@@ -101,9 +101,12 @@ Links:
 
 Production postgresql shell:
 heroku run -a flightplan-airborne -- python manage.py dbshell
+heroku run -a flightplan-skyguy -- python manage.py dbshell
 
 Heroku shell:
 heroku run -a flightplan-airborne -- python manage.py shell
+heroku run -a flightplan-skyguy -- python manage.py shell
+
 
 Heroku logs:
 heroku logs --tail -a flightplan-airborne

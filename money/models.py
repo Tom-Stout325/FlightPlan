@@ -287,9 +287,9 @@ class JobNumberCounter(models.Model):
     Global counter per (year, segment_digit). Tracks the last used 3-digit sequence.
     Manual overrides do NOT advance this counter (behavior #2).
     """
-    year = models.PositiveIntegerField(db_index=True)
+    year          = models.PositiveIntegerField(db_index=True)
     segment_digit = models.PositiveSmallIntegerField(db_index=True)
-    last_seq = models.PositiveSmallIntegerField(default=0)
+    last_seq      = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         constraints = [
@@ -319,15 +319,14 @@ class Event(OwnedModelMixin):
     ]
 
     title                  = models.CharField(max_length=200)
-    # Base job number only (e.g., 261000). Invoices may later use suffixes; jobs do not.
     job_number             = models.CharField(max_length=20, blank=True, null=True, db_index=True)
     event_type             = models.CharField(max_length=50, choices=CATEGORY_TYPE_CHOICES, default="commercial",)
     event_year             = models.PositiveIntegerField(default=timezone.localdate().year, validators=[MinValueValidator(2000), MaxValueValidator(2100)], db_index=True, help_text="Year this job belongs to (used for reporting and invoice grouping).",)
     location_address       = models.CharField(max_length=500, blank=True, null=True)
     location_city          = models.CharField(max_length=200, blank=True, null=True)
     notes                  = models.TextField(blank=True, null=True)
-    client = models.ForeignKey("money.Client", on_delete=models.SET_NULL, null=True, blank=True, related_name="jobs", help_text="Optional. Attach a client to this job for reporting and defaults.",)
-    slug = models.SlugField(max_length=100, blank=True, null=True)
+    client                 = models.ForeignKey("money.Client", on_delete=models.SET_NULL, null=True, blank=True, related_name="jobs", help_text="Optional. Attach a client to this job for reporting and defaults.",)
+    slug                   = models.SlugField(max_length=100, blank=True, null=True)
 
     class Meta:
         ordering = ["event_year", "job_number", "title"]
@@ -338,7 +337,6 @@ class Event(OwnedModelMixin):
                 condition=Q(slug__isnull=False),
                 name="uniq_money_event_user_slug_not_null",
             ),
-            # Global per-year job numbers (not per user)
             models.UniqueConstraint(
                 fields=["event_year", "job_number"],
                 condition=Q(job_number__isnull=False),
