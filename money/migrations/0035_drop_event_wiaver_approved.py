@@ -8,8 +8,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql="ALTER TABLE money_event DROP COLUMN IF EXISTS waiver_approved;",
-            reverse_sql="ALTER TABLE money_event ADD COLUMN waiver_approved boolean;",
-        ),
+    migrations.RunSQL(
+        sql="ALTER TABLE money_event DROP COLUMN IF EXISTS waiver_approved;",
+        reverse_sql="ALTER TABLE money_event ADD COLUMN IF NOT EXISTS waiver_approved boolean;",
+    )
     ]
