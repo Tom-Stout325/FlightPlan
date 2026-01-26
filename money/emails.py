@@ -14,7 +14,6 @@ IRS_W9_PDF_URL = "https://www.irs.gov/pub/irs-pdf/fw9.pdf"
 class W9EmailContext:
     contractor_name: str
 
-    # ✅ separate links
     w9_fill_link: str
     w9_upload_link: str
 
