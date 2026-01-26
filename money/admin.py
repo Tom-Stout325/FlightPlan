@@ -15,7 +15,8 @@ from django.utils import timezone
 from money.emails import W9EmailContext, send_w9_request_email
 from money.utils import make_contractor_w9_token
 
-
+import logging
+logger = logging.getLogger(__name__)
 
 from .models import (
     Category,
@@ -892,7 +893,12 @@ def send_w9_request_email_action(self, request, queryset):
             contractor.save(update_fields=update_fields)
             sent += 1
 
-        except Exception:
+
+
+
+
+        except Exception as e:
+            logger.exception("W-9 email send failed for contractor_id=%s email=%s", contractor.pk, contractor.email)
             failed += 1
 
 

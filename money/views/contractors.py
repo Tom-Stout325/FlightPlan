@@ -21,6 +21,11 @@ from money.models import Contractor, ContractorW9Submission, Transaction
 from ..emails import W9EmailContext, send_w9_request_email
 
 
+
+import logging
+logger = logging.getLogger(__name__)
+
+
 IRS_W9_PDF_URL = "https://www.irs.gov/pub/irs-pdf/fw9.pdf"
 
 
@@ -119,6 +124,13 @@ class ContractorDetailView(LoginRequiredMixin, UserScopedQuerysetMixin, DetailVi
             .dates("date", "year")
         )
         year_choices = sorted({d.year for d in years} | {timezone.localdate().year}, reverse=True)
+
+        try:
+            send_w9_request_email(...)
+            messages.success(request, "W-9 email sent.")
+        except Exception:
+            logger.exception("W-9 email send failed (contractor_id=%s)", contractor.pk)
+            messages.error(request, "Email failed to send. Please try again or check email settings/logs.")
 
         ctx.update(
             {
@@ -396,7 +408,20 @@ def contractor_send_w9_email(request: HttpRequest, pk: int) -> HttpResponse:
     except Exception:
         messages.error(request, "Email failed to send. Please try again or check email settings/logs.")
 
+        try:
+            send_w9_request_email(to_email=contractor.email, ctx=ctx)
+        except Exception:
+            logger.exception("Office365 send failed (contractor_id=%s to=%s)", contractor.pk, contractor.email)
+        raise  # temporarily re-raise so you see it in Heroku logs
+
+
     return redirect("money:contractor_detail", pk=contractor.pk)
+
+
+
+
+
+
 
 
 @require_http_methods(["GET", "POST"])
