@@ -102,23 +102,31 @@ class UserScopedAdminMixin:
 
 
 class UserScopedFKMixin(UserScopedAdminMixin):
-    """
-    Additionally scopes common FK dropdowns by request.user for non-superusers.
-    Override `fk_user_map` to add/adjust field->queryset mapping.
-    """
-
     fk_user_map: dict[str, tuple[object, dict]] = {}
 
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if request.user.is_superuser:
-            return super().formfield_for_foreignkey(db_field, request, **kwargs)
+    def _selected_owner_id(self, request) -> str | None:
+        # On POST, the "user" field comes through in POST.
+        # On the initial add form, you can pass ?user=<id> or it will be empty.
+        return request.POST.get("user") or request.GET.get("user")
 
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name in self.fk_user_map:
             model_cls, extra_filters = self.fk_user_map[db_field.name]
-            base = {"user": request.user}
-            base.update(extra_filters or {})
-            kwargs["queryset"] = model_cls.objects.filter(**base)
+
+            if request.user.is_superuser:
+                owner_id = self._selected_owner_id(request)
+                if owner_id:
+                    base = {"user_id": owner_id}
+                    base.update(extra_filters or {})
+                    kwargs["queryset"] = model_cls.objects.filter(**base)
+            else:
+                base = {"user": request.user}
+                base.update(extra_filters or {})
+                kwargs["queryset"] = model_cls.objects.filter(**base)
+
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
 
 
 # ------------------------------------------------------------------------------
@@ -356,6 +364,7 @@ class InvoiceItemV2Inline(admin.TabularInline):
     line_total_display.short_description = "Line total"
 
 
+
 @admin.register(InvoiceV2)
 class InvoiceV2Admin(UserScopedFKMixin, admin.ModelAdmin):
     fk_user_map = {
@@ -454,6 +463,27 @@ class InvoiceV2Admin(UserScopedFKMixin, admin.ModelAdmin):
         }),
     )
 
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = list(super().get_fieldsets(request, obj))
+
+        if request.user.is_superuser:
+            name, opts = fieldsets[0]  # "Identity"
+            fields = list(opts.get("fields", ()))
+            if "user" not in fields:
+                opts = dict(opts)
+                opts["fields"] = ("user",) + tuple(fields)
+                fieldsets[0] = (name, opts)
+
+        return tuple(fieldsets)
+
+    def save_model(self, request, obj, form, change):
+        # Non-superusers always own what they create
+        if not request.user.is_superuser and not obj.user_id:
+            obj.user = request.user
+        super().save_model(request, obj, form, change)
+
+        
     def net_income_display(self, obj):
         return obj.net_income
 
