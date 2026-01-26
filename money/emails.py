@@ -55,17 +55,23 @@ def send_w9_request_email(*, to_email: str, ctx: W9EmailContext) -> None:
     to_email = to_email.strip("[]").replace("'", "").replace('"', "").strip()
 
     bcc: list[str] = []
-    brand_bcc = (getattr(settings, "BRAND_BCC", "") or "").strip()
-    brand_bcc = brand_bcc.strip("[]").replace("'", "").replace('"', "").strip()
-    if brand_bcc:
-        bcc.append(brand_bcc)
 
-    msg = EmailMultiAlternatives(
-        subject=subject,
-        body=body,
-        from_email=from_email,
-        to=[to_email],
-        bcc=bcc or None,
-    )
-    msg.send(fail_silently=False)
+    bcc: list[str] = []
+
+    brand_bcc = getattr(settings, "BRAND_BCC", None)
+    if brand_bcc:
+        if isinstance(brand_bcc, (list, tuple)):
+            bcc.extend([e for e in brand_bcc if e])
+        else:
+            bcc.append(str(brand_bcc).strip())
+
+
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=body,
+            from_email=from_email,
+            to=[to_email],
+            bcc=bcc or None,
+        )
+        msg.send(fail_silently=False)
 
