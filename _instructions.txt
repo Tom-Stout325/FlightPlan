@@ -105,6 +105,8 @@ heroku run -a flightplan-airborne -- python manage.py dbshell
 Heroku shell:
 heroku run -a flightplan-airborne -- python manage.py shell
 
+Heroku logs:
+heroku logs --tail -a flightplan-airborne
 
 
 Get into local psql:
@@ -120,8 +122,6 @@ heroku run -a flightplan-airborne -- python manage.py migrate
 Run Migrations on Heroku:
 heroku run -a flightplan-skyguy -- python manage.py migrate
 
-Heroku logs:
-heroku logs --tail -a flightplan-airborne
 
 
 View Databases in production:
