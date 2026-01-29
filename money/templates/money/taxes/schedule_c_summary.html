@@ -17,8 +17,7 @@
     <form method="get" class="d-flex gap-2 align-items-center">
       <label for="id_year" class="small text-muted mb-0">Year</label>
       <select id="id_year" name="year" class="form-select form-select-sm" style="max-width: 140px;" onchange="this.form.submit()">
-        {% for line_key, breakdown in lines.items %}
-
+        {% for y in year_choices %}
           <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
         {% endfor %}
       </select>
@@ -26,6 +25,19 @@
         <button class="btn btn-sm btn-primary" type="submit">Go</button>
       </noscript>
     </form>
+
+    <div class="d-flex gap-2">
+  <a class="btn btn-sm btn-outline-secondary"
+     href="{% url 'money:schedule_c_pdf_preview' %}{% if selected_year %}?year={{ selected_year }}{% endif %}">
+    Preview PDF
+  </a>
+
+  <a class="btn btn-sm btn-primary"
+     href="{% url 'money:schedule_c_pdf_download' %}{% if selected_year %}?year={{ selected_year }}{% endif %}">
+    Download PDF
+  </a>
+</div>
+
   </div>
 
   <div class="card shadow-sm border-0 mb-3">
@@ -46,7 +58,7 @@
         <table class="table table-hover mb-0 align-middle">
           <thead class="table-light">
             <tr>
-              <th style="width: 120px;">Line</th>
+              <th style="width: 200px;">Line</th>
               <th>Details</th>
               <th class="text-end" style="width: 180px;">Deductible total</th>
             </tr>
@@ -55,11 +67,18 @@
             {% for line in lines %}
               <tr>
                 <td class="fw-semibold">
-                  {{ line.line }}
-                  <span class="text-muted fw-normal ms-2">| {{ line.category_label }}</span>
+                  <div class="d-flex align-items-baseline gap-2">
+                    <span class="badge bg-light text-dark border">
+                      {{ line.line }}
+                    </span>
+                  </div>
+
+                  {% if line.category_label %}
+                    <div class="text-muted fw-normal mt-1" style="line-height: 1.2;">
+                      {{ line.category_label }}
+                    </div>
+                  {% endif %}
                 </td>
-
-
                 <td>
                   <details>
                     <summary class="small text-muted">Show breakdown</summary>

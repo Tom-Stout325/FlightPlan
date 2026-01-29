@@ -1,0 +1,186 @@
+{% load humanize %}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+ <style>
+  @font-face {
+  font-family: "Montserrat";
+  src: url("/static/fonts/Montserrat-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  src: url("/static/fonts/Montserrat-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  src: url("/static/fonts/Montserrat-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+}
+
+  @page { size: Letter; margin: 0.5in; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: "Montserrat", sans-serif;
+    font-size: 11px;
+    color: #111;
+  }
+
+
+  * { box-sizing: border-box; }
+
+  .header { text-align: center; margin-bottom: 14px; }
+  .header img {
+    max-height: 60px;
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto 6px auto;
+  }
+
+  .title { font-size: 18px; font-weight: 700; margin: 0;}
+  .sub { font-size: 11px; color: #555; margin-top: 4px; }
+  .meta { font-size: 10px; color: #666; margin-top: 6px; }
+
+  table {
+    width: 100%;
+    max-width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    table-layout: fixed;
+  }
+
+  th, td { padding: 6px 6px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  th { text-align: left; font-size: 10px; color: #555; border-bottom: 2px solid #222; }
+
+  .line { width: 54px; font-weight: 700; white-space: nowrap; width: text-align: center; }
+  .cat  { width: 230px; font-weight: 600; }
+  .subamt { width: 110px; }
+  .linetotal { width: 120px; font-weight: 700; }
+
+  th.line {
+    white-space: normal;     
+    word-break: break-word;
+    line-height: 1.1;
+    font-weight: 900;
+    font-size: 9px;            
+}
+
+  .cat, .subcat {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .num { text-align: right; white-space: nowrap; }
+  .linerow td { border-bottom: none; padding-bottom: 2px; }
+  .linerow .cat { color: #111; }
+  .subrow td { padding-top: 4px; padding-bottom: 4px; border-bottom: 1px solid #eee; }
+  .subrow .subcat { padding-left: 14px; color: #222; }
+  .subrow .cat { color: #666; font-weight: 400; }
+  .divider td { padding: 0; border-bottom: 1px solid #ddd; height: 8px; }
+  .muted { color: #666; }
+
+  .badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    font-size: 9px;
+    margin-left: 6px;
+    color: #333;
+  }
+
+  .grand {
+    margin-top: 14px;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: right;
+  }
+</style>
+
+<body>
+  <div class="header">
+      <div class="header">
+    {% if company_profile and company_profile.logo %}
+      <div style="margin-bottom: 8px;">
+        <img
+          src="{{ company_profile.logo.url }}"
+          alt="{{ company_name }}"
+          style="max-height: 150px;"
+        />
+      </div>
+    {% endif %}
+
+    <div class="title">Operating Expenses</div>
+    <div class="sub">
+
+      {% if selected_year %}Tax Year {{ selected_year }}{% else %} — All Time{% endif %}
+    </div>
+   
+  </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="line">Schedule C Line</th>
+        <th class="cat">Category</th>
+        <th class="subcat">Sub-category</th>
+        <th class="num subamt"></th>
+        <th class="num linetotal">Line total</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for line in lines %}
+        {# line header row with total on the far right #}
+        <tr class="linerow">
+          <td class="line">{{ line.line }}</td>
+          <td class="cat">{{ line.category_label }}</td>
+          <td class="subcat muted"></td>
+          <td class="num subamt muted"></td>
+          <td class="num linetotal">${{ line.total|floatformat:2|intcomma }}</td>
+        </tr>
+
+        {# sub-category rows show only sub-cat deductible; line total column stays blank #}
+        {% for r in line.breakdown %}
+          <tr class="subrow">
+            <td class="line"></td>
+            <td class="cat"></td>
+            <td class="subcat">
+              {{ r.sub_cat|default:"(none)" }}
+              {% if r.sub_cat_slug == "meals" or r.sub_cat_slug|slice:"-6:" == "-meals" %}
+                <span class="badge">Meals 50%</span>
+              {% endif %}
+            </td>
+            <td class="num subamt">${{ r.deductible_total|floatformat:2|intcomma }}</td>
+            <td class="num linetotal muted"></td>
+          </tr>
+        {% endfor %}
+
+        <tr class="divider"><td colspan="5"></td></tr>
+      {% empty %}
+        <tr>
+          <td colspan="5" class="muted">No mapped tax sub-categories found.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="grand">
+    Total Operating Expenses: ${{ grand_total|floatformat:2|intcomma }}
+  </div>
+</body>
+</html>

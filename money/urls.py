@@ -77,7 +77,6 @@ from .views.tax_tools import (
 )
 
 from .views.tax_reports import (
-    schedule_c_summary,
     tax_profit_loss,
     tax_category_summary,
     form_4797_view,
@@ -86,6 +85,9 @@ from .views.tax_reports import (
     tax_profit_loss_yoy_pdf,
     tax_profit_loss_yoy,
     tax_profit_loss_yoy_pdf,
+    schedule_c_summary,
+    schedule_c_pdf_preview,
+    schedule_c_pdf_download,
     
 )
 
@@ -229,13 +231,17 @@ urlpatterns = [
     # ---------------------------------------------------------------------
     path("tax/profit-loss/", tax_profit_loss, name="tax_profit_loss"),
     path("tax/category-summary/", tax_category_summary, name="tax_category_summary"),
-    path("taxes/schedule-c/", schedule_c_summary, name="schedule_c_summary"),
     path("tax/reports/profit-loss/", tax_profit_loss, name="tax_profit_loss",),
     path("tax/reports/profit-loss/pdf/<int:year>/", tax_profit_loss_pdf, name="tax_profit_loss_pdf",),
     path("tax/reports/profit-loss/yoy/", tax_profit_loss_yoy, name="tax_profit_loss_yoy",),
     path("tax/reports/profit-loss/yoy/pdf/", tax_profit_loss_yoy_pdf, name="tax_profit_loss_yoy_pdf",),
     path("form-4797/", form_4797_view, name="form_4797"),
     path("form-4797/pdf/", form_4797_pdf, name="form_4797_pdf"),
+    
+    
+    path("taxes/schedule-c/", schedule_c_summary, name="schedule_c_summary"),
+    path("taxes/schedule-c/preview/", schedule_c_pdf_preview, name="schedule_c_pdf_preview"),
+    path("taxes/schedule-c/download/", schedule_c_pdf_download, name="schedule_c_pdf_download"),
 
     # ---------------------------------------------------------------------
     # Category & SubCategory CRUD

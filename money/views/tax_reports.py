@@ -49,11 +49,12 @@ ZERO = Decimal("0.00")
 
 def _selected_year_from_request(request: HttpRequest) -> int | None:
     year_raw = (request.GET.get("year") or "").strip().lower()
-    if year_raw in ("", "all", "any"):
+    if year_raw in ("all", "any"):
         return None
     if year_raw.isdigit():
         return int(year_raw)
-    return None
+    return timezone.localdate().year
+
 
 
 def _year_choices_for_user(user) -> list[int]:
@@ -446,13 +447,47 @@ def tax_category_summary(request: HttpRequest) -> HttpResponse:
     return render(request, "money/taxes/tax_category_summary.html", ctx)
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # -----------------------------------------------------------------------------
 # Schedule C
 # -----------------------------------------------------------------------------
 
 
-
-
+def _category_label_for_line(breakdown: list[dict]) -> str:
+    """
+    Your rule: one Schedule C line -> one Category.
+    So return the single category name for this line (or "" if none).
+    """
+    cats = {
+        (r.get("category") or "").strip()
+        for r in breakdown
+        if (r.get("category") or "").strip()
+    }
+    if len(cats) == 1:
+        return next(iter(cats))
+    if len(cats) > 1:
+        # Data mismatch with your intended mapping; keep it obvious.
+        return "Multiple"
+    return ""
 
 
 @login_required
@@ -464,6 +499,7 @@ def schedule_c_summary(request: HttpRequest) -> HttpResponse:
     qs = _exclude_personal_vehicle_fuel(qs)
 
     deductible_expr = _tax_deductible_amount_expr()
+    raw_expr = _base_amount_expr()
     schedule_c_line_expr = Coalesce(
         F("sub_cat__schedule_c_line"),
         F("category__schedule_c_line"),
@@ -478,8 +514,109 @@ def schedule_c_summary(request: HttpRequest) -> HttpResponse:
         )
         .annotate(
             schedule_c_line=schedule_c_line_expr,
-            raw_total=Coalesce(Sum("amount"), Value(ZERO)),
-            deductible_total=Coalesce(Sum(deductible_expr), Value(ZERO)),
+            raw_total=Coalesce(Sum(raw_expr, output_field=TWO_DP), Value(ZERO), output_field=TWO_DP),
+            deductible_total=Coalesce(Sum(deductible_expr, output_field=TWO_DP), Value(ZERO), output_field=TWO_DP),
+        )
+        .order_by("schedule_c_line", "category__category", "sub_cat__sub_cat")
+    )
+
+    by_line: dict[str, list[dict]] = defaultdict(list)
+    line_totals: dict[str, Decimal] = defaultdict(lambda: ZERO)
+    grand_total: Decimal = ZERO
+
+    for r in rows:
+        line_key = (r.get("schedule_c_line") or "").strip() or "Unmapped"
+
+        raw_total = (r.get("raw_total") or ZERO).quantize(Decimal("0.01"))
+        deductible_total = (r.get("deductible_total") or ZERO).quantize(Decimal("0.01"))
+
+        by_line[line_key].append(
+            {
+                "category": (r.get("category__category") or "Uncategorized").strip() or "Uncategorized",
+                "sub_cat": (r.get("sub_cat__sub_cat") or "").strip(),
+                "sub_cat_slug": (r.get("sub_cat__slug") or "").strip(),
+                "raw_total": raw_total,
+                "deductible_total": deductible_total,
+            }
+        )
+
+        line_totals[line_key] = (line_totals[line_key] + deductible_total).quantize(Decimal("0.01"))
+        grand_total = (grand_total + deductible_total).quantize(Decimal("0.01"))
+
+    def _sort_line_key(k: str):
+        if k == "Unmapped":
+            return (2, 10**9, k)
+
+        num = ""
+        suf = ""
+        for ch in k:
+            if ch.isdigit():
+                num += ch
+            else:
+                suf += ch
+        try:
+            return (0, int(num or 0), suf, k)
+        except ValueError:
+            return (1, 10**8, k, k)
+
+    lines = []
+    for line_key in sorted(by_line.keys(), key=_sort_line_key):
+        breakdown = by_line[line_key]
+        lines.append(
+            {
+                "line": line_key,
+                "category_label": _category_label_for_line(breakdown),
+                "breakdown": breakdown,
+                "total": line_totals[line_key],
+            }
+        )
+
+    ctx = {
+        "current_page": "schedule_c",
+        "selected_year": year,
+        "year_choices": _year_choices_for_user(request.user),
+        "lines": lines,
+        "line_totals": dict(line_totals),
+        "grand_total": grand_total,
+        "meals_rate": MEALS_RATE,
+        "now": timezone.now(),
+    }
+    ctx.update(_company_context())
+    return render(request, "money/taxes/schedule_c_summary.html", ctx)
+
+
+
+
+
+
+def _schedule_c_ctx(request: HttpRequest) -> dict:
+    """
+    Reuse your existing schedule_c_summary context builder.
+    If schedule_c_summary currently builds ctx inline, extract that ctx-building
+    into a helper and call it from both HTML and PDF.
+    """
+    year = _selected_year_from_request(request)
+    # call your existing schedule_c_summary logic, but return ctx only:
+    # easiest: copy the ctx-building portion into this helper
+    # and keep schedule_c_summary as: return render(..., ctx)
+    qs = _tx_qs_for_user(request.user, year)
+    qs = qs.filter(trans_type=Transaction.EXPENSE, sub_cat__include_in_tax_reports=True)
+    qs = _exclude_personal_vehicle_fuel(qs)
+
+    deductible_expr = _tax_deductible_amount_expr()
+    raw_expr = _base_amount_expr()
+    schedule_c_line_expr = Coalesce(
+        F("sub_cat__schedule_c_line"),
+        F("category__schedule_c_line"),
+        Value(""),
+    )
+
+    rows = (
+        qs.values("category__category", "sub_cat__sub_cat", "sub_cat__slug")
+        .annotate(
+            schedule_c_line=schedule_c_line_expr,
+            raw_total=Coalesce(Sum(raw_expr, output_field=TWO_DP), Value(ZERO), output_field=TWO_DP),
+            deductible_total=Coalesce(Sum(deductible_expr, output_field=TWO_DP), Value(ZERO), output_field=TWO_DP),
         )
         .order_by("schedule_c_line", "category__category", "sub_cat__sub_cat")
     )
@@ -489,41 +626,46 @@ def schedule_c_summary(request: HttpRequest) -> HttpResponse:
     grand_total = ZERO
 
     for r in rows:
-        line = (r.get("schedule_c_line") or "").strip() or "Unmapped"
-
+        line_key = (r.get("schedule_c_line") or "").strip() or "Unmapped"
         raw_total = (r.get("raw_total") or ZERO).quantize(Decimal("0.01"))
         deductible_total = (r.get("deductible_total") or ZERO).quantize(Decimal("0.01"))
 
-        by_line[line].append(
+        by_line[line_key].append(
             {
-                "category": r.get("category__category") or "Uncategorized",
-                "sub_cat": r.get("sub_cat__sub_cat") or "",
-                "sub_cat_slug": r.get("sub_cat__slug") or "",
+                "category": (r.get("category__category") or "Uncategorized").strip() or "Uncategorized",
+                "sub_cat": (r.get("sub_cat__sub_cat") or "").strip(),
+                "sub_cat_slug": (r.get("sub_cat__slug") or "").strip(),
                 "raw_total": raw_total,
                 "deductible_total": deductible_total,
             }
         )
 
-        line_totals[line] = (line_totals[line] + deductible_total).quantize(Decimal("0.01"))
+        line_totals[line_key] = (line_totals[line_key] + deductible_total).quantize(Decimal("0.01"))
         grand_total = (grand_total + deductible_total).quantize(Decimal("0.01"))
 
-    # Convert dict -> list shaped like the template expects
-    def _sort_key(line_key: str):
-        # Put numeric lines first, then Unmapped last
-        if line_key == "Unmapped":
-            return (1, 10**9, line_key)
+    def _sort_line_key(k: str):
+        if k == "Unmapped":
+            return (2, 10**9, k)
+        num = ""
+        suf = ""
+        for ch in k:
+            if ch.isdigit():
+                num += ch
+            else:
+                suf += ch
         try:
-            return (0, int(line_key), line_key)
+            return (0, int(num or 0), suf, k)
         except ValueError:
-            return (0, 10**8, line_key)
+            return (1, 10**8, k, k)
 
     lines = []
-    for line_key in sorted(by_line.keys(), key=_sort_key):
+    for line_key in sorted(by_line.keys(), key=_sort_line_key):
+        breakdown = by_line[line_key]
         lines.append(
             {
                 "line": line_key,
-                "category_label": "",  # optional: set a human label if you have one
-                "breakdown": by_line[line_key],
+                "category_label": _category_label_for_line(breakdown),
+                "breakdown": breakdown,
                 "total": line_totals[line_key],
             }
         )
@@ -531,17 +673,44 @@ def schedule_c_summary(request: HttpRequest) -> HttpResponse:
     ctx = {
         "current_page": "schedule_c",
         "selected_year": year,
-        "years": _year_choices_for_user(request.user),  # <-- template expects "years"
-        "lines": lines,                                 # <-- template expects list of objects/dicts
+        "year_choices": _year_choices_for_user(request.user),
+        "lines": lines,
         "line_totals": dict(line_totals),
         "grand_total": grand_total,
-        "meals_rate": Decimal("0.50"),  # or pull from your helper/settings if you have one
+        "meals_rate": MEALS_RATE,
         "now": timezone.now(),
     }
     ctx.update(_company_context())
-    return render(request, "money/taxes/schedule_c_summary.html", ctx)
+    return ctx
 
 
+@login_required
+def schedule_c_pdf_preview(request: HttpRequest) -> HttpResponse:
+    """
+    HTML preview using the PDF template.
+    """
+    ctx = _schedule_c_ctx(request)
+    return render(request, "money/taxes/schedule_c_summary_pdf.html", ctx)
+
+
+@login_required
+def schedule_c_pdf_download(request: HttpRequest) -> HttpResponse:
+    """
+    Generate and download PDF (WeasyPrint).
+    """
+    ctx = _schedule_c_ctx(request)
+    html = render_to_string("money/taxes/schedule_c_summary_pdf.html", ctx, request=request)
+
+    # base_url is important so CSS/images/static resolve correctly
+    pdf_bytes = HTML(string=html, base_url=request.build_absolute_uri("/")).write_pdf()
+
+    year = ctx["selected_year"]
+    year_label = str(year) if year else "all"
+    filename = f"schedule-c-summary-{year_label}.pdf"
+
+    resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
 # -----------------------------------------------------------------------------
 # Form 4797 (Equipment)
 # -----------------------------------------------------------------------------
