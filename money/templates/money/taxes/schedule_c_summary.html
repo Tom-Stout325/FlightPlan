@@ -17,7 +17,8 @@
     <form method="get" class="d-flex gap-2 align-items-center">
       <label for="id_year" class="small text-muted mb-0">Year</label>
       <select id="id_year" name="year" class="form-select form-select-sm" style="max-width: 140px;" onchange="this.form.submit()">
-        {% for y in years %}
+        {% for line_key, breakdown in lines.items %}
+
           <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
         {% endfor %}
       </select>

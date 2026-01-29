@@ -37,17 +37,15 @@ from .reports import (
 
 
 
-TWO_DP = DecimalField(max_digits=20, decimal_places=2)
-ZERO = Decimal("0.00")
 
-MEALS_RATE = Decimal("0.50")
-PERSONAL_VEHICLE_TRANSPORT = "personal_vehicle"
-
-ZERO = Decimal("0.00")
 
 # -----------------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------------
+TWO_DP = DecimalField(max_digits=20, decimal_places=2)
+MEALS_RATE = Decimal("0.50")
+PERSONAL_VEHICLE_TRANSPORT = "personal_vehicle"
+ZERO = Decimal("0.00")
 
 def _selected_year_from_request(request: HttpRequest) -> int | None:
     year_raw = (request.GET.get("year") or "").strip().lower()
@@ -452,6 +450,11 @@ def tax_category_summary(request: HttpRequest) -> HttpResponse:
 # Schedule C
 # -----------------------------------------------------------------------------
 
+
+
+
+
+
 @login_required
 def schedule_c_summary(request: HttpRequest) -> HttpResponse:
     year = _selected_year_from_request(request)
@@ -461,13 +464,22 @@ def schedule_c_summary(request: HttpRequest) -> HttpResponse:
     qs = _exclude_personal_vehicle_fuel(qs)
 
     deductible_expr = _tax_deductible_amount_expr()
-    schedule_c_line = Coalesce(F("sub_cat__schedule_c_line"), F("category__schedule_c_line"), Value(""))
+    schedule_c_line_expr = Coalesce(
+        F("sub_cat__schedule_c_line"),
+        F("category__schedule_c_line"),
+        Value(""),
+    )
 
     rows = (
-        qs.values("category__category", "sub_cat__sub_cat")
+        qs.values(
+            "category__category",
+            "sub_cat__sub_cat",
+            "sub_cat__slug",
+        )
         .annotate(
-            schedule_c_line=schedule_c_line,
-            total=Coalesce(Sum(deductible_expr, output_field=TWO_DP), Value(ZERO), output_field=TWO_DP),
+            schedule_c_line=schedule_c_line_expr,
+            raw_total=Coalesce(Sum("amount"), Value(ZERO)),
+            deductible_total=Coalesce(Sum(deductible_expr), Value(ZERO)),
         )
         .order_by("schedule_c_line", "category__category", "sub_cat__sub_cat")
     )
@@ -478,24 +490,52 @@ def schedule_c_summary(request: HttpRequest) -> HttpResponse:
 
     for r in rows:
         line = (r.get("schedule_c_line") or "").strip() or "Unmapped"
-        total = (r.get("total") or ZERO).quantize(Decimal("0.01"))
+
+        raw_total = (r.get("raw_total") or ZERO).quantize(Decimal("0.01"))
+        deductible_total = (r.get("deductible_total") or ZERO).quantize(Decimal("0.01"))
+
         by_line[line].append(
             {
                 "category": r.get("category__category") or "Uncategorized",
                 "sub_cat": r.get("sub_cat__sub_cat") or "",
-                "total": total,
+                "sub_cat_slug": r.get("sub_cat__slug") or "",
+                "raw_total": raw_total,
+                "deductible_total": deductible_total,
             }
         )
-        line_totals[line] = (line_totals[line] + total).quantize(Decimal("0.01"))
-        grand_total = (grand_total + total).quantize(Decimal("0.01"))
+
+        line_totals[line] = (line_totals[line] + deductible_total).quantize(Decimal("0.01"))
+        grand_total = (grand_total + deductible_total).quantize(Decimal("0.01"))
+
+    # Convert dict -> list shaped like the template expects
+    def _sort_key(line_key: str):
+        # Put numeric lines first, then Unmapped last
+        if line_key == "Unmapped":
+            return (1, 10**9, line_key)
+        try:
+            return (0, int(line_key), line_key)
+        except ValueError:
+            return (0, 10**8, line_key)
+
+    lines = []
+    for line_key in sorted(by_line.keys(), key=_sort_key):
+        lines.append(
+            {
+                "line": line_key,
+                "category_label": "",  # optional: set a human label if you have one
+                "breakdown": by_line[line_key],
+                "total": line_totals[line_key],
+            }
+        )
 
     ctx = {
         "current_page": "schedule_c",
         "selected_year": year,
-        "year_choices": _year_choices_for_user(request.user),
-        "lines": dict(by_line),
+        "years": _year_choices_for_user(request.user),  # <-- template expects "years"
+        "lines": lines,                                 # <-- template expects list of objects/dicts
         "line_totals": dict(line_totals),
         "grand_total": grand_total,
+        "meals_rate": Decimal("0.50"),  # or pull from your helper/settings if you have one
         "now": timezone.now(),
     }
     ctx.update(_company_context())
