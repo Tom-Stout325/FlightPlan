@@ -431,11 +431,6 @@ def tax_profit_loss_yoy_pdf(request: HttpRequest) -> HttpResponse:
     return resp
 
 
-
-
-
-
-
 @login_required
 def tax_category_summary(request: HttpRequest) -> HttpResponse:
     year = _selected_year_from_request(request)
@@ -444,30 +439,9 @@ def tax_category_summary(request: HttpRequest) -> HttpResponse:
     return render(request, "money/taxes/tax_category_summary.html", ctx)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # -----------------------------------------------------------------------------
 # Schedule C
 # -----------------------------------------------------------------------------
-
 
 def _category_label_for_line(breakdown: list[dict]) -> str:
     """
@@ -482,7 +456,6 @@ def _category_label_for_line(breakdown: list[dict]) -> str:
     if len(cats) == 1:
         return next(iter(cats))
     if len(cats) > 1:
-        # Data mismatch with your intended mapping; keep it obvious.
         return "Multiple"
     return ""
 
@@ -582,20 +555,8 @@ def schedule_c_summary(request: HttpRequest) -> HttpResponse:
     return render(request, "money/taxes/schedule_c_summary.html", ctx)
 
 
-
-
-
-
 def _schedule_c_ctx(request: HttpRequest) -> dict:
-    """
-    Reuse your existing schedule_c_summary context builder.
-    If schedule_c_summary currently builds ctx inline, extract that ctx-building
-    into a helper and call it from both HTML and PDF.
-    """
     year = _selected_year_from_request(request)
-    # call your existing schedule_c_summary logic, but return ctx only:
-    # easiest: copy the ctx-building portion into this helper
-    # and keep schedule_c_summary as: return render(..., ctx)
     qs = _tx_qs_for_user(request.user, year)
     qs = qs.filter(trans_type=Transaction.EXPENSE, sub_cat__include_in_tax_reports=True)
     qs = _exclude_personal_vehicle_fuel(qs)
@@ -681,7 +642,6 @@ def _schedule_c_ctx(request: HttpRequest) -> dict:
     return ctx
 
 
-
 @login_required
 def schedule_c_pdf_preview(request: HttpRequest) -> HttpResponse:
     ctx = _schedule_c_ctx(request)
@@ -692,8 +652,8 @@ def schedule_c_pdf_preview(request: HttpRequest) -> HttpResponse:
         stylesheets=[CSS(url=base_url + "static/styles/pdf_base.css")]
     )
 
-    # Inline display in browser
     resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+    resp["Cache-Control"] = "no-store"
     resp["Content-Disposition"] = 'inline; filename="schedule-c-preview.pdf"'
     return resp
 
@@ -713,6 +673,7 @@ def schedule_c_pdf_download(request: HttpRequest) -> HttpResponse:
     filename = f"schedule-c-operating-expenses-{year_label}.pdf"
 
     resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+    resp["Cache-Control"] = "no-store"
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
 

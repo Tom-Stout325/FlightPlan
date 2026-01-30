@@ -212,7 +212,8 @@ urlpatterns = [
     path("reports/travel-summary/", travel_summary, name="travel_summary"),
     path("reports/travel-summary/pdf/", travel_summary_pdf_preview, name="travel_summary_pdf_preview"),
     path("reports/travel-summary/pdf/download/", travel_summary_pdf_download, name="travel_summary_pdf_download"),
-   path("jobs/<int:pk>/review/", JobReviewView.as_view(), name="job_review"),
+    path("jobs/<int:pk>/review/", JobReviewView.as_view(), name="job_review"),
+    
     # ---------------------------------------------------------------------
     # Legacy report aliases (safe to keep while migrating templates / bookmarks)
     # IMPORTANT: Do not use these in templates going forward.
