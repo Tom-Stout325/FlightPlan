@@ -37,10 +37,6 @@ from money.models import (
 
 
 
-
-
-
-
 TWO_DP = DecimalField(max_digits=20, decimal_places=2)
 ZERO = Decimal("0.00")
 

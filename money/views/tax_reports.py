@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from equipment.models import Equipment
 from money.models import CompanyProfile, Transaction
 from typing import Any
-
+import re
 from weasyprint import HTML, CSS
 
 logger = logging.getLogger(__name__)
@@ -409,7 +409,7 @@ def tax_profit_loss_yoy_pdf(request: HttpRequest) -> HttpResponse:
     ctx["now"] = timezone.now()
 
     html = render_to_string(
-        "money/taxes/profit_loss_tax_yoy_pdf.html",  # create this PDF template (tax version)
+        "money/taxes/profit_loss_tax_yoy_pdf.html", 
         ctx,
         request=request,
     )
@@ -443,6 +443,20 @@ def tax_category_summary(request: HttpRequest) -> HttpResponse:
 # Schedule C
 # -----------------------------------------------------------------------------
 
+@dataclass(frozen=True)
+class YoYSCSubRow:
+    name: str
+    values: list[Decimal] 
+
+@dataclass(frozen=True)
+class YoYSCLineRow:
+    line: str
+    category_label: str
+    values: list[Decimal]  
+    subrows: list[YoYSCSubRow]
+
+    
+
 def _category_label_for_line(breakdown: list[dict]) -> str:
     """
     Your rule: one Schedule C line -> one Category.
@@ -460,8 +474,15 @@ def _category_label_for_line(breakdown: list[dict]) -> str:
     return ""
 
 
+
 @login_required
 def schedule_c_summary(request: HttpRequest) -> HttpResponse:
+    ctx = _schedule_c_ctx(request)
+    # HTML uses same ctx builder as PDF so behavior is identical
+    return render(request, "money/taxes/schedule_c_summary.html", ctx)
+
+
+def _schedule_c_ctx(request: HttpRequest) -> dict[str, Any]:
     year = _selected_year_from_request(request)
 
     qs = _tx_qs_for_user(request.user, year)
@@ -490,12 +511,12 @@ def schedule_c_summary(request: HttpRequest) -> HttpResponse:
         .order_by("schedule_c_line", "category__category", "sub_cat__sub_cat")
     )
 
-    by_line: dict[str, list[dict]] = defaultdict(list)
+    by_line: dict[str, list[dict[str, Any]]] = defaultdict(list)
     line_totals: dict[str, Decimal] = defaultdict(lambda: ZERO)
     grand_total: Decimal = ZERO
 
     for r in rows:
-        line_key = (r.get("schedule_c_line") or "").strip() or "Unmapped"
+        line_key = _norm_sched_c_line(r.get("schedule_c_line") or "")
 
         raw_total = (r.get("raw_total") or ZERO).quantize(Decimal("0.01"))
         deductible_total = (r.get("deductible_total") or ZERO).quantize(Decimal("0.01"))
@@ -513,23 +534,7 @@ def schedule_c_summary(request: HttpRequest) -> HttpResponse:
         line_totals[line_key] = (line_totals[line_key] + deductible_total).quantize(Decimal("0.01"))
         grand_total = (grand_total + deductible_total).quantize(Decimal("0.01"))
 
-    def _sort_line_key(k: str):
-        if k == "Unmapped":
-            return (2, 10**9, k)
-
-        num = ""
-        suf = ""
-        for ch in k:
-            if ch.isdigit():
-                num += ch
-            else:
-                suf += ch
-        try:
-            return (0, int(num or 0), suf, k)
-        except ValueError:
-            return (1, 10**8, k, k)
-
-    lines = []
+    lines: list[dict[str, Any]] = []
     for line_key in sorted(by_line.keys(), key=_sort_line_key):
         breakdown = by_line[line_key]
         lines.append(
@@ -541,8 +546,9 @@ def schedule_c_summary(request: HttpRequest) -> HttpResponse:
             }
         )
 
-    ctx = {
+    ctx: dict[str, Any] = {
         "current_page": "schedule_c",
+        "tax_mode": "single",
         "selected_year": year,
         "year_choices": _year_choices_for_user(request.user),
         "lines": lines,
@@ -552,94 +558,10 @@ def schedule_c_summary(request: HttpRequest) -> HttpResponse:
         "now": timezone.now(),
     }
     ctx.update(_company_context())
-    return render(request, "money/taxes/schedule_c_summary.html", ctx)
-
-
-def _schedule_c_ctx(request: HttpRequest) -> dict:
-    year = _selected_year_from_request(request)
-    qs = _tx_qs_for_user(request.user, year)
-    qs = qs.filter(trans_type=Transaction.EXPENSE, sub_cat__include_in_tax_reports=True)
-    qs = _exclude_personal_vehicle_fuel(qs)
-
-    deductible_expr = _tax_deductible_amount_expr()
-    raw_expr = _base_amount_expr()
-    schedule_c_line_expr = Coalesce(
-        F("sub_cat__schedule_c_line"),
-        F("category__schedule_c_line"),
-        Value(""),
-    )
-
-    rows = (
-        qs.values("category__category", "sub_cat__sub_cat", "sub_cat__slug")
-        .annotate(
-            schedule_c_line=schedule_c_line_expr,
-            raw_total=Coalesce(Sum(raw_expr, output_field=TWO_DP), Value(ZERO), output_field=TWO_DP),
-            deductible_total=Coalesce(Sum(deductible_expr, output_field=TWO_DP), Value(ZERO), output_field=TWO_DP),
-        )
-        .order_by("schedule_c_line", "category__category", "sub_cat__sub_cat")
-    )
-
-    by_line = defaultdict(list)
-    line_totals = defaultdict(lambda: ZERO)
-    grand_total = ZERO
-
-    for r in rows:
-        line_key = (r.get("schedule_c_line") or "").strip() or "Unmapped"
-        raw_total = (r.get("raw_total") or ZERO).quantize(Decimal("0.01"))
-        deductible_total = (r.get("deductible_total") or ZERO).quantize(Decimal("0.01"))
-
-        by_line[line_key].append(
-            {
-                "category": (r.get("category__category") or "Uncategorized").strip() or "Uncategorized",
-                "sub_cat": (r.get("sub_cat__sub_cat") or "").strip(),
-                "sub_cat_slug": (r.get("sub_cat__slug") or "").strip(),
-                "raw_total": raw_total,
-                "deductible_total": deductible_total,
-            }
-        )
-
-        line_totals[line_key] = (line_totals[line_key] + deductible_total).quantize(Decimal("0.01"))
-        grand_total = (grand_total + deductible_total).quantize(Decimal("0.01"))
-
-    def _sort_line_key(k: str):
-        if k == "Unmapped":
-            return (2, 10**9, k)
-        num = ""
-        suf = ""
-        for ch in k:
-            if ch.isdigit():
-                num += ch
-            else:
-                suf += ch
-        try:
-            return (0, int(num or 0), suf, k)
-        except ValueError:
-            return (1, 10**8, k, k)
-
-    lines = []
-    for line_key in sorted(by_line.keys(), key=_sort_line_key):
-        breakdown = by_line[line_key]
-        lines.append(
-            {
-                "line": line_key,
-                "category_label": _category_label_for_line(breakdown),
-                "breakdown": breakdown,
-                "total": line_totals[line_key],
-            }
-        )
-
-    ctx = {
-        "current_page": "schedule_c",
-        "selected_year": year,
-        "year_choices": _year_choices_for_user(request.user),
-        "lines": lines,
-        "line_totals": dict(line_totals),
-        "grand_total": grand_total,
-        "meals_rate": MEALS_RATE,
-        "now": timezone.now(),
-    }
-    ctx.update(_company_context())
+    if "_brand_pdf_context" in globals():
+        ctx.update(_brand_pdf_context(request))
     return ctx
+
 
 
 @login_required
@@ -677,6 +599,292 @@ def schedule_c_pdf_download(request: HttpRequest) -> HttpResponse:
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
 
+
+
+
+
+
+@dataclass(frozen=True)
+class YoYSCSubRow:
+    name: str
+    values: list[Decimal]  # aligned with years
+
+
+@dataclass(frozen=True)
+class YoYSCLineRow:
+    line: str
+    category_label: str
+    values: list[Decimal]  # aligned with years (line totals)
+    subrows: list[YoYSCSubRow]
+
+
+def _pick_last_three_years(request: HttpRequest, selected_year: int | None) -> list[int]:
+    end = selected_year or timezone.localdate().year
+    return [end - 2, end - 1, end]
+
+
+def _dec(v: Any) -> Decimal:
+    if isinstance(v, Decimal):
+        return v
+    if v is None:
+        return ZERO
+    try:
+        return Decimal(str(v))
+    except Exception:
+        return ZERO
+
+
+def _norm_sched_c_line(v: str) -> str:
+    """
+    Minimal, stable normalization:
+      - strip
+      - remove internal whitespace
+      - normalize leading zeros
+      - normalize suffix casing
+    """
+    s = (v or "").strip()
+    if not s:
+        return "Unmapped"
+
+    s = re.sub(r"\s+", "", s)
+
+    m = re.match(r"^(\d+)([a-zA-Z]*)$", s)
+    if m:
+        num = str(int(m.group(1)))  # removes leading zeros
+        suf = (m.group(2) or "").lower()
+        return f"{num}{suf}" if suf else num
+
+    return s
+
+
+def _sort_line_key(k: str):
+    k = _norm_sched_c_line(k)
+
+    if k == "Unmapped":
+        return (2, 10**9, k)
+
+    num = ""
+    suf = ""
+    for ch in k:
+        if ch.isdigit():
+            num += ch
+        else:
+            suf += ch
+
+    try:
+        return (0, int(num or 0), suf, k)
+    except ValueError:
+        return (1, 10**8, k, k)
+
+
+# expenses-only; exclude Gross Receipts
+SCHEDULE_C_YOY_EXCLUDED_LINES = {"1"}
+
+
+def _schedule_c_year_agg(request: HttpRequest, year: int) -> dict[str, Any]:
+    qs = _tx_qs_for_user(request.user, year)
+    qs = qs.filter(trans_type=Transaction.EXPENSE, sub_cat__include_in_tax_reports=True)
+    qs = _exclude_personal_vehicle_fuel(qs)
+
+    deductible_expr = _tax_deductible_amount_expr()
+    schedule_c_line_expr = Coalesce(
+        F("sub_cat__schedule_c_line"),
+        F("category__schedule_c_line"),
+        Value(""),
+    )
+
+    rows = (
+        qs.values(
+            "category__category",
+            "sub_cat__sub_cat",
+            "sub_cat__slug",
+        )
+        .annotate(
+            schedule_c_line=schedule_c_line_expr,
+            deductible_total=Coalesce(
+                Sum(deductible_expr, output_field=TWO_DP),
+                Value(ZERO),
+                output_field=TWO_DP,
+            ),
+        )
+        .order_by("schedule_c_line", "category__category", "sub_cat__sub_cat")
+    )
+
+    line_totals: dict[str, Decimal] = defaultdict(lambda: ZERO)
+    cats: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(lambda: ZERO))
+    subs: dict[str, dict[str, dict[str, tuple[str, Decimal]]]] = defaultdict(lambda: defaultdict(dict))
+    breakdown_for_label: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    grand_total = ZERO
+
+    for r in rows:
+        line = _norm_sched_c_line(r.get("schedule_c_line") or "")
+        cat = (r.get("category__category") or "Uncategorized").strip() or "Uncategorized"
+        sub_name = (r.get("sub_cat__sub_cat") or "").strip()
+        sub_slug = (r.get("sub_cat__slug") or "").strip()
+
+        amt = (r.get("deductible_total") or ZERO).quantize(Decimal("0.01"))
+
+        # For category label inference
+        breakdown_for_label[line].append({"category": cat})
+
+        # Roll up totals
+        cats[line][cat] = (cats[line][cat] + amt).quantize(Decimal("0.01"))
+        line_totals[line] = (line_totals[line] + amt).quantize(Decimal("0.01"))
+        grand_total = (grand_total + amt).quantize(Decimal("0.01"))
+
+        # Sub totals
+        if sub_slug and sub_name:
+            prev_name, prev_amt = subs[line][cat].get(sub_slug, (sub_name, ZERO))
+            subs[line][cat][sub_slug] = (
+                prev_name or sub_name,
+                (prev_amt + amt).quantize(Decimal("0.01")),
+            )
+
+    return {
+        "line_totals": dict(line_totals),
+        "cats": {ln: dict(cmap) for ln, cmap in cats.items()},
+        "subs": {
+            ln: {cat: dict(smap) for cat, smap in cmap.items()}
+            for ln, cmap in subs.items()
+        },
+        "breakdown_for_label": dict(breakdown_for_label),
+        "grand_total": grand_total,
+    }
+
+
+def _build_schedule_c_yoy_context(request: HttpRequest, ending_year: int | None = None) -> dict[str, Any]:
+    years = _pick_last_three_years(request, ending_year)
+    per_year = [_schedule_c_year_agg(request, y) for y in years]
+
+    # robust union of normalized line keys across all years
+    all_lines = sorted(
+        {
+            _norm_sched_c_line(line_key)
+            for p in per_year
+            for line_key in p["line_totals"].keys()
+        },
+        key=_sort_line_key,
+    )
+
+    # expenses-only: remove line 1
+    all_lines = [ln for ln in all_lines if ln not in SCHEDULE_C_YOY_EXCLUDED_LINES]
+
+    line_rows: list[YoYSCLineRow] = []
+
+    for line in all_lines:
+        line_vals = [
+            _dec(per_year[i]["line_totals"].get(line)).quantize(Decimal("0.01"))
+            for i in range(len(years))
+        ]
+
+        # Determine if multiple categories exist for this line across years
+        cat_union: set[str] = set()
+        for i in range(len(years)):
+            cat_union |= set((per_year[i]["cats"].get(line) or {}).keys())
+        multi_cat = len(cat_union) > 1
+
+        # Union all (category, sub_slug) keys across all years for this line
+        sub_key_union: set[tuple[str, str]] = set()
+        for i in range(len(years)):
+            subs_for_line = per_year[i]["subs"].get(line) or {}
+            for cat, smap in subs_for_line.items():
+                for sub_slug in smap.keys():
+                    sub_key_union.add((cat, sub_slug))
+
+        subrows: list[YoYSCSubRow] = []
+        for cat, sub_slug in sorted(sub_key_union, key=lambda t: (t[0], t[1])):
+            vals: list[Decimal] = []
+            display_name = ""
+
+            for i in range(len(years)):
+                item = (((per_year[i]["subs"].get(line) or {}).get(cat) or {}).get(sub_slug))
+                if item:
+                    nm, amt = item
+                    display_name = display_name or (nm or "")
+                    vals.append(_dec(amt).quantize(Decimal("0.01")))
+                else:
+                    vals.append(ZERO)
+
+            label = f"{cat}: {display_name or sub_slug}" if multi_cat else (display_name or sub_slug)
+            subrows.append(YoYSCSubRow(name=label, values=vals))
+
+        # Prefer ending-year label, but fallback to earlier years if ending year has no activity
+        breakdown = []
+        for p in reversed(per_year):
+            breakdown = p["breakdown_for_label"].get(line) or []
+            if breakdown:
+                break
+        category_label = _category_label_for_line(breakdown)
+
+        line_rows.append(
+            YoYSCLineRow(
+                line=line,
+                category_label=category_label,
+                values=line_vals,
+                subrows=subrows,
+            )
+        )
+
+    grand_totals = [_dec(p["grand_total"]).quantize(Decimal("0.01")) for p in per_year]
+
+    ctx: dict[str, Any] = {
+        "current_page": "schedule_c",
+        "tax_mode": "yoy",
+        "selected_year": years[-1],
+        "years": years,
+        "year_choices": _year_choices_for_user(request.user),
+        "lines": line_rows,
+        "grand_totals": grand_totals,
+        "meals_rate": MEALS_RATE,
+        "now": timezone.now(),
+    }
+    ctx.update(_company_context())
+    if "_brand_pdf_context" in globals():
+        ctx.update(_brand_pdf_context(request))
+    return ctx
+
+
+@login_required
+def schedule_c_yoy(request: HttpRequest) -> HttpResponse:
+    try:
+        ending_year = int(request.GET.get("year") or 0) or timezone.localdate().year
+    except (TypeError, ValueError):
+        ending_year = timezone.localdate().year
+
+    ctx = _build_schedule_c_yoy_context(request, ending_year)
+    return render(request, "money/taxes/schedule_c_yoy.html", ctx)
+
+
+@login_required
+def schedule_c_yoy_pdf(request: HttpRequest) -> HttpResponse:
+    try:
+        ending_year = int(request.GET.get("year") or 0) or timezone.localdate().year
+    except (TypeError, ValueError):
+        ending_year = timezone.localdate().year
+
+    ctx = _build_schedule_c_yoy_context(request, ending_year)
+
+    html = render_to_string(
+        "money/taxes/schedule_c_yoy_pdf.html",
+        ctx,
+        request=request,
+    )
+
+    pdf = HTML(
+        string=html,
+        base_url=request.build_absolute_uri("/"),
+    ).write_pdf()
+
+    preview_flag = (request.GET.get("preview") or "").strip().lower()
+    is_preview = preview_flag in {"1", "true", "yes", "y", "on"}
+
+    years = ctx.get("years") or [ending_year - 2, ending_year - 1, ending_year]
+    filename = f"ScheduleC_YOY_{years[0]}_{years[-1]}.pdf"
+    disposition = "inline" if is_preview else "attachment"
+
+    resp = HttpResponse(pdf, content_type="application/pdf")
+    resp["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+    return resp
 
 
 # -----------------------------------------------------------------------------

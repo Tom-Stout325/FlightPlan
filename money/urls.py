@@ -88,6 +88,8 @@ from .views.tax_reports import (
     schedule_c_summary,
     schedule_c_pdf_preview,
     schedule_c_pdf_download,
+    schedule_c_yoy,
+    schedule_c_yoy_pdf,
     
 )
 
@@ -243,6 +245,10 @@ urlpatterns = [
     path("taxes/schedule-c/", schedule_c_summary, name="schedule_c_summary"),
     path("taxes/schedule-c/preview/", schedule_c_pdf_preview, name="schedule_c_pdf_preview"),
     path("taxes/schedule-c/download/", schedule_c_pdf_download, name="schedule_c_pdf_download"),
+    
+    path("taxes/schedule-c/yoy/", schedule_c_yoy, name="schedule_c_yoy"),
+    path("taxes/schedule-c/yoy/pdf/", schedule_c_yoy_pdf, name="schedule_c_yoy_pdf"),
+
 
     # ---------------------------------------------------------------------
     # Category & SubCategory CRUD

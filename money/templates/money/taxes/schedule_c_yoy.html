@@ -1,0 +1,108 @@
+{% extends "index.html" %}
+{% load humanize %}
+
+{% block title %}Schedule C YoY{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-2 px-md-3">
+
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mb-3">
+    <!-- Title -->
+    <div class="flex-grow-1">
+      <h1 class="h4 mb-1">Operating Expenses (3-Year YoY)</h1>
+      <div class="text-muted small"></div>
+    </div>
+
+    <!-- Controls -->
+    <div class="d-flex flex-column flex-md-row flex-wrap align-items-stretch align-items-md-center justify-content-md-end gap-2">
+      <!-- Year selector -->
+      <form method="get" class="d-flex align-items-center gap-2">
+        <label class="small text-muted mb-0" for="year" style="min-width: 84px;">Ending year</label>
+        <select id="year" name="year" class="form-select form-select-sm" style="width: 120px;" onchange="this.form.submit()">
+          {% for y in year_choices %}
+            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </form>
+
+      <div class="btn-group w-100 w-md-auto" role="group" aria-label="Schedule C View">
+        <a class="btn btn-sm {% if tax_mode != 'yoy' %}btn-dark{% else %}btn-outline-dark{% endif %}"
+           href="{% url 'money:schedule_c_summary' %}?year={{ selected_year }}">
+          Single Year
+        </a>
+        <a class="btn btn-sm {% if tax_mode == 'yoy' %}btn-dark{% else %}btn-outline-dark{% endif %}"
+           href="{% url 'money:schedule_c_yoy' %}?year={{ selected_year }}">
+          YOY (3-Year)
+        </a>
+      </div>
+
+      <!-- PDF buttons -->
+      <div class="d-flex gap-2 w-100 w-md-auto">
+        <a class="btn btn-sm btn-outline-secondary flex-fill"
+           href="{% url 'money:schedule_c_yoy_pdf' %}?year={{ selected_year }}&preview=1"
+           target="_blank" rel="noopener">
+          <i class="fa-solid fa-file-pdf me-1"></i> Preview
+        </a>
+
+        <a class="btn btn-sm btn-outline-primary flex-fill"
+           href="{% url 'money:schedule_c_yoy_pdf' %}?year={{ selected_year }}">
+          <i class="fa-solid fa-download me-1"></i> Download
+        </a>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead class="table-light">
+            <tr>
+                <th style="min-width: 80px;">Sched C</th>
+                <th style="min-width: 320px;">Category / Sub-category</th>
+                {% for y in years %}
+                <th class="text-end" style="min-width: 140px;">{{ y }}</th>
+                {% endfor %}
+            </tr>
+            </thead>
+
+            <tbody>
+            {% for line in lines %}
+                <!-- Line header (shaded) -->
+                <tr class="table-secondary">
+                <td class="fw-semibold">{{ line.line }}</td>
+                <td class="fw-semibold">{{ line.category_label|default:"—" }}</td>
+                {% for v in line.values %}
+                    <td class="text-end fw-semibold">${{ v|floatformat:2|intcomma }}</td>
+                {% endfor %}
+                </tr>
+
+                <!-- Sub-category rows -->
+                {% for sub in line.subrows %}
+                <tr>
+                    <td class="text-muted small"></td>
+                    <td>&emsp;&emsp;&emsp;{{ sub.name }}</td>
+                    {% for v in sub.values %}
+                    <td class="text-end">${{ v|floatformat:2|intcomma }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            {% endfor %}
+            </tbody>
+
+            <tfoot class="table-light">
+            <tr>
+                <th colspan="2" class="text-end">Total Operating Expenses</th>
+                {% for t in grand_totals %}
+                <th class="text-end">${{ t|floatformat:2|intcomma }}</th>
+                {% endfor %}
+            </tr>
+            </tfoot>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
