@@ -5,16 +5,14 @@
 
 {% block content %}
 <div class="container my-4" style="max-width: 1100px;">
-
   <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-3">
     <div>
-      <h1 class="h4 mb-1">Schedule C</h1>
+      <h1 class="h4 mb-1">Operating Expenses</h1>
       <p class="text-muted mb-0 small">
-        Totals are based on sub-categories mapped to Schedule C lines and marked “Include in tax reports”.
+        Operating Expenses for the selected year.
       </p>
     </div>
-
-    <form method="get" class="d-flex gap-2 align-items-center">
+    <form method="get" class="d-flex gap-2 align-items-center w-25">
       <label for="id_year" class="small text-muted mb-0">Year</label>
       <select id="id_year" name="year" class="form-select form-select-sm" style="max-width: 140px;" onchange="this.form.submit()">
         {% for y in year_choices %}
@@ -25,42 +23,35 @@
         <button class="btn btn-sm btn-primary" type="submit">Go</button>
       </noscript>
     </form>
-
     <div class="d-flex gap-2">
-  <a class="btn btn-sm btn-outline-secondary"
-     href="{% url 'money:schedule_c_pdf_preview' %}{% if selected_year %}?year={{ selected_year }}{% endif %}">
-    Preview PDF
-  </a>
-
-  <a class="btn btn-sm btn-primary"
-     href="{% url 'money:schedule_c_pdf_download' %}{% if selected_year %}?year={{ selected_year }}{% endif %}">
-    Download PDF
-  </a>
-</div>
-
+      <a class="btn btn-sm btn-outline-secondary"
+        href="{% url 'money:schedule_c_pdf_preview' %}{% if selected_year %}?year={{ selected_year }}{% else %}?year=all{% endif %} " target="_blank">
+        Preview PDF
+      </a>
+      <a class="btn btn-sm btn-primary"
+        href="{% url 'money:schedule_c_pdf_download' %}{% if selected_year %}?year={{ selected_year }}{% endif %}">
+        Download PDF
+      </a>
+    </div>  
   </div>
-
-  <div class="card shadow-sm border-0 mb-3">
+  <div class="card shadow-lg border-2 my-5">
     <div class="card-body">
       <div class="d-flex justify-content-between align-items-center">
-        <div class="text-muted small">Total deductible expenses</div>
+        <div class="">Total Operating Expenses | {{ selected_year }}</div>
         <div class="h5 mb-0">${{ grand_total|floatformat:2|intcomma }}</div>
       </div>
-      <div class="text-muted small mt-2">
-        Meals (sub-category slug <code>meals</code>) are counted at {{ meals_rate|floatformat:2 }} (50%).
-      </div>
+      <div class="text-muted small mt-2"></div>
     </div>
   </div>
-
   <div class="card shadow-sm border-0">
     <div class="card-body p-0">
       <div class="table-responsive">
         <table class="table table-hover mb-0 align-middle">
           <thead class="table-light">
             <tr>
-              <th style="width: 200px;">Line</th>
-              <th>Details</th>
-              <th class="text-end" style="width: 180px;">Deductible total</th>
+              <th style="width: 200px;">Schedule C Line</th>
+              <th>Sub Categories</th>
+              <th class="text-end" style="width: 180px;">TOTAL</th>
             </tr>
           </thead>
           <tbody>
@@ -72,7 +63,6 @@
                       {{ line.line }}
                     </span>
                   </div>
-
                   {% if line.category_label %}
                     <div class="text-muted fw-normal mt-1" style="line-height: 1.2;">
                       {{ line.category_label }}
@@ -127,6 +117,5 @@
       </div>
     </div>
   </div>
-
 </div>
 {% endblock %}

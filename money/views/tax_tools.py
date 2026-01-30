@@ -483,7 +483,7 @@ def mileage_report_pdf(request):
     pdf_css = CSS(
         string="""
         @page { size: Letter; margin: 0.6in; }
-        body { font-family: Arial, sans-serif; font-size: 10.5pt; color: #111; }
+        body { font-size: 10.5pt; color: #111; }
         h1 { font-size: 16pt; margin: 0 0 6px 0; }
         h2 { font-size: 12pt; margin: 14px 0 6px 0; }
         .muted { color: #555; }

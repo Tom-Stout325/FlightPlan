@@ -4,27 +4,6 @@
 <head>
   <meta charset="utf-8" />
  <style>
-  @font-face {
-  font-family: "Montserrat";
-  src: url("/static/fonts/Montserrat-Regular.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Montserrat";
-  src: url("/static/fonts/Montserrat-SemiBold.ttf") format("truetype");
-  font-weight: 600;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Montserrat";
-  src: url("/static/fonts/Montserrat-Bold.ttf") format("truetype");
-  font-weight: 700;
-  font-style: normal;
-}
-
   @page { size: Letter; margin: 0.5in; }
 
   html, body {
@@ -33,7 +12,6 @@
   }
 
   body {
-    font-family: "Montserrat", sans-serif;
     font-size: 11px;
     color: #111;
   }
@@ -122,16 +100,12 @@
         />
       </div>
     {% endif %}
-
     <div class="title">Operating Expenses</div>
     <div class="sub">
-
       {% if selected_year %}Tax Year {{ selected_year }}{% else %} — All Time{% endif %}
     </div>
-   
   </div>
   </div>
-
   <table>
     <thead>
       <tr>
@@ -145,7 +119,6 @@
 
     <tbody>
       {% for line in lines %}
-        {# line header row with total on the far right #}
         <tr class="linerow">
           <td class="line">{{ line.line }}</td>
           <td class="cat">{{ line.category_label }}</td>
@@ -154,7 +127,6 @@
           <td class="num linetotal">${{ line.total|floatformat:2|intcomma }}</td>
         </tr>
 
-        {# sub-category rows show only sub-cat deductible; line total column stays blank #}
         {% for r in line.breakdown %}
           <tr class="subrow">
             <td class="line"></td>

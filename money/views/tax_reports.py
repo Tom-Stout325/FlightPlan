@@ -12,20 +12,19 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.utils import timezone
-from weasyprint import HTML
 from dataclasses import dataclass
 from equipment.models import Equipment
 from money.models import CompanyProfile, Transaction
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from weasyprint import HTML, CSS
 
+logger = logging.getLogger(__name__)
 
 try:
     from .reports import _brand_pdf_context  
 except Exception:  
     _brand_pdf_context = None
-    
     
 from .reports import ( 
     _selected_year_from_request,
@@ -33,8 +32,6 @@ from .reports import (
     _company_context,
 
 )
-
-
 
 
 
@@ -684,33 +681,43 @@ def _schedule_c_ctx(request: HttpRequest) -> dict:
     return ctx
 
 
+
 @login_required
 def schedule_c_pdf_preview(request: HttpRequest) -> HttpResponse:
-    """
-    HTML preview using the PDF template.
-    """
     ctx = _schedule_c_ctx(request)
-    return render(request, "money/taxes/schedule_c_summary_pdf.html", ctx)
+    html = render_to_string("money/taxes/schedule_c_summary_pdf.html", ctx, request=request)
+
+    base_url = request.build_absolute_uri("/")
+    pdf_bytes = HTML(string=html, base_url=base_url).write_pdf(
+        stylesheets=[CSS(url=base_url + "static/styles/pdf_base.css")]
+    )
+
+    # Inline display in browser
+    resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+    resp["Content-Disposition"] = 'inline; filename="schedule-c-preview.pdf"'
+    return resp
 
 
 @login_required
 def schedule_c_pdf_download(request: HttpRequest) -> HttpResponse:
-    """
-    Generate and download PDF (WeasyPrint).
-    """
     ctx = _schedule_c_ctx(request)
     html = render_to_string("money/taxes/schedule_c_summary_pdf.html", ctx, request=request)
 
-    # base_url is important so CSS/images/static resolve correctly
-    pdf_bytes = HTML(string=html, base_url=request.build_absolute_uri("/")).write_pdf()
+    base_url = request.build_absolute_uri("/")
+    pdf_bytes = HTML(string=html, base_url=base_url).write_pdf(
+        stylesheets=[CSS(url=base_url + "static/styles/pdf_base.css")]
+    )
 
     year = ctx["selected_year"]
     year_label = str(year) if year else "all"
-    filename = f"schedule-c-summary-{year_label}.pdf"
+    filename = f"schedule-c-operating-expenses-{year_label}.pdf"
 
     resp = HttpResponse(pdf_bytes, content_type="application/pdf")
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
+
+
+
 # -----------------------------------------------------------------------------
 # Form 4797 (Equipment)
 # -----------------------------------------------------------------------------
