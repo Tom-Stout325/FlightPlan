@@ -16,15 +16,15 @@ from django.http import HttpRequest, HttpResponse
 from weasyprint import HTML
 from dal import autocomplete
 
+from .utils import validate_10739_readiness, should_include_10739
 from equipment.models import Equipment
 from flightlogs.models import FlightLog
 from pilot.models import PilotProfile
 
-from .forms import _qs_user_scoped
+
 from .utils import decimal_to_dms, dms_to_decimal, generate_short_description  # keep imported if used elsewhere
 from .constants.conops import CONOPS_SECTIONS
-from .forms import TIMEFRAME_CHOICES
-from .forms import WaiverApplicationDescriptionForm, WaiverPlanningForm, WaiverReadinessForm
+from .forms import WaiverApplicationDescriptionForm, WaiverPlanningForm, WaiverReadinessForm, TIMEFRAME_CHOICES, _qs_user_scoped
 from .models import ConopsSection, WaiverApplication, WaiverPlanning, Airport
 from .services import (
     ensure_conops_sections,
@@ -197,12 +197,63 @@ def waiver_planning_new(request):
             }
         )
 
+    # ---------------------------------------------------------
+    # §107.39 readiness + optional examples panel (UI context)
+    # ---------------------------------------------------------
+    # Use the best-available planning "state":
+    # - If POST and valid: use planning_obj (what will be saved)
+    # - Else: use form.instance (existing DB instance) plus form.data-bound values are not on instance,
+    #         but our readiness helper should be resilient; for accuracy on invalid POST, you can
+    #         temporarily attach cleaned_data fields only when form.is_valid().
+    planning_for_readiness = planning or getattr(form, "instance", None)
+
+    # If the form is valid, we can evaluate readiness against the soon-to-be-saved object
+    if request.method == "POST" and form.is_valid():
+        planning_for_readiness = form.save(commit=False)
+        planning_for_readiness.user = request.user
+        planning_for_readiness.pilot_profile = form.cleaned_data.get("pilot_profile")
+        planning_for_readiness.aircraft = form.cleaned_data.get("aircraft")
+
+    readiness_10739 = {"ok": True, "missing": [], "included": False}
+    include_10739 = False
+    try:
+        if planning_for_readiness is not None:
+            readiness_10739 = validate_10739_readiness(planning_for_readiness)
+            include_10739 = bool(readiness_10739.get("included"))
+    except Exception:
+        # Never block the form page if helpers error
+        readiness_10739 = {"ok": True, "missing": [], "included": False}
+        include_10739 = False
+
+    conops_examples_10739 = [
+        {
+            "title": "General event / venue example",
+            "body": (
+                "Operations are designed to avoid flight over people by restricting flight paths to "
+                "sterile areas, enforcing hard boundaries, and using immediate termination triggers if "
+                "non-participants enter the containment area."
+            ),
+        },
+        {
+            "title": "Motorsports venue example (NHRA-style)",
+            "body": (
+                "Flights are limited to sterile track surfaces and restricted operational corridors. "
+                "Event staff control spectator access and keep the operational area clear. If any "
+                "non-participant enters the containment area, operations terminate immediately until "
+                "the area is re-secured."
+            ),
+        },
+    ]
+
     context = {
         "form": form,
         "planning": planning,
         "pilot_profile_data": pilot_profile_data,
         "drone_safety_data": drone_safety_data,
         "planning_mode": "edit" if planning else "new",
+        "readiness_10739": readiness_10739,
+        "include_10739": include_10739,
+        "conops_examples_10739": conops_examples_10739,
     }
 
     _dbg("pilot_profile_data sample:", context["pilot_profile_data"][:1])
@@ -255,20 +306,51 @@ class WaiverPlanningDescriptionForm(WaiverPlanningForm):
         ]
 
 
+
+
+
 @login_required
 def waiver_application_description(request, pk):
     application = get_object_or_404(WaiverApplication, pk=pk, user=request.user)
     planning = application.planning
 
+    # Lock these relationships for this page (prevents accidental changes)
     locked_aircraft_id = planning.aircraft_id
     locked_pilot_profile_id = planning.pilot_profile_id
 
-    def apply_posted_fields_to_instance(form, instance, post_data, files_data):
+    # ---------------------------------------------------------------------
+    # Helpers
+    # ---------------------------------------------------------------------
+    def conops_examples():
+        return [
+            {
+                "title": "General event / venue example",
+                "body": (
+                    "Operations are designed to avoid flight over people by restricting flight paths to "
+                    "sterile areas, enforcing hard boundaries, and using immediate termination triggers if "
+                    "non-participants enter the containment area."
+                ),
+            },
+            {
+                "title": "Motorsports venue example (NHRA-style)",
+                "body": (
+                    "Flights are limited to sterile track surfaces and restricted operational corridors. "
+                    "Event staff control spectator access and keep the operational area clear. If any "
+                    "non-participant enters the containment area, operations terminate immediately until "
+                    "the area is re-secured."
+                ),
+            },
+        ]
+
+    def apply_posted_fields_to_instance(form, instance):
+        """
+        Apply cleaned_data to the instance safely, while forcing locked aircraft/pilot IDs.
+        Assumes form.is_valid() is True.
+        """
         for name in form.fields:
-            if name not in post_data and name not in files_data:
-                continue
             setattr(instance, name, form.cleaned_data.get(name))
 
+        # Force locked relationships
         instance.aircraft_id = locked_aircraft_id
         instance.pilot_profile_id = locked_pilot_profile_id
 
@@ -277,6 +359,44 @@ def waiver_application_description(request, pk):
             form.save_m2m()
         return instance
 
+    def build_10739_context(planning_obj):
+        """
+        Returns dict with readiness + include flag + examples.
+        Never raises.
+        """
+        try:
+            readiness = validate_10739_readiness(planning_obj) if planning_obj else {
+                "ok": True, "missing": [], "included": False
+            }
+            include = bool(readiness.get("included"))
+        except Exception:
+            readiness = {"ok": True, "missing": [], "included": False}
+            include = False
+
+        return {
+            "readiness_10739": readiness,
+            "include_10739": include,
+            "conops_examples_10739": conops_examples(),
+        }
+
+    def render_page(planning_form, app_form, planning_for_10739):
+        ctx_10739 = build_10739_context(planning_for_10739)
+        return render(
+            request,
+            "airspace/waiver_application_description.html",
+            {
+                "planning": planning,
+                "application": application,
+                "planning_form": planning_form,
+                "app_form": app_form,
+                "aircraft_ctx": planning_aircraft_summary(planning, user=request.user),
+                **ctx_10739,
+            },
+        )
+
+    # ---------------------------------------------------------------------
+    # POST
+    # ---------------------------------------------------------------------
     if request.method == "POST":
         planning_form = WaiverPlanningDescriptionForm(
             request.POST, request.FILES, instance=planning, user=request.user
@@ -285,10 +405,24 @@ def waiver_application_description(request, pk):
             request.POST, request.FILES, instance=application
         )
 
-        # lock toggle persists regardless of which button was pressed
+        # Persist lock toggle regardless of button pressed
         application.locked_description = ("locked_description" in request.POST)
         application.save(update_fields=["locked_description"])
 
+        # Best-available planning state for 107.39 readiness:
+        # - if form is valid, evaluate against the unsaved "would-be" planning
+        planning_for_10739 = planning
+        if planning_form.is_valid():
+            tmp = planning_form.save(commit=False)
+
+            # Keep the locked relationships (and user if your model expects it)
+            tmp.user = request.user
+            tmp.aircraft_id = locked_aircraft_id
+            tmp.pilot_profile_id = locked_pilot_profile_id
+
+            planning_for_10739 = tmp
+
+        # Generate
         if "generate" in request.POST:
             if application.locked_description:
                 messages.error(request, "Description is locked. Unlock it to regenerate.")
@@ -296,54 +430,37 @@ def waiver_application_description(request, pk):
 
             if not planning_form.is_valid():
                 messages.error(request, "Please fix the errors above before generating.")
-                return render(
-                    request,
-                    "airspace/waiver_application_description.html",
-                    {
-                        "planning": planning,
-                        "application": application,
-                        "planning_form": planning_form,
-                        "app_form": app_form,
-                        "aircraft_ctx": planning_aircraft_summary(planning, user=request.user),
-                    },
-                )
+                return render_page(planning_form, app_form, planning_for_10739)
 
-            apply_posted_fields_to_instance(planning_form, planning, request.POST, request.FILES)
+            # Save planning changes (locked relationships enforced)
+            apply_posted_fields_to_instance(planning_form, planning)
 
-            # HARDEN: service requires user
             generated_text = generate_waiver_description_text(planning, user=request.user)
-
             application.description = generated_text
             application.save(update_fields=["description"])
 
             messages.success(request, "Description generated.")
             return redirect("airspace:waiver_application_description", pk=application.pk)
 
-        # -------- SAVE ----------
+        # Save (no generate)
         if planning_form.is_valid() and app_form.is_valid():
-            apply_posted_fields_to_instance(planning_form, planning, request.POST, request.FILES)
+            apply_posted_fields_to_instance(planning_form, planning)
             app_form.save()
+
             messages.success(request, "Changes saved.")
             return redirect("airspace:waiver_application_description", pk=application.pk)
 
         messages.error(request, "Please fix the errors below and try again.")
+        return render_page(planning_form, app_form, planning_for_10739)
 
+    # ---------------------------------------------------------------------
     # GET
+    # ---------------------------------------------------------------------
     planning_form = WaiverPlanningDescriptionForm(instance=planning, user=request.user)
     app_form = WaiverApplicationDescriptionForm(instance=application)
-    aircraft_ctx = planning_aircraft_summary(planning, user=request.user)
 
-    return render(
-        request,
-        "airspace/waiver_application_description.html",
-        {
-            "planning": planning,
-            "application": application,
-            "planning_form": planning_form,
-            "app_form": app_form,
-            "aircraft_ctx": aircraft_ctx,
-        },
-    )
+    # For GET, readiness should be evaluated against saved planning
+    return render_page(planning_form, app_form, planning)
 
 
 # -----------------------------------------------------------------------------
@@ -469,8 +586,6 @@ def conops_section_edit(request, pk, section_key):
         user=request.user,
     )
 
-    # If you have ConopsSection.user, keep user=request.user.
-    # If not yet migrated, comment out `user=request.user` temporarily.
     section = get_object_or_404(
         ConopsSection,
         application=application,
@@ -479,7 +594,6 @@ def conops_section_edit(request, pk, section_key):
     )
 
     if request.method == "POST":
-        # Persist lock toggle on every POST
         section.locked = ("locked" in request.POST)
         section.save(update_fields=["locked"])
 

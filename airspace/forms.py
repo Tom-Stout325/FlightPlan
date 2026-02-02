@@ -11,10 +11,10 @@ from uuid import UUID
 
 from equipment.models import Equipment
 from pilot.models import PilotProfile
-from .models import Airport, WaiverApplication, WaiverPlanning, Airport
+from .models import Airport, WaiverApplication, WaiverPlanning
 from documents.models import GeneralDocument
 
-from .models import _validate_controlled_airspace_required_fields  # uses your helper in models.py
+from .models import _validate_controlled_airspace_required_fields 
 
 
 
@@ -359,12 +359,41 @@ class WaiverPlanningForm(forms.ModelForm):
             
         }
 
+    def _should_lock_distance(self, cleaned=None) -> bool:
+        """
+        Lock distance_to_airport_nm when we have enough inputs to compute it.
+        Works for both initial render (instance) and POST (cleaned).
+        """
+        if cleaned is not None:
+            airport = cleaned.get("nearest_airport_ref")
+            lat = cleaned.get("location_latitude")
+            lon = cleaned.get("location_longitude")
+            return bool(airport and lat is not None and lon is not None)
+
+        airport = getattr(self.instance, "nearest_airport_ref", None)
+        lat = getattr(self.instance, "location_latitude", None)
+        lon = getattr(self.instance, "location_longitude", None)
+        return bool(airport and lat is not None and lon is not None)
+
+
     def __init__(self, *args, user=None, **kwargs):
         self.user = user
         super().__init__(*args, **kwargs)
 
         if self.user is not None:
             self.instance.user = self.user
+            
+        if "distance_to_airport_nm" in self.fields:
+            if self._should_lock_distance():
+                f = self.fields["distance_to_airport_nm"]
+                f.disabled = True
+                f.required = False
+                f.help_text = "Auto-calculated from selected airport + coordinates."
+                f.widget.attrs.update({
+                    "class": "form-control",
+                    "readonly": "readonly",
+                })
+
 
         for name, field in self.fields.items():
             w = field.widget
@@ -464,9 +493,12 @@ class WaiverPlanningForm(forms.ModelForm):
         return ac
 
 
-
     def clean(self):
         cleaned = super().clean()
+
+        # -------------------------------------------------
+        # Ownership enforcement (server-side)
+        # -------------------------------------------------
         if self.user is not None:
             pilot = cleaned.get("pilot_profile")
             if pilot is not None and hasattr(pilot, "user_id") and pilot.user_id != self.user.id:
@@ -481,24 +513,36 @@ class WaiverPlanningForm(forms.ModelForm):
                 if doc is not None and hasattr(doc, "user_id") and doc.user_id != self.user.id:
                     self.add_error(doc_field, "Invalid selection.")
 
-        # -------------------------
+        # -------------------------------------------------
         # Pilot auto-fill (server-side)
-        # -------------------------
-        pilot = self._selected_pilot()
-        if pilot:
-            if not cleaned.get("pilot_cert_manual") and (pilot.license_number or "").strip():
-                cleaned["pilot_cert_manual"] = pilot.license_number
+        # -------------------------------------------------
+        pilot_obj = self._selected_pilot()
+        if pilot_obj:
+            # Certificate
+            if not cleaned.get("pilot_cert_manual") and (pilot_obj.license_number or "").strip():
+                cleaned["pilot_cert_manual"] = pilot_obj.license_number
 
+            # Flight hours
             if not cleaned.get("pilot_flight_hours"):
-                total_seconds = pilot.flight_time_total()
+                total_seconds = pilot_obj.flight_time_total()
                 if total_seconds:
                     cleaned["pilot_flight_hours"] = round(total_seconds / 3600, 1)
 
-        # -------------------------
-        # DMS -> Decimal coords
-        # -------------------------
-        lat_parts = [cleaned.get("lat_deg"), cleaned.get("lat_min"), cleaned.get("lat_sec"), cleaned.get("lat_dir")]
-        lon_parts = [cleaned.get("lon_deg"), cleaned.get("lon_min"), cleaned.get("lon_sec"), cleaned.get("lon_dir")]
+        # -------------------------------------------------
+        # DMS -> Decimal coords (authoritative)
+        # -------------------------------------------------
+        lat_parts = [
+            cleaned.get("lat_deg"),
+            cleaned.get("lat_min"),
+            cleaned.get("lat_sec"),
+            cleaned.get("lat_dir"),
+        ]
+        lon_parts = [
+            cleaned.get("lon_deg"),
+            cleaned.get("lon_min"),
+            cleaned.get("lon_sec"),
+            cleaned.get("lon_dir"),
+        ]
 
         lat_complete = all(part not in (None, "") for part in lat_parts)
         lon_complete = all(part not in (None, "") for part in lon_parts)
@@ -508,7 +552,7 @@ class WaiverPlanningForm(forms.ModelForm):
                 cleaned["location_latitude"] = _dms_to_decimal(
                     cleaned["lat_deg"], cleaned["lat_min"], cleaned["lat_sec"], cleaned["lat_dir"]
                 )
-            except (InvalidOperation, ValueError):
+            except (InvalidOperation, ValueError, TypeError):
                 self.add_error("lat_sec", "Invalid latitude value.")
 
         if lon_complete:
@@ -516,17 +560,27 @@ class WaiverPlanningForm(forms.ModelForm):
                 cleaned["location_longitude"] = _dms_to_decimal(
                     cleaned["lon_deg"], cleaned["lon_min"], cleaned["lon_sec"], cleaned["lon_dir"]
                 )
-            except (InvalidOperation, ValueError):
+            except (InvalidOperation, ValueError, TypeError):
                 self.add_error("lon_sec", "Invalid longitude value.")
 
-        # HARDEN: If DMS not provided, do NOT accept posted hidden coords
-        # (prevents client-side tampering / stale hidden input injection)
+        # HARDEN: If DMS not provided, do NOT accept posted hidden coords.
+        # Keep the instance values (edit mode) or None (new).
         if not lat_complete:
             cleaned["location_latitude"] = getattr(self.instance, "location_latitude", None)
         if not lon_complete:
             cleaned["location_longitude"] = getattr(self.instance, "location_longitude", None)
 
+        # -------------------------------------------------
+        # Distance-to-airport handling
+        # - If airport FK + coords exist, the MODEL computes distance in save().
+        #   So we *clear* any user-entered value to avoid stale/confusing persistence.
+        # - Otherwise, accept manual distance if they typed it.
+        # -------------------------------------------------
+        if self._should_lock_distance(cleaned):
+            cleaned["distance_to_airport_nm"] = None
+
         return cleaned
+
 
     def save(self, commit=True):
         instance = super().save(commit=False)
@@ -536,7 +590,7 @@ class WaiverPlanningForm(forms.ModelForm):
         instance.pilot_profile = self.cleaned_data.get("pilot_profile")
         instance.nearest_airport_ref = self.cleaned_data.get("nearest_airport_ref")
 
-        # DMS -> model decimals (we control these)
+        # DMS -> model decimals (authoritative)
         instance.location_latitude = self.cleaned_data.get("location_latitude")
         instance.location_longitude = self.cleaned_data.get("location_longitude")
 
@@ -546,10 +600,19 @@ class WaiverPlanningForm(forms.ModelForm):
             if profile and (profile.safety_features or "").strip():
                 instance.safety_features_notes = profile.safety_features
 
+        # Distance: allow manual entry ONLY when we're NOT in auto-compute mode.
+        if not self._should_lock_distance(self.cleaned_data):
+            instance.distance_to_airport_nm = self.cleaned_data.get("distance_to_airport_nm")
+        else:
+            # Clear any manual/stale value; model.save() will compute if it can.
+            instance.distance_to_airport_nm = None
+
         if commit:
             instance.save()
             self.save_m2m()
+
         return instance
+
 
 
 class WaiverApplicationDescriptionForm(forms.ModelForm):

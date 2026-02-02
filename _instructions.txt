@@ -1,5 +1,7 @@
 Next Steps:
 
+Add link to transactions and invoice in the Job Review
+
 Airspace:
 See if Waiver Planning is better than Waiver Rediness, get rid of one of them
 

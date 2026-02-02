@@ -135,58 +135,6 @@
       <hr class="my-0">
 
       <div class="card-body pt-3">
-        <h6 class="text-muted mb-2">Operations Over People / Vehicles</h6>
-
-        <div class="row g-3">
-          <div class="col-12 col-md-6">
-            <div class="form-check mb-2">
-              {{ planning_form.operates_under_10739 }}
-              <label class="form-check-label" for="{{ planning_form.operates_under_10739.id_for_label }}">
-                Operates under 107.39 (Operations Over People)
-              </label>
-            </div>
-            {{ planning_form.operates_under_10739.errors }}
-
-            <div class="mb-2">
-              {{ planning_form.oop_waiver_document.label_tag }}
-              {{ planning_form.oop_waiver_document }}
-              {{ planning_form.oop_waiver_document.errors }}
-            </div>
-
-            <div class="mb-2">
-              {{ planning_form.oop_waiver_number.label_tag }}
-              {{ planning_form.oop_waiver_number }}
-              {{ planning_form.oop_waiver_number.errors }}
-            </div>
-          </div>
-
-          <div class="col-12 col-md-6">
-            <div class="form-check mb-2">
-              {{ planning_form.operates_under_107145 }}
-              <label class="form-check-label" for="{{ planning_form.operates_under_107145.id_for_label }}">
-                Operates under 107.145 (Moving Vehicles)
-              </label>
-            </div>
-            {{ planning_form.operates_under_107145.errors }}
-
-            <div class="mb-2">
-              {{ planning_form.mv_waiver_document.label_tag }}
-              {{ planning_form.mv_waiver_document }}
-              {{ planning_form.mv_waiver_document.errors }}
-            </div>
-
-            <div class="mb-2">
-              {{ planning_form.mv_waiver_number.label_tag }}
-              {{ planning_form.mv_waiver_number }}
-              {{ planning_form.mv_waiver_number.errors }}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <hr class="my-0">
-
-      <div class="card-body pt-3">
         <div class="d-flex justify-content-between align-items-start gap-3">
           <div>
             <div class="text-uppercase text-muted small mb-1">Purpose of Drone Operations</div>

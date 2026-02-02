@@ -8,164 +8,220 @@
 {% block extra_css %}
   {{ form.media.css }}
   <style>
-    /* Keep checkboxes/radios from inheriting big text-input styling */
     input[type="checkbox"], input[type="radio"]{
       width:auto; margin:0 0.35rem 0 0; padding:0; border:none;
     }
-
     .checkbox-group ul{ list-style:none; padding-left:0; margin-bottom:0; }
     .checkbox-group li{ margin-bottom:0.25rem; }
-
-    /* Clean accordion headings */
-    .accordion-button{
-      font-weight: 600;
-    }
-
-    /* Small helper text density */
+    .accordion-button{ font-weight: 600; }
     .form-text.compact{ margin-top:.25rem; font-size:.825rem; }
-
-    /* Make disabled-looking groups consistent height on mobile */
-    .stack-gap > *{ margin-bottom: .75rem; }
+    .badge-controlled {
+      display: inline-block;
+      margin-left: .5rem;
+      padding: .15rem .55rem;
+      font-size: .75rem;
+      font-weight: 700;
+      border-radius: 999px;
+      border: 1px solid #0d6efd;
+      color: #0d6efd;
+      background: #e7f1ff;
+      vertical-align: middle;
+    }
+    .req-dot{
+      display:inline-block;
+      width:.45rem; height:.45rem;
+      border-radius:999px;
+      background:#dc3545;
+      margin-left:.35rem;
+      vertical-align:middle;
+    }
+    .soft-required{
+      border-left: 3px solid #0d6efd;
+      padding-left: .75rem;
+      margin-bottom: 1rem;
+      background: rgba(13,110,253,.04);
+      border-radius: .35rem;
+      padding-top:.5rem;
+      padding-bottom:.5rem;
+    }
   </style>
 {% endblock %}
 
 {% block extra_js %}
   {{ form.media.js }}
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
 
-    // -------------------------
-    // Pilot profile auto-fill
-    // -------------------------
-    const pilotSelect = document.getElementById("id_pilot_profile");
-    const certInput   = document.getElementById("id_pilot_cert_manual");
-    const hoursInput  = document.getElementById("id_pilot_flight_hours");
+      // -------------------------
+      // Pilot profile auto-fill
+      // -------------------------
+      const pilotSelect = document.getElementById("id_pilot_profile");
+      const certInput   = document.getElementById("id_pilot_cert_manual");
+      const hoursInput  = document.getElementById("id_pilot_flight_hours");
 
-    if (pilotSelect) {
-      let profileMap = {};
-      const dataElement = document.getElementById("pilot-profile-data");
+      if (pilotSelect) {
+        let profileMap = {};
+        const dataElement = document.getElementById("pilot-profile-data");
 
-      if (dataElement) {
-        try {
-          const data = JSON.parse(dataElement.textContent);
-          data.forEach(function (item) {
-            profileMap[String(item.id)] = item;
-          });
-        } catch (e) {
-          console.error("Could not parse pilot profile data", e);
+        if (dataElement) {
+          try {
+            const data = JSON.parse(dataElement.textContent);
+            data.forEach(function (item) { profileMap[String(item.id)] = item; });
+          } catch (e) { console.error("Could not parse pilot profile data", e); }
         }
-      }
 
-      function updatePilotFields() {
-        const selectedId = String(pilotSelect.value || "");
-        const profile = profileMap[selectedId];
-        if (!profile) return;
+        function updatePilotFields() {
+          const selectedId = String(pilotSelect.value || "");
+          const profile = profileMap[selectedId];
+          if (!profile) return;
 
-        if (certInput)  certInput.value  = profile.license_number || "";
-        if (hoursInput) hoursInput.value = profile.flight_hours || "";
-      }
-
-      pilotSelect.addEventListener("change", updatePilotFields);
-      updatePilotFields();
-    }
-
-    // -------------------------
-    // Drone safety auto-fill
-    // -------------------------
-    const aircraftSelect = document.getElementById("id_aircraft");
-    const safetyTextarea = document.getElementById("id_safety_features_notes");
-
-    if (aircraftSelect && safetyTextarea) {
-      let safetyMap = {};
-      let userEdited = false;
-
-      const safetyDataElement = document.getElementById("drone-safety-data");
-
-      if (safetyDataElement) {
-        try {
-          const safetyData = JSON.parse(safetyDataElement.textContent);
-          safetyData.forEach(function (item) {
-            safetyMap[String(item.id)] = (item.safety_features || "").trim();
-          });
-        } catch (e) {
-          console.error("Could not parse drone safety data", e);
+          if (certInput && !certInput.value)  certInput.value  = profile.license_number || "";
+          if (hoursInput && !hoursInput.value) hoursInput.value = profile.flight_hours || "";
         }
-      } else {
-        console.warn("drone-safety-data element not found (drone_safety_data not in context?)");
+
+        pilotSelect.addEventListener("change", updatePilotFields);
+        updatePilotFields();
       }
 
-      // Mark field as manually edited once the user types
-      safetyTextarea.addEventListener("input", function () {
-        userEdited = true;
-      });
+      // -------------------------
+      // Drone safety auto-fill
+      // -------------------------
+      const aircraftSelect = document.getElementById("id_aircraft");
+      const safetyTextarea = document.getElementById("id_safety_features_notes");
 
-      function populateSafetyFeatures(force=false) {
-        const selectedId = String(aircraftSelect.value || "");
-        if (!selectedId) return;
+      if (aircraftSelect && safetyTextarea) {
+        let safetyMap = {};
+        let userEdited = false;
 
-        const safetyText = (safetyMap[selectedId] || "").trim();
-        if (!safetyText) return;
+        const safetyDataElement = document.getElementById("drone-safety-data");
+        if (safetyDataElement) {
+          try {
+            const safetyData = JSON.parse(safetyDataElement.textContent);
+            safetyData.forEach(function (item) {
+              safetyMap[String(item.id)] = (item.safety_features || "").trim();
+            });
+          } catch (e) { console.error("Could not parse drone safety data", e); }
+        }
 
-        if (!force && userEdited) return;
+        safetyTextarea.addEventListener("input", function () { userEdited = true; });
 
-        safetyTextarea.value = safetyText;
-      }
+        function populateSafetyFeatures(force=false) {
+          const selectedId = String(aircraftSelect.value || "");
+          if (!selectedId) return;
 
-      // On aircraft change: reset "userEdited" and force refresh from profile
-      aircraftSelect.addEventListener("change", function () {
-        userEdited = false;
+          const safetyText = (safetyMap[selectedId] || "").trim();
+          if (!safetyText) return;
+
+          if (!force && userEdited) return;
+          if (!force && (safetyTextarea.value || "").trim()) return;
+
+          safetyTextarea.value = safetyText;
+        }
+
+        aircraftSelect.addEventListener("change", function () {
+          userEdited = false;
+          populateSafetyFeatures(true);
+        });
+
         populateSafetyFeatures(true);
-      });
+      }
 
-      // Populate on initial load (edit mode too)
-      populateSafetyFeatures(true);
-    }
+      // -------------------------
+      // 107.39 / 107.145 toggles
+      // -------------------------
+      const oopToggle  = document.getElementById("id_operates_under_10739");
+      const oopDetails = document.getElementById("oop-waiver-details");
+      if (oopToggle && oopDetails) {
+        const update = () => oopDetails.classList.toggle("d-none", !oopToggle.checked);
+        oopToggle.addEventListener("change", update);
+        update();
+      }
 
-    // -------------------------
-    // 107.39 / 107.145 toggles
-    // -------------------------
-    const oopToggle  = document.getElementById("id_operates_under_10739");
-    const oopDetails = document.getElementById("oop-waiver-details");
-    if (oopToggle && oopDetails) {
-      const update = () => oopDetails.classList.toggle("d-none", !oopToggle.checked);
-      oopToggle.addEventListener("change", update);
-      update();
-    }
+      const mvToggle  = document.getElementById("id_operates_under_107145");
+      const mvDetails = document.getElementById("mv-waiver-details");
+      if (mvToggle && mvDetails) {
+        const update = () => mvDetails.classList.toggle("d-none", !mvToggle.checked);
+        mvToggle.addEventListener("change", update);
+        update();
+      }
 
-    const mvToggle  = document.getElementById("id_operates_under_107145");
-    const mvDetails = document.getElementById("mv-waiver-details");
-    if (mvToggle && mvDetails) {
-      const update = () => mvDetails.classList.toggle("d-none", !mvToggle.checked);
-      mvToggle.addEventListener("change", update);
-      update();
-    }
+      // -------------------------
+      // ATC method toggles
+      // -------------------------
+      const atcMethod    = document.getElementById("id_atc_coordination_method");
+      const atcPhoneWrap = document.getElementById("atc-phone-wrap");
+      const atcFreqWrap  = document.getElementById("atc-freq-wrap");
 
-    // -------------------------
-    // ATC method toggles (phone/radio hints)
-    // -------------------------
-    const atcMethod    = document.getElementById("id_atc_coordination_method");
-    const atcPhoneWrap = document.getElementById("atc-phone-wrap");
-    const atcFreqWrap  = document.getElementById("atc-freq-wrap");
+      function updateAtcVisibility() {
+        if (!atcMethod) return;
+        const v = String(atcMethod.value || "").toLowerCase();
 
-    function updateAtcVisibility() {
-      if (!atcMethod) return;
-      const v = String(atcMethod.value || "").toLowerCase();
+        const showPhone = (v === "phone" || v === "both" || v === "other");
+        const showRadio = (v === "radio" || v === "both" || v === "other");
 
-      const showPhone = (v === "phone" || v === "both" || v === "other");
-      const showRadio = (v === "radio" || v === "both" || v === "other");
+        if (atcPhoneWrap) atcPhoneWrap.classList.toggle("d-none", !showPhone);
+        if (atcFreqWrap)  atcFreqWrap.classList.toggle("d-none", !showRadio);
+      }
+      if (atcMethod) {
+        atcMethod.addEventListener("change", updateAtcVisibility);
+        updateAtcVisibility();
+      }
 
-      if (atcPhoneWrap) atcPhoneWrap.classList.toggle("d-none", !showPhone);
-      if (atcFreqWrap)  atcFreqWrap.classList.toggle("d-none", !showRadio);
-    }
+      // -------------------------
+      // Controlled airspace toggles (B/C/D/E)
+      // -------------------------
+      const airspace = document.getElementById("id_airspace_class");
+      const controlledNotice = document.getElementById("controlled-notice");
+      const containmentItem  = document.getElementById("accordion-containment");
+      const atcItem          = document.getElementById("accordion-atc");
 
-    if (atcMethod) {
-      atcMethod.addEventListener("change", updateAtcVisibility);
-      updateAtcVisibility();
-    }
+      function isControlled(v){
+        v = String(v || "").toUpperCase().trim();
+        return ["B","C","D","E"].includes(v);
+      }
 
-  });
-</script>
+      function updateControlledUI() {
+        const controlled = isControlled(airspace ? airspace.value : "");
+        if (controlledNotice) controlledNotice.classList.toggle("d-none", !controlled);
+        if (containmentItem)  containmentItem.classList.toggle("d-none", !controlled);
+        if (atcItem)          atcItem.classList.toggle("d-none", !controlled);
+      }
 
+      if (airspace) {
+        airspace.addEventListener("change", updateControlledUI);
+        updateControlledUI();
+      }
+
+      // -------------------------
+      // Corridor-only fields
+      // -------------------------
+      const areaType = document.getElementById("id_operation_area_type");
+      const corridorWrap = document.getElementById("corridor-fields");
+      function updateAreaTypeUI(){
+        if (!areaType || !corridorWrap) return;
+        corridorWrap.classList.toggle("d-none", String(areaType.value || "") !== "corridor");
+      }
+      if (areaType) {
+        areaType.addEventListener("change", updateAreaTypeUI);
+        updateAreaTypeUI();
+      }
+
+      // -------------------------
+      // RTH-only altitude
+      // -------------------------
+      const lostLink = document.getElementById("id_lost_link_behavior");
+      const rthWrap  = document.getElementById("rth-alt-wrap");
+      function updateLostLinkUI(){
+        if (!lostLink || !rthWrap) return;
+        rthWrap.classList.toggle("d-none", String(lostLink.value || "") !== "rth");
+      }
+      if (lostLink) {
+        lostLink.addEventListener("change", updateLostLinkUI);
+        updateLostLinkUI();
+      }
+
+    });
+  </script>
 {% endblock %}
 
 {% block content %}
@@ -181,9 +237,7 @@
       </p>
     </div>
     <div class="d-flex gap-2">
-      <a href="{% url 'airspace:waiver_planning_list' %}" class="btn btn-outline-secondary btn-sm">
-        ← Back
-      </a>
+      <a href="{% url 'airspace:waiver_planning_list' %}" class="btn btn-outline-secondary btn-sm">← Back</a>
       {% if planning %}
         <a href="{% url 'airspace:waiver_planning_new' %}?planning_id={{ planning.id }}"
            class="btn btn-primary btn-sm">
@@ -194,10 +248,17 @@
   </div>
 
   {% if form.non_field_errors %}
-    <div class="alert alert-danger">
-      {{ form.non_field_errors }}
-    </div>
+    <div class="alert alert-danger">{{ form.non_field_errors }}</div>
   {% endif %}
+
+  <div id="controlled-notice" class="alert alert-primary d-none">
+    <div class="fw-semibold">
+      Controlled Airspace Detected <span class="badge-controlled">B / C / D / E</span>
+    </div>
+    <div class="small mb-0">
+      Containment + ATC sections become required so your FAA “Description of Operations” and CONOPS can be generated without inventing details.
+    </div>
+  </div>
 
   <div class="card shadow-sm">
     <div class="card-body">
@@ -205,15 +266,12 @@
       <form method="post" novalidate enctype="multipart/form-data">
         {% csrf_token %}
 
-        {# Hidden fields (controlled server-side) #}
         {{ form.location_latitude }}
         {{ form.location_longitude }}
 
         <div class="accordion" id="planningAccordion">
 
-          {# ------------------------------------------------------------------ #}
-          {# Operation Basics                                                    #}
-          {# ------------------------------------------------------------------ #}
+          {# Operation Basics #}
           <div class="accordion-item">
             <h2 class="accordion-header" id="headingBasics">
               <button class="accordion-button" type="button"
@@ -284,9 +342,7 @@
             </div>
           </div>
 
-          {# ------------------------------------------------------------------ #}
-          {# Aircraft                                                            #}
-          {# ------------------------------------------------------------------ #}
+          {# Aircraft #}
           <div class="accordion-item">
             <h2 class="accordion-header" id="headingAircraft">
               <button class="accordion-button collapsed" type="button"
@@ -304,13 +360,14 @@
                     {{ form.aircraft }}
                     {{ form.aircraft.errors }}
                   </div>
+
                   <div class="col-12 col-md-6">
                     <label class="form-label fw-semibold" for="{{ form.aircraft_manual.id_for_label }}">Other / additional drones</label>
                     {{ form.aircraft_manual }}
                     <div class="form-text compact">Comma-separated (e.g., “DJI Avata 2, DJI Mini 4 Pro”).</div>
                     {{ form.aircraft_manual.errors }}
                   </div>
-                    <div class="row g-3">
+
                   <div class="col-12">
                     <label class="form-label fw-semibold" for="{{ form.safety_features_notes.id_for_label }}">Drone Safety Features</label>
                     {{ form.safety_features_notes }}
@@ -318,14 +375,11 @@
                     {{ form.safety_features_notes.errors }}
                   </div>
                 </div>
-                </div>
               </div>
             </div>
           </div>
 
-          {# ------------------------------------------------------------------ #}
-          {# Pilot                                                               #}
-          {# ------------------------------------------------------------------ #}
+          {# Pilot #}
           <div class="accordion-item">
             <h2 class="accordion-header" id="headingPilot">
               <button class="accordion-button collapsed" type="button"
@@ -365,9 +419,7 @@
             </div>
           </div>
 
-          {# ------------------------------------------------------------------ #}
-          {# Venue & Location / Airspace                                         #}
-          {# ------------------------------------------------------------------ #}
+          {# Venue, Location & Airspace #}
           <div class="accordion-item">
             <h2 class="accordion-header" id="headingLocation">
               <button class="accordion-button collapsed" type="button"
@@ -415,9 +467,14 @@
 
                 <div class="row g-3 mb-3">
                   <div class="col-12 col-md-6">
-                    <label class="form-label fw-semibold" for="{{ form.airspace_class.id_for_label }}">Airspace class</label>
+                    <label class="form-label fw-semibold" for="{{ form.airspace_class.id_for_label }}">
+                      Airspace class
+                    </label>
                     {{ form.airspace_class }}
                     {{ form.airspace_class.errors }}
+                    <div class="form-text compact">
+                      If Class B/C/D/E is selected, Containment + ATC become required.
+                    </div>
                   </div>
 
                   <div class="col-12 col-md-6">
@@ -428,17 +485,6 @@
                 </div>
 
                 <h3 class="h6 text-uppercase text-muted mt-3 mb-2">Centerpoint Coordinates (DMS)</h3>
-
-                <div class="row g-1 small text-muted mb-1">
-                  <div class="col-12">
-                    <div class="row g-1">
-                      <div class="col-3 text-center">Deg</div>
-                      <div class="col-3 text-center">Min</div>
-                      <div class="col-3 text-center">Sec</div>
-                      <div class="col-3 text-center">Dir</div>
-                    </div>
-                  </div>
-                </div>
 
                 <div class="row g-3 mb-3">
                   <div class="col-12 col-md-6">
@@ -471,7 +517,7 @@
                   </div>
 
                   <div class="col-12 col-md-6">
-                    <label class="form-label fw-semibold" for="{{ form.distance_to_airport_nm.id_for_label }}">Distance to airport (NM)</label>
+                    <label class="form-label fw-semibold" for="{{ form.distance_to_airport_nm.id_for_label }}">Distance to airport (NM) - Auto-calculated when airport + coordinates are set.</label>
                     {{ form.distance_to_airport_nm }}
                     <div class="form-text compact">Optional (if you’ve measured it).</div>
                     {{ form.distance_to_airport_nm.errors }}
@@ -499,35 +545,11 @@
                   </div>
                 </div>
 
-                {% if planning %}
-                  <div class="mt-3">
-                    {% if planning.nearest_airport_ref %}
-                      <div class="alert alert-light border py-2 mb-0">
-                        <div class="fw-semibold small">Selected Airport</div>
-                        <div>
-                          {{ planning.nearest_airport_ref.icao }} — {{ planning.nearest_airport_ref.name }}
-                          {% if planning.distance_to_airport_nm %}
-                            <span class="text-muted">({{ planning.distance_to_airport_nm }} NM)</span>
-                          {% endif %}
-                        </div>
-                      </div>
-                    {% elif planning.nearest_airport %}
-                      <div class="alert alert-warning py-2 mb-0">
-                        <div class="small mb-0">
-                          Manual airport set to <strong>{{ planning.nearest_airport }}</strong>.
-                        </div>
-                      </div>
-                    {% endif %}
-                  </div>
-                {% endif %}
-
               </div>
             </div>
           </div>
 
-          {# ------------------------------------------------------------------ #}
-          {# Waivers: §107.39 and §107.145                                       #}
-          {# ------------------------------------------------------------------ #}
+          {# Existing Waivers #}
           <div class="accordion-item">
             <h2 class="accordion-header" id="headingWaivers">
               <button class="accordion-button collapsed" type="button"
@@ -539,7 +561,6 @@
             <div id="collapseWaivers" class="accordion-collapse collapse"
                  aria-labelledby="headingWaivers" data-bs-parent="#planningAccordion">
               <div class="accordion-body">
-
                 <div class="row g-3">
                   <div class="col-12 col-md-6">
                     <div class="form-check form-switch">
@@ -596,9 +617,7 @@
             </div>
           </div>
 
-          {# ------------------------------------------------------------------ #}
-          {# Safety & Insurance                                                   #}
-          {# ------------------------------------------------------------------ #}
+          {# Safety, VO & Insurance #}
           <div class="accordion-item">
             <h2 class="accordion-header" id="headingSafety">
               <button class="accordion-button collapsed" type="button"
@@ -610,14 +629,11 @@
             <div id="collapseSafety" class="accordion-collapse collapse"
                  aria-labelledby="headingSafety" data-bs-parent="#planningAccordion">
               <div class="accordion-body">
-
                 <div class="row g-3 mb-3">
                   <div class="col-12 col-md-4">
                     <div class="form-check form-switch">
                       {{ form.uses_drone_detection }}
-                      <label class="form-check-label fw-semibold" for="{{ form.uses_drone_detection.id_for_label }}">
-                        Drone detection in use
-                      </label>
+                      <label class="form-check-label fw-semibold" for="{{ form.uses_drone_detection.id_for_label }}">Drone detection in use</label>
                     </div>
                     {{ form.uses_drone_detection.errors }}
                   </div>
@@ -625,9 +641,7 @@
                   <div class="col-12 col-md-4">
                     <div class="form-check form-switch">
                       {{ form.uses_flight_tracking }}
-                      <label class="form-check-label fw-semibold" for="{{ form.uses_flight_tracking.id_for_label }}">
-                        Flight tracking in use
-                      </label>
+                      <label class="form-check-label fw-semibold" for="{{ form.uses_flight_tracking.id_for_label }}">Flight tracking in use</label>
                     </div>
                     {{ form.uses_flight_tracking.errors }}
                   </div>
@@ -635,9 +649,7 @@
                   <div class="col-12 col-md-4">
                     <div class="form-check form-switch">
                       {{ form.has_visual_observer }}
-                      <label class="form-check-label fw-semibold" for="{{ form.has_visual_observer.id_for_label }}">
-                        Visual observer used
-                      </label>
+                      <label class="form-check-label fw-semibold" for="{{ form.has_visual_observer.id_for_label }}">Visual observer used</label>
                     </div>
                     {{ form.has_visual_observer.errors }}
                   </div>
@@ -659,9 +671,7 @@
             </div>
           </div>
 
-          {# ------------------------------------------------------------------ #}
-          {# Purpose & Operational Profile                                        #}
-          {# ------------------------------------------------------------------ #}
+          {# Purpose & Operational Profile #}
           <div class="accordion-item">
             <h2 class="accordion-header" id="headingProfile">
               <button class="accordion-button collapsed" type="button"
@@ -673,7 +683,6 @@
             <div id="collapseProfile" class="accordion-collapse collapse"
                  aria-labelledby="headingProfile" data-bs-parent="#planningAccordion">
               <div class="accordion-body">
-
                 <div class="row g-3 mb-3">
                   <div class="col-12">
                     <label class="form-label fw-semibold" for="{{ form.purpose_operations.id_for_label }}">Purpose of drone operations</label>
@@ -766,20 +775,23 @@
             </div>
           </div>
 
-          {# ------------------------------------------------------------------ #}
-          {# Containment / Area Definition (Controlled airspace)                  #}
-          {# ------------------------------------------------------------------ #}
-          <div class="accordion-item">
+          {# Containment (controlled airspace only) #}
+          <div class="accordion-item d-none" id="accordion-containment">
             <h2 class="accordion-header" id="headingContainment">
               <button class="accordion-button collapsed" type="button"
                       data-bs-toggle="collapse" data-bs-target="#collapseContainment"
                       aria-expanded="false" aria-controls="collapseContainment">
                 Containment & Area Definition (Controlled Airspace)
+                <span class="req-dot" title="Required for controlled airspace"></span>
               </button>
             </h2>
             <div id="collapseContainment" class="accordion-collapse collapse"
                  aria-labelledby="headingContainment" data-bs-parent="#planningAccordion">
               <div class="accordion-body">
+
+                <div class="soft-required small">
+                  These fields are required for Class B/C/D/E so Paragraph 2 can be written without inventing details.
+                </div>
 
                 <div class="row g-3 mb-3">
                   <div class="col-12 col-md-6">
@@ -803,7 +815,7 @@
                   </div>
                 </div>
 
-                <div class="row g-3">
+                <div id="corridor-fields" class="row g-3 d-none">
                   <div class="col-6 col-md-4">
                     <label class="form-label fw-semibold" for="{{ form.corridor_length_ft.id_for_label }}">Corridor length (ft)</label>
                     {{ form.corridor_length_ft }}
@@ -821,13 +833,20 @@
                   </div>
                 </div>
 
+                {# still show groundspeed even when not corridor #}
+                <div class="row g-3" id="non-corridor-speed">
+                  <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold" for="{{ form.max_groundspeed_mph.id_for_label }}">Max groundspeed (mph)</label>
+                    {{ form.max_groundspeed_mph }}
+                    {{ form.max_groundspeed_mph.errors }}
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>
 
-          {# ------------------------------------------------------------------ #}
-          {# Emergency / Lost Link                                                #}
-          {# ------------------------------------------------------------------ #}
+          {# Emergency / Lost Link #}
           <div class="accordion-item">
             <h2 class="accordion-header" id="headingEmergency">
               <button class="accordion-button collapsed" type="button"
@@ -846,7 +865,8 @@
                     {{ form.lost_link_behavior }}
                     {{ form.lost_link_behavior.errors }}
                   </div>
-                  <div class="col-12 col-md-6">
+
+                  <div class="col-12 col-md-6 d-none" id="rth-alt-wrap">
                     <label class="form-label fw-semibold" for="{{ form.rth_altitude_ft_agl.id_for_label }}">RTH altitude (ft AGL)</label>
                     {{ form.rth_altitude_ft_agl }}
                     {{ form.rth_altitude_ft_agl.errors }}
@@ -870,20 +890,23 @@
             </div>
           </div>
 
-          {# ------------------------------------------------------------------ #}
-          {# ATC / Communications                                                 #}
-          {# ------------------------------------------------------------------ #}
-          <div class="accordion-item">
+          {# ATC (controlled airspace only) #}
+          <div class="accordion-item d-none" id="accordion-atc">
             <h2 class="accordion-header" id="headingATC">
               <button class="accordion-button collapsed" type="button"
                       data-bs-toggle="collapse" data-bs-target="#collapseATC"
                       aria-expanded="false" aria-controls="collapseATC">
                 ATC / Communications (Controlled Airspace)
+                <span class="req-dot" title="Required for controlled airspace"></span>
               </button>
             </h2>
             <div id="collapseATC" class="accordion-collapse collapse"
                  aria-labelledby="headingATC" data-bs-parent="#planningAccordion">
               <div class="accordion-body">
+
+                <div class="soft-required small">
+                  Provide check-in steps + deviation/termination triggers so the FAA description can be generated without assumptions.
+                </div>
 
                 <div class="row g-3 mb-3">
                   <div class="col-12 col-md-6">
@@ -931,9 +954,7 @@
             </div>
           </div>
 
-          {# ------------------------------------------------------------------ #}
-          {# Weather & Crew                                                       #}
-          {# ------------------------------------------------------------------ #}
+          {# Weather & Crew #}
           <div class="accordion-item">
             <h2 class="accordion-header" id="headingWeather">
               <button class="accordion-button collapsed" type="button"
@@ -989,7 +1010,7 @@
             </div>
           </div>
 
-        </div> {# /accordion #}
+        </div>
 
         <hr class="text-primary my-4">
 

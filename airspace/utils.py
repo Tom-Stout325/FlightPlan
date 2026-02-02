@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any, Optional
+from typing import List, Dict, Any, Optional
 
 from math import radians, sin, cos, sqrt, atan2
 
@@ -201,3 +201,83 @@ def haversine_nm(lat1, lon1, lat2, lon2) -> Decimal:
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     km = EARTH_RADIUS_KM * c
     return (Decimal(str(km)) * NM_PER_KM).quantize(Decimal("0.01"))
+
+
+
+
+
+
+
+
+CROWDLIKE_ENV_CODES = {
+    "crowd_sparse", "crowd_moderate", "crowd_dense",
+    "pedestrian", "roadways", "recreational", "commercial",
+}
+
+
+def should_include_10739(planning) -> bool:
+    """
+    §107.39 section is included if:
+      - user indicates they are operating under an existing 107.39 waiver, OR
+      - planning suggests people/public may be present.
+    """
+    if getattr(planning, "operates_under_10739", False):
+        return True
+
+    env = getattr(planning, "ground_environment", None) or []
+    env_set = set(env) if isinstance(env, (list, tuple)) else set()
+
+    crowd_hint = bool(env_set.intersection(CROWDLIKE_ENV_CODES))
+    crowd_size = bool((getattr(planning, "estimated_crowd_size", "") or "").strip())
+    return crowd_hint or crowd_size
+
+
+
+
+def validate_10739_readiness(planning) -> Dict[str, Any]:
+    """
+    Validates underlying facts needed to write a defensible §107.39 section.
+    Returns dict: { ok: bool, missing: [str] }
+    """
+    missing: List[str] = []
+
+    def req(label: str, ok: bool):
+        if not ok:
+            missing.append(label)
+
+    def has_text(v) -> bool:
+        return bool((v or "").strip()) if isinstance(v, str) else bool(v)
+
+    def has_any(*vals) -> bool:
+        return any(has_text(v) for v in vals)
+
+    include = should_include_10739(planning)
+    if not include:
+        return {"ok": True, "missing": [], "included": False}
+
+    # People/crowd context
+    req("Ground environment OR estimated crowd size", has_any(getattr(planning, "estimated_crowd_size", ""), getattr(planning, "ground_environment", None)))
+
+    # Containment / keep-out
+    req("Containment method OR containment notes", has_any(getattr(planning, "containment_method", ""), getattr(planning, "containment_notes", "")))
+
+    # Basic operating profile (keeps narrative from being vague)
+    req("Proposed AGL (ft)", getattr(planning, "proposed_agl", None) is not None)
+    req("Max groundspeed (mph)", getattr(planning, "max_groundspeed_mph", None) is not None)
+
+    # Termination triggers + contingencies
+    req("Deviation / termination triggers", has_text(getattr(planning, "atc_deviation_triggers", "")))
+    req("Lost-link behavior", has_text(getattr(planning, "lost_link_behavior", "")))
+    req("Lost-link actions", has_text(getattr(planning, "lost_link_actions", "")))
+    req("Flyaway actions", has_text(getattr(planning, "flyaway_actions", "")))
+
+    # If corridor: dimensions
+    if (getattr(planning, "operation_area_type", "") or "").strip() == "corridor":
+        req("Corridor length (ft)", getattr(planning, "corridor_length_ft", None) is not None)
+        req("Corridor width (ft)", getattr(planning, "corridor_width_ft", None) is not None)
+
+    # If RTH: altitude
+    if (getattr(planning, "lost_link_behavior", "") or "").strip() == "rth":
+        req("RTH altitude (ft AGL)", getattr(planning, "rth_altitude_ft_agl", None) is not None)
+
+    return {"ok": len(missing) == 0, "missing": missing, "included": True}

@@ -13,7 +13,6 @@ from documents.models import GeneralDocument
 
 
 
-
 # ==========================================================
 # CONTROLLED AIRSPACE REQUIREMENTS (FAA WAIVER DESCRIPTION)
 # ==========================================================
@@ -30,19 +29,16 @@ def _is_controlled_airspace(planning) -> bool:
 
 
 def _validate_controlled_airspace_required_fields(planning) -> dict:
-    """
-    Returns an errors dict suitable for ValidationError(errors).
-    Uses WaiverPlanning field names EXACTLY.
-    """
     if not _is_controlled_airspace(planning):
         return {}
 
     errors = {}
-
+    
     def add(field: str, msg: str) -> None:
         errors.setdefault(field, []).append(msg)
 
     op_area = (getattr(planning, "operation_area_type", "") or "").strip().lower()
+    
     if not op_area:
         add(
             "operation_area_type",
@@ -53,6 +49,7 @@ def _validate_controlled_airspace_required_fields(planning) -> dict:
         _has_text(getattr(planning, "containment_method", "")) or
         _has_text(getattr(planning, "containment_notes", ""))
     )
+    
     if not containment_ok:
         add(
             "containment_method",
@@ -117,8 +114,6 @@ def _validate_controlled_airspace_required_fields(planning) -> dict:
         )
 
     return errors
-
-
 
 
 def _ownership_error() -> str:
@@ -200,6 +195,7 @@ class WaiverPlanning(models.Model):
         ("crowd_moderate", "Moderate public presence"),
         ("crowd_dense", "Dense gatherings / event crowds"),
     ]
+
 
     PREPARED_PROCEDURES_CHOICES = [
         ("preflight", "Pre-flight checklist used"),
@@ -612,12 +608,6 @@ class WaiverApplication(models.Model):
 #               C O N O P S
 # ------------------------------------
 class ConopsSection(models.Model):
-    """
-    One section of a CONOPS document for an FAA waiver application.
-    Sections may be generated or manually edited and locked.
-    """
-
-    # HARDEN: direct ownership for row-level filtering without joins
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -670,13 +660,13 @@ class ConopsSection(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["application", "section_key"],
-                name="uniq_conopssection_app_sectionkey",
-            ),
+                name="uniq_conops_section_per_application_key",
+            )
         ]
-        ordering = ["id"]
         indexes = [
-            models.Index(fields=["user", "application", "section_key"]),
+            models.Index(fields=["application", "section_key"]),
         ]
+
 
     def __str__(self):
         return f"{self.application_id} – {self.title}"

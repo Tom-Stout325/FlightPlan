@@ -11,7 +11,9 @@ CLIENT = "airborne"
 
 DEBUG = True  # or True while you're still debugging
 
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
+# ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
+ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
+
 
 print(">>> USING ALLOWED_HOSTS:", ALLOWED_HOSTS)
 
@@ -31,3 +33,6 @@ ENABLED_REPORTS = [
     "tax_category_summary",
     "drone_safety_profile_list",
 ]
+
+
+
