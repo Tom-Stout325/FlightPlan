@@ -13,10 +13,11 @@ from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.utils import timezone
 from dataclasses import dataclass
-from equipment.models import Equipment
+
 from money.models import CompanyProfile, Transaction
 from typing import Any
 import re
+from django.apps import apps
 from weasyprint import HTML, CSS
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,17 @@ from .reports import (
 )
 
 
+from django.apps import apps
+from django.http import Http404
 
+def get_equipment_model():
+    """
+    Equipment app is optional in some deployments.
+    Returns the model or None if the app isn't installed.
+    """
+    if apps.is_installed("equipment"):
+        return apps.get_model("equipment", "Equipment")
+    return None
 
 # -----------------------------------------------------------------------------
 # Helpers
@@ -891,8 +902,13 @@ def schedule_c_yoy_pdf(request: HttpRequest) -> HttpResponse:
 # Form 4797 (Equipment)
 # -----------------------------------------------------------------------------
 
+
 @login_required
 def form_4797_view(request: HttpRequest) -> HttpResponse:
+    Equipment = get_equipment_model()
+    if Equipment is None:
+        raise Http404("Equipment module is not enabled in this deployment.")
+
     year = _selected_year_from_request(request)
 
     equipment_qs = (
@@ -903,7 +919,7 @@ def form_4797_view(request: HttpRequest) -> HttpResponse:
     if year is not None:
         equipment_qs = equipment_qs.filter(placed_in_service_date__year=year)
 
-    ctx = {
+    ctx: dict[str, Any] = {
         "current_page": "form_4797",
         "selected_year": year,
         "year_choices": _year_choices_for_user(request.user),
@@ -914,8 +930,14 @@ def form_4797_view(request: HttpRequest) -> HttpResponse:
     return render(request, "money/taxes/form_4797.html", ctx)
 
 
+
+
 @login_required
 def form_4797_pdf(request: HttpRequest) -> HttpResponse:
+    Equipment = get_equipment_model()
+    if Equipment is None:
+        raise Http404("Equipment module is not enabled in this deployment.")
+
     year = _selected_year_from_request(request)
 
     equipment_qs = (
@@ -926,7 +948,7 @@ def form_4797_pdf(request: HttpRequest) -> HttpResponse:
     if year is not None:
         equipment_qs = equipment_qs.filter(placed_in_service_date__year=year)
 
-    ctx = {
+    ctx: dict[str, Any] = {
         "current_page": "form_4797",
         "selected_year": year,
         "year_choices": _year_choices_for_user(request.user),
@@ -935,10 +957,20 @@ def form_4797_pdf(request: HttpRequest) -> HttpResponse:
     }
     ctx.update(_company_context())
 
-    html_string = render_to_string("money/taxes/form_4797_pdf.html", ctx, request=request)
-    pdf = HTML(string=html_string, base_url=request.build_absolute_uri("/")).write_pdf()
+    html_string = render_to_string(
+        "money/taxes/form_4797_pdf.html",
+        ctx,
+        request=request,
+    )
+
+    pdf_bytes = HTML(
+        string=html_string,
+        base_url=request.build_absolute_uri("/"),
+    ).write_pdf()
 
     suffix = str(year) if year is not None else "ALL"
-    resp = HttpResponse(pdf, content_type="application/pdf")
-    resp["Content-Disposition"] = f'attachment; filename="Form_4797_{suffix}.pdf"'
+    filename = f"Form_4797_{suffix}.pdf"
+
+    resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+    resp["Content-Disposition"] = f'inline; filename="{filename}"'
     return resp

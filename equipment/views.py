@@ -103,7 +103,10 @@ def equipment_list(request):
     Inventory list + inline create form.
     """
     equipment_qs = _equipment_queryset(request.user)
+    
+    
     equipment = _attach_drone_flight_stats(request, equipment_qs)
+
 
     if request.method == "POST":
         form = EquipmentForm(request.POST, request.FILES, user=request.user)
