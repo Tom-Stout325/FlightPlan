@@ -32,6 +32,9 @@ from .views.invoices_v2 import (
     invoice_v2_review,
     InvoiceV2ListView,
     invoice_v2_suggest_number,
+    invoicev2_export_csv,
+    invoiceitemv2_export_csv,
+    
 )
 
 from .views.clients import (
@@ -130,7 +133,7 @@ from .views.contractor_1099 import (
     contractor_1099_email_copy_b,
     contractor_1099_copy_b,
 )
-from . import views_exports
+
 
 app_name = "money"
 
@@ -327,8 +330,8 @@ urlpatterns = [
 
 
 
-    path("invoices-v2/export/csv/", views_exports.invoicev2_export_csv, name="invoicev2_export_csv"),
-    path("invoice-items-v2/export/csv/", views_exports.invoiceitemv2_export_csv, name="invoiceitemv2_export_csv"),
+    path("invoices-v2/export/csv/", invoicev2_export_csv, name="invoicev2_export_csv"),
+    path("invoice-items-v2/export/csv/", invoiceitemv2_export_csv, name="invoiceitemv2_export_csv"),
 ]
 # ---------------------------------------------------------------------
 # Optional: Form 4797 (requires equipment app)
