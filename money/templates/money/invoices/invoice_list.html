@@ -18,6 +18,14 @@
       <a href="{% url 'money:invoice_v2_create' %}" class="btn btn-primary btn-sm">
        + New Invoice
       </a>
+      <div class="d-flex flex-wrap gap-2">
+  <a class="btn btn-outline-secondary" href="{% url 'money:invoicev2_export_csv' %}">
+    <i class="fa-solid fa-file-csv me-1"></i> Export Invoices (CSV)
+  </a>
+  <a class="btn btn-outline-secondary" href="{% url 'money:invoiceitemv2_export_csv' %}">
+    <i class="fa-solid fa-file-csv me-1"></i> Export Items (CSV)
+  </a>
+</div>
     </div>
   </div>
 

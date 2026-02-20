@@ -19,7 +19,8 @@ from django.views.generic import DeleteView, DetailView, ListView
 from django.db.models.functions import Coalesce
 from django.apps import apps
 from django.http import JsonResponse
-
+from django.utils.timezone import localtime
+from django.db.models import QuerySet
 from money.forms.invoices.invoice_v2 import InvoiceItemV2FormSet, InvoiceV2Form
 from money.models import Client, CompanyProfile, InvoiceV2, Transaction, Event, Service
 
@@ -606,3 +607,200 @@ def invoice_v2_review(request: HttpRequest, pk: int) -> HttpResponse:
 def invoice_review_router(request: HttpRequest, pk: int) -> HttpResponse:
     invoice = get_object_or_404(InvoiceV2, pk=pk, user=request.user)
     return redirect("money:invoice_v2_review", pk=invoice.pk)
+
+
+
+
+
+
+
+def _csv_response(filename: str) -> HttpResponse:
+    resp = HttpResponse(content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+
+def _s(val) -> str:
+    return "" if val is None else str(val)
+
+
+def _money(val: Decimal | None) -> str:
+    if val is None:
+        return ""
+    # Keep plain decimal string; importers usually prefer this.
+    return f"{val:.2f}"
+
+
+@login_required
+def invoicev2_export_csv(request: HttpRequest) -> HttpResponse:
+    """
+    Exports one row per InvoiceV2.
+    Assumes single-user app, but still scopes by request.user for safety.
+    """
+    qs: QuerySet[InvoiceV2] = (
+        InvoiceV2.objects
+        .filter(user=request.user)
+        .select_related("client", "event", "service")
+        .order_by("invoice_number", "pk")
+    )
+
+    # Filename includes timestamp to avoid overwrites
+    ts = localtime().strftime("%Y%m%d-%H%M%S")
+    resp = _csv_response(f"invoices_v2_{ts}.csv")
+    writer = csv.writer(resp)
+
+    headers = [
+        "invoice_number",
+        "client_id",
+        "client_name",
+        "client_email",
+        "service_id",
+        "service_name",
+        "event_id",
+        "event_title",
+        "event_year",
+        "event_name",
+        "location",
+        "amount",
+        "date",
+        "due",
+        "paid_date",
+        "status",
+        "issued_at",
+        "version",
+        "pdf_url",
+        "pdf_sha256",
+        "sent_at",
+        "sent_to",
+        # Snapshot “from” fields (optional but handy for preserving history)
+        "from_name",
+        "from_address",
+        "from_phone",
+        "from_email",
+        "from_website",
+        "from_tax_id",
+        "from_logo_url",
+        "from_header_logo_max_width_px",
+        "from_terms",
+        "from_net_days",
+        "from_footer_text",
+        "from_currency",
+        "from_locale",
+        "from_timezone",
+        "pdf_snapshot",
+        "pdf_snapshot_created_at",
+        "created_at",
+        "updated_at",
+    ]
+    writer.writerow(headers)
+
+    for inv in qs.iterator(chunk_size=2000):
+        client = getattr(inv, "client", None)
+        service = getattr(inv, "service", None)
+        event = getattr(inv, "event", None)
+
+        # These names may differ in your models; adjust as needed.
+        client_name = getattr(client, "display_name", None) or getattr(client, "name", None) or str(client) if client else ""
+        client_email = getattr(client, "email", "") if client else ""
+        service_name = getattr(service, "service", None) or str(service) if service else ""
+        event_title = getattr(event, "title", None) or str(event) if event else ""
+        event_year = getattr(event, "event_year", "") if event else ""
+
+        writer.writerow([
+            _s(inv.invoice_number),
+            _s(inv.client_id),
+            _s(client_name),
+            _s(client_email),
+            _s(inv.service_id),
+            _s(service_name),
+            _s(inv.event_id),
+            _s(event_title),
+            _s(event_year),
+            _s(inv.event_name),
+            _s(inv.location),
+            _money(inv.amount),
+            _s(inv.date),
+            _s(inv.due),
+            _s(inv.paid_date),
+            _s(inv.status),
+            _s(inv.issued_at),
+            _s(inv.version),
+            _s(inv.pdf_url),
+            _s(inv.pdf_sha256),
+            _s(inv.sent_at),
+            _s(inv.sent_to),
+            _s(inv.from_name),
+            _s(inv.from_address),
+            _s(inv.from_phone),
+            _s(inv.from_email),
+            _s(inv.from_website),
+            _s(inv.from_tax_id),
+            _s(inv.from_logo_url),
+            _s(inv.from_header_logo_max_width_px),
+            _s(inv.from_terms),
+            _s(inv.from_net_days),
+            _s(inv.from_footer_text),
+            _s(inv.from_currency),
+            _s(inv.from_locale),
+            _s(inv.from_timezone),
+            _s(getattr(inv.pdf_snapshot, "name", "")),
+            _s(inv.pdf_snapshot_created_at),
+            _s(getattr(inv, "created_at", "")),
+            _s(getattr(inv, "updated_at", "")),
+        ])
+
+    return resp
+
+
+@login_required
+def invoiceitemv2_export_csv(request: HttpRequest) -> HttpResponse:
+    """
+    Exports one row per InvoiceItemV2, joined by invoice_number for portability.
+    """
+    qs: QuerySet[InvoiceItemV2] = (
+        InvoiceItemV2.objects
+        .filter(user=request.user)
+        .select_related("invoice", "sub_cat", "category")
+        .order_by("invoice__invoice_number", "pk")
+    )
+
+    ts = localtime().strftime("%Y%m%d-%H%M%S")
+    resp = _csv_response(f"invoice_items_v2_{ts}.csv")
+    writer = csv.writer(resp)
+
+    headers = [
+        "invoice_number",
+        "item_id",
+        "description",
+        "qty",
+        "price",
+        "line_total",
+        "sub_cat_id",
+        "sub_cat_name",
+        "category_id",
+        "category_name",
+    ]
+    writer.writerow(headers)
+
+    for item in qs.iterator(chunk_size=5000):
+        inv_no = getattr(item.invoice, "invoice_number", "") if item.invoice_id else ""
+        sub_cat_name = getattr(item.sub_cat, "sub_cat", None) or str(item.sub_cat) if item.sub_cat else ""
+        category_name = getattr(item.category, "category", None) or str(item.category) if item.category else ""
+
+        # Avoid calling property repeatedly in loop
+        line_total = (item.qty or Decimal("0")) * (item.price or Decimal("0"))
+
+        writer.writerow([
+            _s(inv_no),
+            _s(item.pk),
+            _s(item.description),
+            _s(item.qty),
+            _money(item.price),
+            _money(line_total),
+            _s(item.sub_cat_id),
+            _s(sub_cat_name),
+            _s(item.category_id),
+            _s(category_name),
+        ])
+
+    return resp

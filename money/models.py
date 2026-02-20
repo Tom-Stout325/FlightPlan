@@ -616,11 +616,7 @@ class MileageRate(models.Model):
 class Vehicle(OwnedModelMixin):
     name = models.CharField(max_length=255)
     placed_in_service_date = models.DateField()
-    placed_in_service_mileage = models.DecimalField(
-        max_digits=10,
-        decimal_places=1,
-        validators=[MinValueValidator(0)],
-    )
+    placed_in_service_mileage = models.DecimalField(max_digits=10, decimal_places=1, validators=[MinValueValidator(0)],)
     year = models.PositiveIntegerField()
     make = models.CharField(max_length=100)
     model = models.CharField(max_length=100)
