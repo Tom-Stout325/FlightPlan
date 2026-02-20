@@ -22,7 +22,8 @@ from django.http import JsonResponse
 from django.utils.timezone import localtime
 from django.db.models import QuerySet
 from money.forms.invoices.invoice_v2 import InvoiceItemV2FormSet, InvoiceV2Form
-from money.models import Client, CompanyProfile, InvoiceV2, Transaction, Event, Service
+from money.models import Client, CompanyProfile, InvoiceV2, Transaction, Event, Service, InvoiceItemV2
+import csv
 
 try:
     from weasyprint import HTML
