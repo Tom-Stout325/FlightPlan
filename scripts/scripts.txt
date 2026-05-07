@@ -1,0 +1,22 @@
+chmod +x scripts/zip_app.sh
+./scripts/zip_app.sh _FLIGHTPLAN
+
+chmod +x scripts/zip_app.sh
+./scripts/zip_app.sh airspace
+./scripts/zip_app.sh accounts
+./scripts/zip_app.sh clients
+./scripts/zip_app.sh documents
+./scripts/zip_app.sh equipment
+./scripts/zip_app.sh flightlogs
+./scripts/zip_app.sh money
+./scripts/zip_app.sh operations
+./scripts/zip_app.sh pilot
+
+Heroku Django Shell:  heroku run -a airspace -- python manage.py shell
+
+Backup the poject:
+cp -R _FLIGHTPLAN _FLIGHTPLAN_backup
+
+cd into the root folder
+
+unzip ~/Downloads/flightplan_equipment_usage_patch.zip

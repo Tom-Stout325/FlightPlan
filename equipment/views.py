@@ -1,6 +1,9 @@
 import csv
 import tempfile
+from collections import defaultdict
+from datetime import timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
@@ -38,57 +41,191 @@ def _equipment_queryset(user):
     )
 
 
+def _duration_zero():
+    return timedelta(0)
+
+
+def _usage_key(*values):
+    """
+    Returns a normalized matching key from the first non-empty value.
+    Serial numbers are preferred by the caller, then names as a fallback.
+    """
+    for value in values:
+        value = (value or "").strip()
+        if value:
+            return value.lower()
+    return ""
+
+
+def _safe_dom_id(prefix: str, value: str) -> str:
+    raw = f"{prefix}-{value or 'item'}"
+    return "".join(c if c.isalnum() else "-" for c in raw).strip("-")
+
+
 def _attach_drone_flight_stats(request, equipment_qs):
     """
-    Adds:
-      - flights_count
-      - total_duration
-    for drone items that have serial_number.
+    Adds flight-log usage stats to Equipment rows and appends read-only
+    virtual equipment rows discovered in FlightLog but not yet saved in Equipment.
 
-    NOTE: If FlightLog is user-owned in your system, scope it:
-      FlightLog.objects.filter(user=request.user, drone_serial__in=[...])
+    For drones, matching prefers FlightLog.drone_serial -> Equipment.serial_number,
+    with drone_name/name as fallback.
+
+    For batteries, matching prefers FlightLog.battery_serial_internal or
+    battery_serial_printed -> Equipment.serial_number, with battery_name/name as fallback.
+
+    Battery charge cycles are not stored as a dedicated FlightLog field, so
+    logged_charge_cycles is a conservative proxy: one logged battery use per flight.
     """
-    drone_serials = list(
-        equipment_qs.filter(equipment_type="Drone")
-        .exclude(serial_number__isnull=True)
-        .exclude(serial_number__exact="")
-        .values_list("serial_number", flat=True)
+    equipment = list(equipment_qs)
+
+    logs = FlightLog.objects.all()
+    if hasattr(FlightLog, "user"):
+        logs = logs.filter(user=request.user)
+
+    log_rows = logs.values(
+        "id",
+        "air_time",
+        "drone_name",
+        "drone_type",
+        "drone_serial",
+        "drone_reg_number",
+        "battery_name",
+        "battery_serial_printed",
+        "battery_serial_internal",
+        "takeoff_battery_pct",
+        "landing_battery_pct",
     )
 
-    stats_map = {}
-    if drone_serials:
-        flight_qs = FlightLog.objects.filter(drone_serial__in=drone_serials)
+    drone_stats = defaultdict(lambda: {
+        "flights_count": 0,
+        "total_duration": _duration_zero(),
+        "name": "",
+        "model": "",
+        "serial_number": "",
+        "faa_number": "",
+    })
+    battery_stats = defaultdict(lambda: {
+        "flights_count": 0,
+        "total_duration": _duration_zero(),
+        "logged_charge_cycles": 0,
+        "name": "",
+        "serial_number": "",
+        "printed_serial": "",
+        "internal_serial": "",
+    })
 
-        if hasattr(FlightLog, "user"):
-            flight_qs = flight_qs.filter(user=request.user)
+    for row in log_rows:
+        duration = row.get("air_time") or _duration_zero()
 
-        stats = (
-            flight_qs.values("drone_serial")
-            .annotate(
-                flights_count=Count("id"),
-                total_duration=Sum("air_time"),
-            )
+        drone_key = _usage_key(row.get("drone_serial"), row.get("drone_name"))
+        if drone_key:
+            stat = drone_stats[drone_key]
+            stat["flights_count"] += 1
+            stat["total_duration"] += duration
+            stat["name"] = stat["name"] or row.get("drone_name") or row.get("drone_type") or "Drone from Flight Logs"
+            stat["model"] = stat["model"] or row.get("drone_type") or ""
+            stat["serial_number"] = stat["serial_number"] or row.get("drone_serial") or ""
+            stat["faa_number"] = stat["faa_number"] or row.get("drone_reg_number") or ""
+
+        battery_key = _usage_key(
+            row.get("battery_serial_internal"),
+            row.get("battery_serial_printed"),
+            row.get("battery_name"),
         )
-        stats_map = {
-            row["drone_serial"]: {
-                "flights_count": row["flights_count"] or 0,
-                "total_duration": row["total_duration"] or 0,
-            }
-            for row in stats
-        }
+        if battery_key:
+            stat = battery_stats[battery_key]
+            stat["flights_count"] += 1
+            stat["total_duration"] += duration
+            stat["logged_charge_cycles"] += 1
+            stat["name"] = stat["name"] or row.get("battery_name") or "Battery from Flight Logs"
+            stat["serial_number"] = stat["serial_number"] or row.get("battery_serial_internal") or row.get("battery_serial_printed") or ""
+            stat["printed_serial"] = stat["printed_serial"] or row.get("battery_serial_printed") or ""
+            stat["internal_serial"] = stat["internal_serial"] or row.get("battery_serial_internal") or ""
 
-    for eq in equipment_qs:
-        serial = (eq.serial_number or "").strip()
-        if eq.equipment_type == "Drone" and serial:
-            s = stats_map.get(serial, {})
-            eq.flights_count = s.get("flights_count", 0)
-            eq.total_duration = s.get("total_duration", 0)
-        else:
-            eq.flights_count = 0
-            eq.total_duration = 0
+    matched_drone_keys = set()
+    matched_battery_keys = set()
 
-    return equipment_qs
+    for eq in equipment:
+        eq.is_flightlog_virtual = False
+        eq.modal_id = f"equipmentModal{eq.pk}"
+        eq.usage_source = "Equipment inventory"
+        eq.flights_count = 0
+        eq.total_duration = _duration_zero()
+        eq.logged_charge_cycles = 0
 
+        if eq.equipment_type == "Drone":
+            key = _usage_key(eq.serial_number, eq.name)
+            stat = drone_stats.get(key, {}) if key else {}
+            matched_drone_keys.add(key) if key and stat else None
+            eq.flights_count = stat.get("flights_count", 0)
+            eq.total_duration = stat.get("total_duration", _duration_zero())
+        elif eq.equipment_type == "Battery":
+            key = _usage_key(eq.serial_number, eq.name)
+            stat = battery_stats.get(key, {}) if key else {}
+            matched_battery_keys.add(key) if key and stat else None
+            eq.flights_count = stat.get("flights_count", 0)
+            eq.total_duration = stat.get("total_duration", _duration_zero())
+            eq.logged_charge_cycles = stat.get("logged_charge_cycles", 0)
+
+    for key, stat in drone_stats.items():
+        if key in matched_drone_keys:
+            continue
+        equipment.append(SimpleNamespace(
+            pk=_safe_dom_id("flightlog-drone", key),
+            modal_id=_safe_dom_id("equipmentModal-flightlog-drone", key),
+            is_flightlog_virtual=True,
+            usage_source="Flight logs",
+            name=stat["name"],
+            equipment_type="Drone",
+            brand="",
+            model=stat["model"],
+            serial_number=stat["serial_number"],
+            faa_number=stat["faa_number"],
+            faa_certificate=None,
+            receipt=None,
+            purchase_date=None,
+            purchase_cost=None,
+            date_sold=None,
+            sale_price=None,
+            deducted_full_cost=None,
+            notes="This read-only equipment row was discovered from flight logs. Add it to Equipment Inventory to track purchase/tax details.",
+            active=True,
+            flights_count=stat["flights_count"],
+            total_duration=stat["total_duration"],
+            logged_charge_cycles=0,
+        ))
+
+    for key, stat in battery_stats.items():
+        if key in matched_battery_keys:
+            continue
+        equipment.append(SimpleNamespace(
+            pk=_safe_dom_id("flightlog-battery", key),
+            modal_id=_safe_dom_id("equipmentModal-flightlog-battery", key),
+            is_flightlog_virtual=True,
+            usage_source="Flight logs",
+            name=stat["name"],
+            equipment_type="Battery",
+            brand="",
+            model="",
+            serial_number=stat["serial_number"],
+            printed_serial=stat["printed_serial"],
+            internal_serial=stat["internal_serial"],
+            faa_number="",
+            faa_certificate=None,
+            receipt=None,
+            purchase_date=None,
+            purchase_cost=None,
+            date_sold=None,
+            sale_price=None,
+            deducted_full_cost=None,
+            notes="This read-only battery row was discovered from flight logs. Logged charge cycles are estimated from logged battery uses.",
+            active=True,
+            flights_count=stat["flights_count"],
+            total_duration=stat["total_duration"],
+            logged_charge_cycles=stat["logged_charge_cycles"],
+        ))
+
+    return equipment
 
 def _safe_filename(name: str) -> str:
     return "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name).strip("_") or "file"
@@ -268,6 +405,7 @@ def equipment_pdf_single(request, pk):
         return redirect("equipment:equipment_list")
 
     item = get_object_or_404(Equipment, user=request.user, pk=pk)
+    item = next((e for e in _attach_drone_flight_stats(request, Equipment.objects.filter(pk=item.pk, user=request.user)) if not getattr(e, "is_flightlog_virtual", False)), item)
 
     template = get_template("equipment/equipment_pdf_single.html")
     html_string = template.render(

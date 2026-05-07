@@ -5,6 +5,8 @@ from __future__ import annotations
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import FieldError
+from collections import defaultdict
+
 from django.db.models import Count, Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect, render
@@ -25,6 +27,54 @@ def _get_pilot_profile(user):
     """
     return get_object_or_404(PilotProfile, user=user)
 
+
+
+
+def _duration_to_seconds(value) -> int:
+    """
+    Convert a DurationField value to whole seconds for template filters.
+    """
+    if not value:
+        return 0
+    try:
+        return int(value.total_seconds())
+    except AttributeError:
+        return int(value or 0)
+
+
+def _build_drone_usage_stats(logs):
+    """
+    Build the per-drone summary shown on the pilot profile page.
+
+    The template expects each row to include:
+    - drone_name
+    - drone_serial
+    - flights
+    - total_seconds
+    """
+    stats = defaultdict(lambda: {
+        "drone_name": "",
+        "drone_serial": "",
+        "flights": 0,
+        "total_seconds": 0,
+    })
+
+    for log in logs.only("drone_name", "drone_serial", "air_time"):
+        drone_name = (log.drone_name or "").strip()
+        drone_serial = (log.drone_serial or "").strip()
+        key = (drone_name.lower(), drone_serial.lower())
+
+        row = stats[key]
+        row["drone_name"] = drone_name
+        row["drone_serial"] = drone_serial
+        row["flights"] += 1
+        row["total_seconds"] += _duration_to_seconds(log.air_time)
+
+    return sorted(
+        stats.values(),
+        key=lambda item: (item["flights"], item["total_seconds"], item["drone_name"]),
+        reverse=True,
+    )
 
 def _flightlogs_for_user(user):
     """
@@ -57,6 +107,7 @@ def profile(request):
     profile = _get_pilot_profile(request.user)
 
     logs = _flightlogs_for_user(request.user)
+    drone_stats = _build_drone_usage_stats(logs)
 
     # Aggregate stats (defensive if fields are missing)
     # These are best-effort and won't error if a field doesn't exist.
@@ -115,6 +166,7 @@ def profile(request):
         "profile": profile,
         "trainings": trainings,
         "logs": logs,  # if your template uses it
+        "drone_stats": drone_stats,
         "totals": totals,
         "highest_altitude_flight": highest_altitude_flight,
         "fastest_speed_flight": fastest_speed_flight,

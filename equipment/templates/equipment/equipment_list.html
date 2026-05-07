@@ -50,7 +50,8 @@
           <th class="d-none d-md-table-cell">Brand</th>
           <th>Model</th>
           <th class="d-none d-md-table-cell">Serial</th>
-          <th class="d-none d-md-table-cell">Purchased</th>
+          <th class="d-none d-lg-table-cell">Purchased</th>
+          <th class="text-center">Usage</th>
           <th class="text-center">Active</th>
           <th class="text-center">Actions</th>
         </tr>
@@ -63,7 +64,17 @@
             <td class="d-none d-md-table-cell">{{ item.brand }}</td>
             <td>{{ item.model }}</td>
             <td class="d-none d-md-table-cell">{{ item.serial_number }}</td>
-            <td class="d-none d-md-table-cell">{{ item.purchase_date|default:"—" }}</td>
+            <td class="d-none d-lg-table-cell">{{ item.purchase_date|default:"—" }}</td>
+            <td class="text-center small">
+              {% if item.equipment_type == "Drone" or item.equipment_type == "Battery" %}
+                <div class="fw-semibold">{{ item.flights_count|default:"0" }} flights</div>
+                {% if item.equipment_type == "Battery" %}
+                  <div class="text-muted">{{ item.logged_charge_cycles|default:"0" }} cycles*</div>
+                {% endif %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
             <td class="text-center">
               {% if item.active %}
                 <i class="fas fa-check-circle text-success" aria-label="Active"></i>
@@ -76,33 +87,36 @@
                 <button type="button"
                         class="btn btn-sm btn-info"
                         data-bs-toggle="modal"
-                        data-bs-target="#equipmentModal{{ item.pk }}"
+                        data-bs-target="#{{ item.modal_id|default:item.pk }}"
                         title="View">
                   <i class="fas fa-eye"></i>
                 </button>
-                <a href="{% url 'equipment:equipment_edit' item.pk %}" class="btn btn-sm btn-primary" title="Edit">
-                  <i class="fas fa-edit"></i>
-                </a>
-                <a href="{% url 'equipment:equipment_delete' item.pk %}" class="btn btn-sm btn-danger" title="Delete">
-                  <i class="fas fa-trash-alt"></i>
-                </a>
+                {% if not item.is_flightlog_virtual %}
+                  <a href="{% url 'equipment:equipment_edit' item.pk %}" class="btn btn-sm btn-primary" title="Edit">
+                    <i class="fas fa-edit"></i>
+                  </a>
+                  <a href="{% url 'equipment:equipment_delete' item.pk %}" class="btn btn-sm btn-danger" title="Delete">
+                    <i class="fas fa-trash-alt"></i>
+                  </a>
+                {% endif %}
               </div>
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="8" class="text-center">No equipment found.</td></tr>
+          <tr><td colspan="9" class="text-center">No equipment found.</td></tr>
         {% endfor %}
       </tbody>
     </table>
+    <p class="small text-muted mt-2 mb-0">* Battery cycles are estimated from flight-log battery uses. Add the battery to Equipment Inventory to track purchase/tax details while still keeping usage synced from logs.</p>
   </div>
 
   <!-- Equipment Detail Modals -->
   {% for item in equipment %}
-  <div class="modal fade" id="equipmentModal{{ item.pk }}" tabindex="-1" aria-labelledby="equipmentModalLabel{{ item.pk }}" aria-hidden="true">
+  <div class="modal fade" id="{{ item.modal_id|default:item.pk }}" tabindex="-1" aria-labelledby="equipmentModalLabel{{ item.pk }}" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="equipmentModalLabel{{ item.pk }}">{{ item.name }} Details</h5>
+          <h5 class="modal-title" id="equipmentModalLabel{{ item.pk }}">{{ item.name }} Details{% if item.is_flightlog_virtual %} <span class="badge bg-secondary ms-2">From Flight Logs</span>{% endif %}</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
 
@@ -114,13 +128,23 @@
             {% if item.serial_number %}<dt class="col-sm-4">Serial Number</dt><dd class="col-sm-8">{{ item.serial_number }}</dd>{% endif %}
             {% if item.faa_number %}<dt class="col-sm-4">FAA Registration</dt><dd class="col-sm-8">{{ item.faa_number }}</dd>{% endif %}
 
-            {# Drone-only flight stats (uses annotated values + duration_display) #}
-            {% if item.equipment_type == "Drone" %}
-              <dt class="col-sm-4">Flights</dt>
+            {# Flight-log usage stats for drones and batteries #}
+            {% if item.equipment_type == "Drone" or item.equipment_type == "Battery" %}
+              <dt class="col-sm-4">Logged Flights</dt>
               <dd class="col-sm-8">{{ item.flights_count|default:"0" }}</dd>
 
-              <dt class="col-sm-4">Flight Time</dt>
+              <dt class="col-sm-4">Logged Flight Time</dt>
               <dd class="col-sm-8">{{ item.total_duration|duration_display }}</dd>
+
+              {% if item.equipment_type == "Battery" %}
+                <dt class="col-sm-4">Logged Charge Cycles</dt>
+                <dd class="col-sm-8">
+                  {{ item.logged_charge_cycles|default:"0" }}
+                  <div class="text-muted small">Estimated from flight-log battery uses because the current FlightLog model does not store manufacturer-reported cycle count.</div>
+                </dd>
+                {% if item.internal_serial %}<dt class="col-sm-4">Internal Battery Serial</dt><dd class="col-sm-8">{{ item.internal_serial }}</dd>{% endif %}
+                {% if item.printed_serial %}<dt class="col-sm-4">Printed Battery Serial</dt><dd class="col-sm-8">{{ item.printed_serial }}</dd>{% endif %}
+              {% endif %}
             {% endif %}
 
             {% if item.faa_certificate %}
@@ -153,9 +177,11 @@
         </div>
 
         <div class="modal-footer">
-          <a href="{% url 'equipment:equipment_pdf_single' item.pk %}" target="_blank" class="btn btn-outline-secondary">
-            <i class="fas fa-file-pdf"></i> PDF
-          </a>
+          {% if not item.is_flightlog_virtual %}
+            <a href="{% url 'equipment:equipment_pdf_single' item.pk %}" target="_blank" class="btn btn-outline-secondary">
+              <i class="fas fa-file-pdf"></i> PDF
+            </a>
+          {% endif %}
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
         </div>
       </div>
